@@ -23,6 +23,7 @@ dual licensed as above, without any additional terms or conditions.
 
 This project is currently maintained by the following developers:
 
-|    Name    |     Email Address    |                GitHub Username               |
-|:----------:|:--------------------:|:--------------------------------------------:|
+|       Name       |    Email Address     |               GitHub Username                |
+|:----------------:|:--------------------:|:--------------------------------------------:|
+|  Falko Galperin  | falko1@uni-bremen.de |    [@falko17](https://github.com/falko17)    |
 | Hugo Hakim Damer | hdamer@uni-bremen.de | [@pulsastrix](https://github.com/pulsastrix) |
