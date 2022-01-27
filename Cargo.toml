@@ -2,7 +2,11 @@
 name = "dcaf"
 version = "0.1.0"
 edition = "2021"
+authors = ["Falko Galperin <falko1@uni-bremen.de>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+serde = { version = "1.0", features = ["derive"] }
+ciborium = "^0.2.0"
+coset = "^0.3.0"
