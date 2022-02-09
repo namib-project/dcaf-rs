@@ -58,6 +58,8 @@ impl Serialize for ASRequestCreationHint {
     }
 }
 
+// TODO: Deserialize
+
 impl ASRequestCreationHint {
     fn empty() -> ASRequestCreationHint {
         ASRequestCreationHint {
@@ -69,6 +71,54 @@ impl ASRequestCreationHint {
         }
     }
 }
+
+// TODO: Authorization request vs token request?
+
+struct AccessTokenRequest {
+
+    /// Grant type used for this request. Defaults to `client_credentials`.
+    grant_type: Option<u32>,
+
+    /// The logical name of the target service where the client intends to use the requested security token.
+    audience: Option<String>,
+
+    // TODO Not mentioned in ACE OAuth? https://www.rfc-editor.org/rfc/rfc6749.html#section-4.1.3
+    /// The authorization code received from the authorization server.
+    code: ByteString,
+
+    /// URI to redirect the client to after authorization is complete.
+    redirect_uri: String,
+
+    /// Client nonce to ensure the token is still fresh.
+    cnonce: Option<ByteString>,
+
+    // TODO: May be encoded as byte string
+    /// Scope of the access request.
+    scope: Option<String>,
+
+    /// Included in the request if the AS shall include the `ace_profile` parameter in its
+    /// response.
+    ace_profile: Option<()>,
+
+    /// Contains information about the key the client would like to bind to the 
+    /// access token for proof-of-possession.
+    req_cnf: Option<String>,
+
+    /// The client identifier as described in Section 2.2 of RFC 6749.
+    client_id: String
+}
+
+
+impl Serialize for AccessTokenRequest {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        let map = cbor_map!{
+            33 => self.grant_type, 5 => self.audience, 29 => self.code, 27 => self.redirect_uri, 39 => self.cnonce,
+            9 => self.scope, 38 => self.ace_profile, 24 => self.client_id, 4 => self.req_cnf
+        };
+        Serialize::serialize(&map, serializer)
+    }
+}
+
 
 struct BearerToken {
     content: Vec<u8>,
