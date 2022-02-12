@@ -8,5 +8,10 @@ authors = ["Falko Galperin <falko1@uni-bremen.de>"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-ciborium = "^0.2.0"
-coset = "^0.3.0"
+ciborium = { version = "^0.2.0", default-features = false }
+coset = { git = "https://github.com/namib-project/coset", branch = "as-cbor-public" }
+serde_bytes = { version = "^0.11.5", default-features = false, features = ["alloc"] }
+erased-serde = { version = "^0.3.18", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+hex = { version = "^0.4.3", default-features = false, features = ["alloc"] }
