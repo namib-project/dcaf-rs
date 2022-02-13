@@ -149,8 +149,6 @@ impl AsCborMap for AccessTokenRequest {
     }
 }
 
-//TODO: Serialize
-
 pub struct AccessTokenResponse {
     // TODO
 }
@@ -159,12 +157,10 @@ pub struct AccessTokenResponse {
 
 #[cfg(test)]
 mod tests {
-    use std::any::Any;
-
     use ciborium::de::from_reader;
-    use ciborium::ser::{into_writer, Error};
-    use coset::{iana, CoseKeyBuilder};
-    use hex::FromHexError;
+    use ciborium::ser::{into_writer};
+    use coset::{CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder, iana, ProtectedHeader};
+    use coset::iana::Algorithm;
 
     use crate::model::cbor_map::CborMap;
     use crate::model::cbor_values::{ByteString, TextOrByteString};
@@ -172,7 +168,7 @@ mod tests {
     use super::*;
 
     macro_rules! test_ser_de {
-        ($value:ident => $hex:literal) => {{
+        ($value:ident$(;$transform_value:expr)? => $hex:literal) => {{
             let mut result = Vec::new();
             into_writer(&$value, &mut result).map_err(|x| x.to_string())?;
             #[cfg(feature = "std")]
@@ -184,6 +180,7 @@ mod tests {
             assert_eq!(result, hex::decode($hex).map_err(|x| x.to_string())?);
             let decoded = from_reader(&result[..]).map_err(|x| x.to_string());
             if let Ok(CborMap(decoded_value)) = decoded {
+                $(let decoded_value = $transform_value(decoded_value);)?
                 assert_eq!(*$value, decoded_value);
                 Ok(())
             } else if let Err(e) = decoded {
@@ -261,5 +258,68 @@ mod tests {
         test_ser_de!(request => "A404A10348EA483475724CD775056876616C76653432340964726561641818686D79636C69656E74")
     }
 
-    // TODO: Test encrypted key
+    #[test]
+    fn test_access_token_request_encrypted() -> Result<(), String> {
+        let unprotected_header = HeaderBuilder::new()
+            .iv(vec![
+                    0x63, 0x68, 0x98, 0x99, 0x4F, 0xF0, 0xEC, 0x7B, 0xFC, 0xF6, 0xD3, 0xF9,
+                    0x5B,
+                ])
+            .build();
+        let protected_header = HeaderBuilder::new()
+            .algorithm(Algorithm::AES_CCM_16_64_128)
+            .build();
+        let encrypted = CoseEncrypt0Builder::new()
+            .protected(protected_header)
+            .unprotected(unprotected_header)
+            .ciphertext(vec![
+                0x05, 0x73, 0x31, 0x8A, 0x35, 0x73, 0xEB, 0x98, 0x3E, 0x55, 0xA7, 0xC2, 0xF0, 0x6C,
+                0xAD, 0xD0, 0x79, 0x6C, 0x9E, 0x58, 0x4F, 0x1D, 0x0E, 0x3E, 0xA8, 0xC5, 0xB0, 0x52,
+                0x59, 0x2A, 0x8B, 0x26, 0x94, 0xBE, 0x96, 0x54, 0xF0, 0x43, 0x1F, 0x38, 0xD5, 0xBB,
+                0xC8, 0x04, 0x9F, 0xA7, 0xF1, 0x3F,
+            ])
+            .build();
+        assert_eq!(hex::encode_upper(encrypted.clone().to_vec().map_err(|x| x.to_string())?),
+                   "8343A1010AA1054D636898994FF0EC7BFCF6D3F95B58300573318A3573EB983E55A7C2F06CADD0796C9E584F1D0E3EA8C5B052592A8B2694BE9654F0431F38D5BBC8049FA7F13F");
+        let request = CborMap(AccessTokenRequest {
+            client_id: "myclient".to_string(),
+            req_cnf: Some(ProofOfPossessionKey::EncryptedCoseKey(Box::new(encrypted))),
+            ..Default::default()
+        });
+
+        // Extract relevant part for comparison (i.e. no protected headers' original data,
+        // which can change after serialization)
+        fn transform_header(mut request: AccessTokenRequest) -> AccessTokenRequest {
+            let enc = request.req_cnf
+                .expect( "No req_cnf present")
+                .try_as_encrypted_cose_key()
+                .expect("Key is not encrypted")
+                .clone();
+            request.req_cnf = Some(ProofOfPossessionKey::EncryptedCoseKey(Box::new(
+                CoseEncrypt0 {
+                    protected: ProtectedHeader {
+                        original_data: None,
+                        ..enc.protected
+                    },
+                    ..enc
+                }
+            )));
+            request
+        }
+
+        test_ser_de!(request; transform_header => "A204A1028343A1010AA1054D636898994FF0EC7BFCF6D3F95B58300573318A3573EB983E55A7C2F06CADD0796C9E584F1D0E3EA8C5B052592A8B2694BE9654F0431F38D5BBC8049FA7F13F1818686D79636C69656E74")
+    }
+
+    #[test]
+    fn test_access_token_other_fields() -> Result<(), String> {
+        let request = CborMap(AccessTokenRequest {
+            client_id: "myclient".to_string(),
+            redirect_uri: Some("coaps://server.example.com".to_string()),
+            grant_type: Some(2),
+            ace_profile: Some(()),
+            client_nonce: Some(ByteString::from(vec![0, 1, 2, 3, 4])),
+            ..Default::default()
+        });
+        test_ser_de!(request => "A51818686D79636C69656E74181B781A636F6170733A2F2F7365727665722E6578616D706C652E636F6D1821021826F61827450001020304")
+    }
 }
