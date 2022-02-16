@@ -5,6 +5,8 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 
 use ciborium::value::Value;
+use coset::{CborSerializable, CoseEncrypt0Builder, CoseSign1Builder, CoseSignBuilder, Header};
+use coset::cwt::ClaimsSet;
 use erased_serde::Serialize as ErasedSerialize;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -161,6 +163,27 @@ pub struct ErrorResponse {
     /// A URI identifying a human-readable web page with information about the error, used to
     /// provide the client developer with additional information about the error.
     error_uri: Option<String>,
+}
+
+fn encrypt_access_token<F>(claims: ClaimsSet, unprotected_header: Header,
+                        protected_header: Header, cipher: F, aad: &[u8])
+    -> Result<ByteString, String> where F: FnOnce(&[u8]) -> Vec<u8> {
+    Ok(ByteString::from(CoseEncrypt0Builder::new()
+        .unprotected(unprotected_header)
+        .protected(protected_header)
+        .create_ciphertext(&claims.to_vec()[..], aad, cipher)
+        .build()
+        .to_vec().map_err(|x| x.to_string())?))
+}
+
+fn sign_access_token<F>(claims: ClaimsSet, unprotected_header: Header,
+                    protected_header: Header, cipher: F, aad: &[u8])
+    -> Result<ByteString, String> where F: FnOnce(&[u8]) -> Vec<u8> {
+    Ok(ByteString::from(CoseSign1Builder::new()
+        .unprotected(unprotected_header)
+        .protected(protected_header)
+        .create_signature(aad, cipher)
+        .build().to_vec().map_err(|x| x.to_string())?))
 }
 
 // Macro adapted from https://github.com/enarx/ciborium/blob/main/ciborium/tests/macro.rs#L13
