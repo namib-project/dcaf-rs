@@ -12,7 +12,7 @@ use crate::model::cbor_map::AsCborMap;
 
 type ByteStringValue = Vec<u8>;
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Default)]
 pub struct ByteString(ByteStringValue);
 
 impl ByteString {
