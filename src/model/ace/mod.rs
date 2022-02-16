@@ -3,9 +3,8 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt::Debug;
-use ciborium::ser;
 
-use ciborium::value::{Integer, Value};
+use ciborium::value::Value;
 use erased_serde::Serialize as ErasedSerialize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error;
@@ -240,4 +239,114 @@ impl AsCborMap for AccessTokenResponse {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum ErrorCode {
+    InvalidRequest,
+    InvalidClient,
+    InvalidGrant,
+    UnauthorizedClient,
+    UnsupportedGrantType,
+    InvalidScope,
+    UnsupportedPopKey,
+    IncompatibleAceProfiles
+}
+
+impl TryFrom<u8> for ErrorCode {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(ErrorCode::InvalidRequest),
+            2 => Ok(ErrorCode::InvalidClient),
+            3 => Ok(ErrorCode::InvalidGrant),
+            4 => Ok(ErrorCode::UnauthorizedClient),
+            5 => Ok(ErrorCode::UnsupportedGrantType),
+            6 => Ok(ErrorCode::InvalidScope),
+            7 => Ok(ErrorCode::UnsupportedPopKey),
+            8 => Ok(ErrorCode::IncompatibleAceProfiles),
+            _ => Err(())
+        }
+    }
+}
+
+impl TryFrom<i128> for ErrorCode {
+    type Error = ();
+
+    fn try_from(value: i128) -> Result<Self, Self::Error> {
+        u8::try_from(value).map_err(|_| ())?.try_into()
+    }
+}
+
+impl From<&ErrorCode> for u8 {
+    fn from(code: &ErrorCode) -> Self {
+        match code {
+            ErrorCode::InvalidRequest => 1,
+            ErrorCode::InvalidClient => 2,
+            ErrorCode::InvalidGrant => 3,
+            ErrorCode::UnauthorizedClient => 4,
+            ErrorCode::UnsupportedGrantType => 5,
+            ErrorCode::InvalidScope => 6,
+            ErrorCode::UnsupportedPopKey => 7,
+            ErrorCode::IncompatibleAceProfiles => 8
+        }
+    }
+}
+
+impl Serialize for ErrorCode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        Value::from(u8::from(self)).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ErrorCode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+        if let Ok(Value::Integer(i)) = Value::deserialize(deserializer) {
+            i128::from(i).try_into().map_err(|_| D::Error::custom("Invalid value"))
+        } else {
+            Err(D::Error::custom("Error code must be an Integer!"))
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct ErrorResponse {
+    error: ErrorCode,
+
+    error_description: Option<String>,
+
+    error_uri: Option<String>
+}
+
+impl AsCborMap for ErrorResponse {
+    fn as_cbor_map(&self) -> Vec<(u16, Option<Box<dyn ErasedSerialize + '_>>)> {
+        cbor_map_vec! {
+            30 => Some(u8::from(&self.error)),
+            31 => self.error_description.as_ref(),
+            32 => self.error_uri.as_ref()
+        }
+    }
+
+    fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self> where Self: Sized + AsCborMap {
+        let mut maybe_error: Option<ErrorCode> = None;
+        let mut error_description: Option<String> = None;
+        let mut error_uri: Option<String> = None;
+        for entry in map {
+            match (entry.0, entry.1) {
+                (30, Value::Integer(x)) => {
+                    if let Ok(i) = u8::try_from(x) {
+                        maybe_error = ErrorCode::try_from(i).ok();
+                    } else {
+                        return None
+                    }
+                }
+                (31, Value::Text(x)) => error_description = Some(x),
+                (32, Value::Text(x)) => error_uri = Some(x),
+                _ => return None
+            }
+        }
+        maybe_error.map(|error| ErrorResponse { error, error_uri, error_description })
+    }
+}
+
 // TODO: Introspection data structures
+// TODO: Verify required fields
