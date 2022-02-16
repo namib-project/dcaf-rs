@@ -91,18 +91,18 @@ pub enum ProofOfPossessionKey {
 }
 
 impl AsCborMap for ProofOfPossessionKey {
-    fn as_cbor_map(&self) -> Vec<(u16, Option<Box<dyn ErasedSerialize + '_>>)> {
+    fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
         // The fact that we have to clone this is a little unfortunate.
         match self {
             Self::CoseKey(key) => {
-                let x: u16 = 1;
+                let x: i128 = 1;
                 vec![(
                     x,
                     Some(Box::new(key.clone().to_cbor_value().expect("Invalid key"))),
                 )]
             }
             Self::EncryptedCoseKey(enc) => {
-                let x: u16 = 2;
+                let x: i128 = 2;
                 vec![(
                     x,
                     Some(Box::new(
@@ -111,7 +111,7 @@ impl AsCborMap for ProofOfPossessionKey {
                 )]
             }
             Self::KeyId(kid) => {
-                let x: u16 = 3;
+                let x: i128 = 3;
                 vec![(x, Some(Box::new(kid)))]
             }
         }

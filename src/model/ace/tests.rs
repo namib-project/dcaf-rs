@@ -156,7 +156,7 @@ fn test_access_token_other_fields() -> Result<(), String> {
     let request = CborMap(AccessTokenRequest {
         client_id: "myclient".to_string(),
         redirect_uri: Some("coaps://server.example.com".to_string()),
-        grant_type: Some(2),
+        grant_type: Some(GrantType::ClientCredentials),
         ace_profile: Some(()),
         client_nonce: Some(ByteString::from(vec![0, 1, 2, 3, 4])),
         ..Default::default()

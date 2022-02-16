@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde::{Deserializer, Serialize, Serializer};
 
 pub trait AsCborMap {
-    fn as_cbor_map(&self) -> Vec<(u16, Option<Box<dyn ErasedSerialize + '_>>)>;
+    fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)>;
 
     fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
     where
@@ -22,7 +22,7 @@ pub trait AsCborMap {
                 .filter(|x| x.1.is_some())
                 .map(|x| {
                     (
-                        Value::Integer(x.0.into()),
+                        Value::Integer(x.0.try_into().expect("CBOR map value too high")),
                         Value::serialized(&x.1).expect("Invalid CBOR map value"),
                     )
                 })
