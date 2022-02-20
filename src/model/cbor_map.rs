@@ -50,6 +50,12 @@ pub struct CborMap<T>(pub T)
 where
     T: AsCborMap;
 
+impl<T> From<T> for CborMap<T> where T: AsCborMap {
+    fn from(value: T) -> Self {
+        CborMap(value)
+    }
+}
+
 impl<T> Deref for CborMap<T>
 where
     T: AsCborMap,

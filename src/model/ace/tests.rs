@@ -124,7 +124,7 @@ fn test_access_token_request_encrypted() -> Result<(), String> {
                "8343A1010AA1054D636898994FF0EC7BFCF6D3F95B58300573318A3573EB983E55A7C2F06CADD0796C9E584F1D0E3EA8C5B052592A8B2694BE9654F0431F38D5BBC8049FA7F13F");
     let request = CborMap(AccessTokenRequest {
         client_id: "myclient".to_string(),
-        req_cnf: Some(ProofOfPossessionKey::EncryptedCoseKey(Box::new(encrypted))),
+        req_cnf: Some(ProofOfPossessionKey::EncryptedCoseKey(encrypted)),
         ..Default::default()
     });
 
@@ -136,7 +136,7 @@ fn test_access_token_request_encrypted() -> Result<(), String> {
             .try_as_encrypted_cose_key()
             .expect("Key is not encrypted")
             .clone();
-        request.req_cnf = Some(ProofOfPossessionKey::EncryptedCoseKey(Box::new(
+        request.req_cnf = Some(ProofOfPossessionKey::EncryptedCoseKey(
             CoseEncrypt0 {
                 protected: ProtectedHeader {
                     original_data: None,
@@ -144,7 +144,7 @@ fn test_access_token_request_encrypted() -> Result<(), String> {
                 },
                 ..enc
             }
-        )));
+        ));
         request
     }
 

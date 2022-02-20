@@ -84,9 +84,10 @@ impl TextOrByteString {
 
 /// A proof-of-possession key as specified by RFC 8747, section 3.1.
 #[derive(Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum ProofOfPossessionKey {
     CoseKey(CoseKey),
-    EncryptedCoseKey(Box<CoseEncrypt0>),
+    EncryptedCoseKey(CoseEncrypt0),
     KeyId(ByteString),
 }
 
@@ -134,7 +135,7 @@ impl AsCborMap for ProofOfPossessionKey {
                 }
                 Some((2, x)) => {
                     if let Ok(enc) = CoseEncrypt0::from_cbor_value(x) {
-                        Some(ProofOfPossessionKey::EncryptedCoseKey(Box::new(enc)))
+                        Some(ProofOfPossessionKey::EncryptedCoseKey(enc))
                     } else {
                         None
                     }
@@ -162,7 +163,7 @@ impl From<ByteString> for ProofOfPossessionKey {
 
 impl From<CoseEncrypt0> for ProofOfPossessionKey {
     fn from(enc: CoseEncrypt0) -> Self {
-        ProofOfPossessionKey::EncryptedCoseKey(Box::new(enc))
+        ProofOfPossessionKey::EncryptedCoseKey(enc)
     }
 }
 
