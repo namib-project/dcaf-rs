@@ -11,11 +11,12 @@ use erased_serde::Serialize as ErasedSerialize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error;
 
+use crate::ace::AceProfile::{CoapDtls, Other};
 use crate::model::cbor_values::{CborMapValue, ProofOfPossessionKey};
 
 use super::cbor_map::AsCborMap;
 use super::cbor_values::{ByteString, TextOrByteString};
-use super::constants::cbor_abbreviations::{creation_hint, error, grant_types, token, token_types};
+use super::constants::cbor_abbreviations::{ace_profile, creation_hint, error, grant_types, token, token_types};
 
 #[cfg(test)]
 mod tests;
@@ -88,7 +89,7 @@ pub struct AccessTokenRequest {
 /// The type of the token issued as described in section 7.1 of
 /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1).
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-enum TokenType {
+pub enum TokenType {
     /// Bearer token type as defined in [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750).
     Bearer,
 
@@ -97,6 +98,22 @@ enum TokenType {
     ProofOfPossession,
 
     /// An unspecified token type along with its representation in CBOR.
+    Other(i32),
+}
+
+/// Profiles for ACE-OAuth as specified in section 5.8.4.3 of `draft-ietf-ace-oauth-authz`.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum AceProfile {
+    /// Profile for ACE-OAuth using Datagram Transport Layer Security, specified in
+    /// [`draft-ietf-ace-dtls-authorize`](https://www.ietf.org/archive/id/draft-ietf-ace-dtls-authorize-18.html).
+    CoapDtls,
+
+    // The below is commented out because no CBOR value has been specified yet for this profile.
+    // /// Profile for ACE-OAuth using OSCORE, specified in
+    // /// [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.txt).
+    // CoapOscore,
+
+    /// An unspecified ACE-OAuth profile along with its representation in CBOR.
     Other(i32),
 }
 
@@ -124,7 +141,7 @@ pub struct AccessTokenResponse {
     refresh_token: Option<ByteString>,
 
     /// This indicates the profile that the client must use towards the RS.
-    ace_profile: Option<i32>, // TODO: Enum
+    ace_profile: Option<AceProfile>,
 
     /// The proof-of-possession key that the AS selected for the token.
     cnf: Option<ProofOfPossessionKey>,
@@ -272,6 +289,24 @@ impl From<TokenType> for i32 {
     }
 }
 
+impl From<i32> for AceProfile {
+    fn from(value: i32) -> Self {
+        match value {
+            ace_profile::COAP_DTLS => CoapDtls,
+            x => Other(x)
+        }
+    }
+}
+
+impl From<AceProfile> for i32 {
+    fn from(profile: AceProfile) -> Self {
+        match profile {
+            CoapDtls => ace_profile::COAP_DTLS,
+            Other(x) => x
+        }
+    }
+}
+
 impl AsCborMap for AuthServerRequestCreationHint {
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
         cbor_map_vec! {
@@ -368,6 +403,7 @@ impl AsCborMap for AccessTokenRequest {
 impl AsCborMap for AccessTokenResponse {
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
         let token_type: Option<CborMapValue<TokenType>> = self.token_type.map(CborMapValue);
+        let ace_profile: Option<CborMapValue<AceProfile>> = self.ace_profile.map(CborMapValue);
         cbor_map_vec! {
             token::ACCESS_TOKEN => Some(&self.access_token),
             token::EXPIRES_IN => self.expires_in,
@@ -375,7 +411,7 @@ impl AsCborMap for AccessTokenResponse {
             token::SCOPE => self.scope.as_ref(),
             token::TOKEN_TYPE => token_type,
             token::REFRESH_TOKEN => self.refresh_token.as_ref(),
-            token::ACE_PROFILE => self.ace_profile,
+            token::ACE_PROFILE => ace_profile,
             token::RS_CNF => self.rs_cnf.as_ref().map(|x| x.to_ciborium_map())
         }
     }
@@ -417,8 +453,8 @@ impl AsCborMap for AccessTokenResponse {
                     response.refresh_token = Some(ByteString::from(x))
                 }
                 (token::ACE_PROFILE, Value::Integer(x)) => {
-                    if let Ok(i) = x.try_into() {
-                        response.ace_profile = Some(i)
+                    if let Ok(i) = i32::try_from(x) {
+                        response.ace_profile = Some(AceProfile::from(i))
                     } else {
                         return None;
                     }

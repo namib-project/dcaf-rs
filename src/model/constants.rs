@@ -125,6 +125,25 @@ pub(crate) mod cbor_abbreviations {
         pub const POP: i32 = 2;
     }
 
+    /// Constants for CBOR abbreviations in token types, as specified in:
+    /// - `draft-ietf-ace-oauth-authz`, section 8.8.
+    /// - [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.txt),
+    ///   section 9.1.
+    /// - [`draft-ietf-ace-dtls-authorize`](https://www.ietf.org/archive/id/draft-ietf-ace-dtls-authorize-18.html),
+    ///   section 9.
+    pub mod ace_profile {
+        /// DTLS profile specified in
+        /// [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.txt).
+        ///
+        /// **Note: The actual value is still TBD, this is just what's suggested in the draft above.**
+        pub const COAP_DTLS: i32 = 1;
+
+        // The below is commented out because no CBOR value has been set in the specification yet.
+        // /// OSCORE profile specified in
+        // /// [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.txt).
+        // // pub const COAP_OSCORE: i32;
+    }
+
 
     /// Constants for CBOR abbreviations in error codes,
     /// as specified in `draft-ietf-ace-oauth-authz-46`, Figure 10.
