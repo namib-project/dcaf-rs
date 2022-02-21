@@ -1,4 +1,5 @@
 /// Constants which abbreviate string values as integers in CBOR.
+#[allow(dead_code)]
 pub(crate) mod cbor_abbreviations {
 
     /// Constants for CBOR map keys in AS Request Creation Hints,
@@ -99,18 +100,17 @@ pub(crate) mod cbor_abbreviations {
     /// Constants for CBOR abbreviations in grant types,
     /// as specified in `draft-ietf-ace-oauth-authz-46`, Figure 11.
     pub mod grant_types {
-
         /// See section 4.3.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const PASSWORD: u8 = 0;
+        pub const PASSWORD: i32 = 0;
 
         /// See section 4.1.3 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const AUTHORIZATION_CODE: u8 = 1;
+        pub const AUTHORIZATION_CODE: i32 = 1;
 
         /// See section 4.4.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const CLIENT_CREDENTIALS: u8 = 2;
+        pub const CLIENT_CREDENTIALS: i32 = 2;
 
         /// See section 6 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const REFRESH_TOKEN: u8 = 3;
+        pub const REFRESH_TOKEN: i32 = 3;
     }
 
     /// Constants for CBOR abbreviations in token types,
@@ -118,11 +118,11 @@ pub(crate) mod cbor_abbreviations {
     pub mod token_types {
         /// Bearer token type, as specified in
         /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const BEARER: u8 = 1;
+        pub const BEARER: i32 = 1;
 
         /// Proof-of-possession token type, as specified in
         /// `draft-ietf-ace-oauth-authz-46`.
-        pub const POP: u8 = 2;
+        pub const POP: i32 = 2;
     }
 
 

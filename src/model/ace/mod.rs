@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 
 use ciborium::value::Value;
-use coset::{CborSerializable, CoseEncrypt0Builder, CoseKey, CoseSign1Builder, CoseSignBuilder, Header};
+use coset::{CborSerializable, CoseEncrypt0Builder, CoseKey, CoseSign1Builder, Header};
 use coset::cwt::ClaimsSet;
 use erased_serde::Serialize as ErasedSerialize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -50,7 +50,7 @@ pub enum GrantType {
     AuthorizationCode,
     ClientCredentials,
     RefreshToken,
-    Other(u8),
+    Other(i32),
 }
 
 /// Request for an access token, sent from the client.
@@ -228,8 +228,8 @@ macro_rules! cbor_map_vec {
     };
 }
 
-impl From<u8> for GrantType {
-    fn from(value: u8) -> Self {
+impl From<i32> for GrantType {
+    fn from(value: i32) -> Self {
         match value {
             grant_types::PASSWORD => GrantType::Password,
             grant_types::AUTHORIZATION_CODE => GrantType::AuthorizationCode,
@@ -240,34 +240,34 @@ impl From<u8> for GrantType {
     }
 }
 
-impl From<GrantType> for u8 {
+impl From<GrantType> for i32 {
     fn from(grant: GrantType) -> Self {
         match grant {
             GrantType::Password => grant_types::PASSWORD,
             GrantType::AuthorizationCode => grant_types::AUTHORIZATION_CODE,
             GrantType::ClientCredentials => grant_types::CLIENT_CREDENTIALS,
             GrantType::RefreshToken => grant_types::REFRESH_TOKEN,
-            GrantType::Other(x) => x.to_owned(),
+            GrantType::Other(x) => x.to_owned()
         }
     }
 }
 
-impl From<u8> for TokenType {
-    fn from(value: u8) -> Self {
+impl From<i32> for TokenType {
+    fn from(value: i32) -> Self {
         match value {
             token_types::BEARER => TokenType::Bearer,
             token_types::POP => TokenType::ProofOfPossession,
-            x => TokenType::Other(x as i32)
+            x => TokenType::Other(x)
         }
     }
 }
 
-impl From<TokenType> for u8 {
+impl From<TokenType> for i32 {
     fn from(token: TokenType) -> Self {
         match token {
             TokenType::Bearer => token_types::BEARER,
             TokenType::ProofOfPossession => token_types::POP,
-            TokenType::Other(x) => x as u8
+            TokenType::Other(x) => x
         }
     }
 }
@@ -348,7 +348,7 @@ impl AsCborMap for AccessTokenRequest {
                 (token::CLIENT_ID, Value::Text(x)) => request.client_id = x,
                 (token::REDIRECT_URI, Value::Text(x)) => request.redirect_uri = Some(x),
                 (token::GRANT_TYPE, Value::Integer(x)) => {
-                    if let Ok(i) = u8::try_from(x) {
+                    if let Ok(i) = i32::try_from(x) {
                         request.grant_type = Some(GrantType::from(i))
                     } else {
                         return None;
@@ -407,7 +407,7 @@ impl AsCborMap for AccessTokenResponse {
                 (token::SCOPE, Value::Bytes(x)) => response.scope = Some(TextOrByteString::from(x)),
                 (token::SCOPE, Value::Text(x)) => response.scope = Some(TextOrByteString::from(x)),
                 (token::TOKEN_TYPE, Value::Integer(x)) => {
-                    if let Ok(i) = u8::try_from(x) {
+                    if let Ok(i) = i32::try_from(x) {
                         response.token_type = Some(TokenType::from(i))
                     } else {
                         return None;
