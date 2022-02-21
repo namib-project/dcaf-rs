@@ -1,5 +1,5 @@
 use ciborium::de::from_reader;
-use ciborium::ser::{into_writer};
+use ciborium::ser::into_writer;
 use coset::{CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder, iana, ProtectedHeader};
 use coset::iana::Algorithm;
 

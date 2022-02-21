@@ -4,9 +4,9 @@ use core::ops::Deref;
 
 use ciborium::value::Value;
 use erased_serde::Serialize as ErasedSerialize;
+use serde::{Deserializer, Serialize, Serializer};
 use serde::de::{Error, Unexpected};
 use serde::Deserialize;
-use serde::{Deserializer, Serialize, Serializer};
 
 pub trait AsCborMap {
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)>;
@@ -47,8 +47,8 @@ pub trait AsCborMap {
 /// (de)serialize as CBOR maps.
 #[derive(Debug)]
 pub struct CborMap<T>(pub T)
-where
-    T: AsCborMap;
+    where
+        T: AsCborMap;
 
 impl<T> From<T> for CborMap<T> where T: AsCborMap {
     fn from(value: T) -> Self {
@@ -57,8 +57,8 @@ impl<T> From<T> for CborMap<T> where T: AsCborMap {
 }
 
 impl<T> Deref for CborMap<T>
-where
-    T: AsCborMap,
+    where
+        T: AsCborMap,
 {
     type Target = T;
 

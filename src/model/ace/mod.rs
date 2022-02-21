@@ -5,17 +5,17 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 
 use ciborium::value::Value;
-use coset::{CborSerializable, CoseEncrypt0Builder, CoseSign1Builder, CoseSignBuilder, Header};
+use coset::{CborSerializable, CoseEncrypt0Builder, CoseKey, CoseSign1Builder, CoseSignBuilder, Header};
 use coset::cwt::ClaimsSet;
 use erased_serde::Serialize as ErasedSerialize;
-use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::Error;
 
-use crate::model::cbor_values::ProofOfPossessionKey;
+use crate::model::cbor_values::{CborMapValue, ProofOfPossessionKey};
 
 use super::cbor_map::AsCborMap;
 use super::cbor_values::{ByteString, TextOrByteString};
-use super::constants::cbor_abbreviations::{creation_hint, error, grant_types, token};
+use super::constants::cbor_abbreviations::{creation_hint, error, grant_types, token, token_types};
 
 #[cfg(test)]
 mod tests;
@@ -44,7 +44,7 @@ pub struct AuthServerRequestCreationHint {
 
 /// Type of the resource owner's authorization used by the client to obtain an access token.
 /// For more information, see [section 1.3 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum GrantType {
     Password,
     AuthorizationCode,
@@ -85,6 +85,21 @@ pub struct AccessTokenRequest {
     client_id: String,
 }
 
+/// The type of the token issued as described in section 7.1 of
+/// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1).
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+enum TokenType {
+    /// Bearer token type as defined in [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750).
+    Bearer,
+
+    /// Proof-of-possession token type, as specified in
+    /// [`draft-ietf-ace-oauth-params-16`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-params-16.txt).
+    ProofOfPossession,
+
+    /// An unspecified token type along with its representation in CBOR.
+    Other(i32),
+}
+
 /// Response to an AccessTokenRequest containing the Access Information.
 #[derive(Debug, PartialEq, Default)]
 pub struct AccessTokenResponse {
@@ -95,12 +110,13 @@ pub struct AccessTokenResponse {
     expires_in: Option<u32>,
 
     /// The scope of the access token as described by
-    /// section 3.3 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1).
+    /// section 3.3 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-3.3).
     scope: Option<TextOrByteString>,
 
     /// The type of the token issued as described in section 7.1 of
-    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1).
-    token_type: Option<i32>,
+    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1) and section 5.8.4.2
+    /// of `draft-ietf-ace-oauth-authz-46`.
+    token_type: Option<TokenType>,
 
     /// The refresh token, which can be used to obtain new access tokens using the same
     /// authorization grant as described in section 6 of
@@ -108,7 +124,7 @@ pub struct AccessTokenResponse {
     refresh_token: Option<ByteString>,
 
     /// This indicates the profile that the client must use towards the RS.
-    ace_profile: Option<i32>,
+    ace_profile: Option<i32>, // TODO: Enum
 
     /// The proof-of-possession key that the AS selected for the token.
     cnf: Option<ProofOfPossessionKey>,
@@ -165,20 +181,21 @@ pub struct ErrorResponse {
     error_uri: Option<String>,
 }
 
-fn encrypt_access_token<F>(claims: ClaimsSet, unprotected_header: Header,
-                        protected_header: Header, cipher: F, aad: &[u8])
-    -> Result<ByteString, String> where F: FnOnce(&[u8]) -> Vec<u8> {
+pub fn encrypt_access_token<F>(claims: ClaimsSet, unprotected_header: Header,
+                               protected_header: Header, cipher: F, aad: &[u8])
+                               -> Result<ByteString, String> where F: FnOnce(&[u8], &[u8]) -> Vec<u8> {
     Ok(ByteString::from(CoseEncrypt0Builder::new()
         .unprotected(unprotected_header)
         .protected(protected_header)
-        .create_ciphertext(&claims.to_vec()[..], aad, cipher)
+        .create_ciphertext(&claims.to_vec().map_err(|x| x.to_string())?[..],
+                           aad, cipher)
         .build()
         .to_vec().map_err(|x| x.to_string())?))
 }
 
-fn sign_access_token<F>(claims: ClaimsSet, unprotected_header: Header,
-                    protected_header: Header, cipher: F, aad: &[u8])
-    -> Result<ByteString, String> where F: FnOnce(&[u8]) -> Vec<u8> {
+pub fn sign_access_token<F>(claims: ClaimsSet, unprotected_header: Header,
+                            protected_header: Header, cipher: F, aad: &[u8])
+                            -> Result<ByteString, String> where F: FnOnce(&[u8]) -> Vec<u8> {
     Ok(ByteString::from(CoseSign1Builder::new()
         .unprotected(unprotected_header)
         .protected(protected_header)
@@ -186,12 +203,20 @@ fn sign_access_token<F>(claims: ClaimsSet, unprotected_header: Header,
         .build().to_vec().map_err(|x| x.to_string())?))
 }
 
+pub fn validate_access_token(token: ByteString, key: CoseKey) {
+    todo!()
+}
+
+pub fn decrypt_access_token(token: ByteString, key: CoseKey) {
+    todo!()
+}
+
 // Macro adapted from https://github.com/enarx/ciborium/blob/main/ciborium/tests/macro.rs#L13
 macro_rules! cbor_map_vec {
    ($($key:expr => $val:expr),* $(,)*) => {
         vec![$(
             (
-                $key,
+                $key as i128,
                 $val.map(|x| {
                         // It's unclear to me why `Box::<dyn ErasedSerialize>` doesn't work.
                         let a_box: Box<dyn ErasedSerialize> = Box::new(x);
@@ -201,6 +226,50 @@ macro_rules! cbor_map_vec {
             )
         ),*]
     };
+}
+
+impl From<u8> for GrantType {
+    fn from(value: u8) -> Self {
+        match value {
+            grant_types::PASSWORD => GrantType::Password,
+            grant_types::AUTHORIZATION_CODE => GrantType::AuthorizationCode,
+            grant_types::CLIENT_CREDENTIALS => GrantType::ClientCredentials,
+            grant_types::REFRESH_TOKEN => GrantType::RefreshToken,
+            x => GrantType::Other(x),
+        }
+    }
+}
+
+impl From<GrantType> for u8 {
+    fn from(grant: GrantType) -> Self {
+        match grant {
+            GrantType::Password => grant_types::PASSWORD,
+            GrantType::AuthorizationCode => grant_types::AUTHORIZATION_CODE,
+            GrantType::ClientCredentials => grant_types::CLIENT_CREDENTIALS,
+            GrantType::RefreshToken => grant_types::REFRESH_TOKEN,
+            GrantType::Other(x) => x.to_owned(),
+        }
+    }
+}
+
+impl From<u8> for TokenType {
+    fn from(value: u8) -> Self {
+        match value {
+            token_types::BEARER => TokenType::Bearer,
+            token_types::POP => TokenType::ProofOfPossession,
+            x => TokenType::Other(x as i32)
+        }
+    }
+}
+
+impl From<TokenType> for u8 {
+    fn from(token: TokenType) -> Self {
+        match token {
+            TokenType::Bearer => token_types::BEARER,
+            TokenType::ProofOfPossession => token_types::POP,
+            TokenType::Other(x) => x as u8
+        }
+    }
 }
 
 impl AsCborMap for AuthServerRequestCreationHint {
@@ -220,7 +289,7 @@ impl AsCborMap for AuthServerRequestCreationHint {
     {
         let mut hint = AuthServerRequestCreationHint::default();
         for entry in map {
-            match (entry.0, entry.1) {
+            match (entry.0 as u8, entry.1) {
                 (creation_hint::AS, Value::Text(x)) => hint.auth_server = Some(x),
                 (creation_hint::KID, Value::Bytes(x)) => hint.kid = Some(ByteString::from(x)),
                 (creation_hint::AUDIENCE, Value::Text(x)) => hint.audience = Some(x),
@@ -240,63 +309,16 @@ impl AsCborMap for AuthServerRequestCreationHint {
     }
 }
 
-impl From<u8> for GrantType {
-    fn from(value: u8) -> Self {
-        match value {
-            grant_types::PASSWORD => GrantType::Password,
-            grant_types::AUTHORIZATION_CODE => GrantType::AuthorizationCode,
-            grant_types::CLIENT_CREDENTIALS => GrantType::ClientCredentials,
-            grant_types::REFRESH_TOKEN => GrantType::RefreshToken,
-            x => GrantType::Other(x),
-        }
-    }
-}
-
-impl From<&GrantType> for u8 {
-    fn from(grant: &GrantType) -> Self {
-        match grant {
-            GrantType::Password => grant_types::PASSWORD,
-            GrantType::AuthorizationCode => grant_types::AUTHORIZATION_CODE,
-            GrantType::ClientCredentials => grant_types::CLIENT_CREDENTIALS,
-            GrantType::RefreshToken => grant_types::REFRESH_TOKEN,
-            GrantType::Other(x) => x.to_owned(),
-        }
-    }
-}
-
-impl Serialize for GrantType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        Value::from(u8::from(self)).serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for GrantType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        if let Ok(Value::Integer(i)) = Value::deserialize(deserializer) {
-            Ok(u8::try_from(i)
-                .map_err(|x| D::Error::custom(x.to_string()))?
-                .into())
-        } else {
-            Err(D::Error::custom("Grant type must be an Integer!"))
-        }
-    }
-}
-
 impl AsCborMap for AccessTokenRequest {
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
+        let grant_type: Option<CborMapValue<GrantType>> = self.grant_type.map(CborMapValue);
         cbor_map_vec! {
             token::REQ_CNF => self.req_cnf.as_ref().map(|x| x.to_ciborium_map()),
             token::AUDIENCE => self.audience.as_ref(),
             token::SCOPE => self.scope.as_ref(),
             token::CLIENT_ID => Some(&self.client_id),
             token::REDIRECT_URI => self.redirect_uri.as_ref(),
-            token::GRANT_TYPE => self.grant_type.as_ref(),
+            token::GRANT_TYPE => grant_type,
             token::ACE_PROFILE => self.ace_profile.as_ref(),
             token::CNONCE => self.client_nonce.as_ref(),
         }
@@ -308,7 +330,7 @@ impl AsCborMap for AccessTokenRequest {
     {
         let mut request = AccessTokenRequest::default();
         for entry in map {
-            match (entry.0, entry.1) {
+            match (entry.0 as u8, entry.1) {
                 (token::REQ_CNF, Value::Map(x)) => {
                     if let Ok(pop_map) = Self::cbor_map_from_int(x) {
                         request.req_cnf = ProofOfPossessionKey::try_from_cbor_map(pop_map)
@@ -345,12 +367,13 @@ impl AsCborMap for AccessTokenRequest {
 
 impl AsCborMap for AccessTokenResponse {
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
+        let token_type: Option<CborMapValue<TokenType>> = self.token_type.map(CborMapValue);
         cbor_map_vec! {
             token::ACCESS_TOKEN => Some(&self.access_token),
             token::EXPIRES_IN => self.expires_in,
             token::CNF => self.cnf.as_ref().map(|x| x.to_ciborium_map()),
             token::SCOPE => self.scope.as_ref(),
-            token::TOKEN_TYPE => self.token_type,
+            token::TOKEN_TYPE => token_type,
             token::REFRESH_TOKEN => self.refresh_token.as_ref(),
             token::ACE_PROFILE => self.ace_profile,
             token::RS_CNF => self.rs_cnf.as_ref().map(|x| x.to_ciborium_map())
@@ -363,7 +386,7 @@ impl AsCborMap for AccessTokenResponse {
     {
         let mut response = AccessTokenResponse::default();
         for entry in map {
-            match (entry.0, entry.1) {
+            match (entry.0 as u8, entry.1) {
                 (token::ACCESS_TOKEN, Value::Bytes(x)) => {
                     response.access_token = ByteString::from(x)
                 }
@@ -384,8 +407,8 @@ impl AsCborMap for AccessTokenResponse {
                 (token::SCOPE, Value::Bytes(x)) => response.scope = Some(TextOrByteString::from(x)),
                 (token::SCOPE, Value::Text(x)) => response.scope = Some(TextOrByteString::from(x)),
                 (token::TOKEN_TYPE, Value::Integer(x)) => {
-                    if let Ok(i) = x.try_into() {
-                        response.token_type = Some(i)
+                    if let Ok(i) = u8::try_from(x) {
+                        response.token_type = Some(TokenType::from(i))
                     } else {
                         return None;
                     }
@@ -496,7 +519,7 @@ impl AsCborMap for ErrorResponse {
         let mut error_description: Option<String> = None;
         let mut error_uri: Option<String> = None;
         for entry in map {
-            match (entry.0, entry.1) {
+            match (entry.0 as u8, entry.1) {
                 (token::ERROR, Value::Integer(x)) => {
                     if let Ok(i) = u8::try_from(x) {
                         maybe_error = ErrorCode::try_from(i).ok();

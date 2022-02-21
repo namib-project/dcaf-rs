@@ -16,7 +16,7 @@ type ByteStringValue = Vec<u8>;
 #[derive(Debug, Deserialize, PartialEq, Eq, Default)]
 pub struct ByteString(ByteStringValue);
 
-struct CborMapValue<T>(T) where u8: Into<T>, T: Into<u8> + Copy;
+pub struct CborMapValue<T>(pub T) where u8: Into<T>, T: Into<u8> + Copy;
 
 impl<T> Deref for CborMapValue<T> where T: From<u8> + Into<u8> + Copy
 {
