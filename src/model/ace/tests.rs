@@ -152,7 +152,7 @@ fn test_access_token_request_encrypted() -> Result<(), String> {
 }
 
 #[test]
-fn test_access_token_other_fields() -> Result<(), String> {
+fn test_access_token_request_other_fields() -> Result<(), String> {
     let request = CborMap(AccessTokenRequest {
         client_id: "myclient".to_string(),
         redirect_uri: Some("coaps://server.example.com".to_string()),
