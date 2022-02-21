@@ -6,7 +6,8 @@ use core::ops::Deref;
 use ciborium::value::Value;
 use coset::{AsCborValue, CoseEncrypt0, CoseKey};
 use erased_serde::Serialize as ErasedSerialize;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::Error;
 
 use crate::model::cbor_map::AsCborMap;
 
@@ -14,6 +15,38 @@ type ByteStringValue = Vec<u8>;
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Default)]
 pub struct ByteString(ByteStringValue);
+
+struct CborMapValue<T>(T) where u8: Into<T>, T: Into<u8> + Copy;
+
+impl<T> Deref for CborMapValue<T> where T: From<u8> + Into<u8> + Copy
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> Serialize for CborMapValue<T> where T: From<u8> + Into<u8> + Copy {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        let cbor_value: u8 = self.0.into();
+        Value::from(cbor_value).serialize(serializer)
+    }
+}
+
+impl<'de, T> Deserialize<'de> for CborMapValue<T> where T: From<u8> + Into<u8> + Copy {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+    {
+        if let Ok(Value::Integer(i)) = Value::deserialize(deserializer) {
+            Ok(CborMapValue(u8::try_from(i)
+                .map_err(|x| D::Error::custom(x.to_string()))?.into()))
+        } else {
+            Err(D::Error::custom("CBOR map value must be an Integer!"))
+        }
+    }
+}
 
 impl ByteString {
     fn as_value(&self) -> Value {
@@ -23,7 +56,7 @@ impl ByteString {
 
 impl Serialize for ByteString {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
+        where
         S: Serializer,
     {
         // The fact that we have to clone this is a little unfortunate.
