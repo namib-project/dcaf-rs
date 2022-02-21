@@ -6,95 +6,94 @@ pub(crate) mod cbor_abbreviations {
     pub mod creation_hint {
 
         /// See section 5.3 of `draft-ietf-ace-oauth-authz-46`.
-        pub const AS: i128 = 1;
+        pub const AS: u8 = 1;
 
         /// See section 5.3 of `draft-ietf-ace-oauth-authz-46`.
-        pub const KID: i128 = 2;
+        pub const KID: u8 = 2;
 
         /// See section 5.3 of `draft-ietf-ace-oauth-authz-46`.
-        pub const AUDIENCE: i128 = 5;
+        pub const AUDIENCE: u8 = 5;
 
         /// See section 5.3 of `draft-ietf-ace-oauth-authz-46`.
-        pub const SCOPE: i128 = 9;
+        pub const SCOPE: u8 = 9;
 
         /// See section 5.3 of `draft-ietf-ace-oauth-authz-46`.
-        pub const CNONCE: i128 = 39;
+        pub const CNONCE: u8 = 39;
     }
 
     /// Constants for CBOR map keys in token requests and responses,
     /// as specified in `draft-ietf-ace-oauth-authz-46`, Figure 12
     /// and `draft-ietf-ace-oauth-params`, Figure 5.
     pub mod token {
+        /// See section 5.1 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+        pub const ACCESS_TOKEN: u8 = 1;
 
         /// See section 5.1 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const ACCESS_TOKEN: i128 = 1;
-
-        /// See section 5.1 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const EXPIRES_IN: i128 = 2;
+        pub const EXPIRES_IN: u8 = 2;
 
         /// See section 3.1 of `draft-ietf-ace-oauth-params-16`.
-        pub const REQ_CNF: i128 = 4;
+        pub const REQ_CNF: u8 = 4;
 
         /// See section 2.1 of [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693.html).
-        pub const AUDIENCE: i128 = 5;
+        pub const AUDIENCE: u8 = 5;
 
         /// See section 3.2 of `draft-ietf-ace-oauth-params-16`.
-        pub const CNF: i128 = 8;
+        pub const CNF: u8 = 8;
 
         /// See section 4.4.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html)
         /// and section 5.1 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const SCOPE: i128 = 9;
+        pub const SCOPE: u8 = 9;
 
         /// See section 2.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const CLIENT_ID: i128 = 24;
+        pub const CLIENT_ID: u8 = 24;
 
         /// See section 2.3.1 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const CLIENT_SECRET: i128 = 25;
+        pub const CLIENT_SECRET: u8 = 25;
 
         /// See section 3.1.1 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const RESPONSE_TYPE: i128 = 26;
+        pub const RESPONSE_TYPE: u8 = 26;
 
         /// See section 3.1.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const REDIRECT_URI: i128 = 27;
+        pub const REDIRECT_URI: u8 = 27;
 
         /// See section 4.1.1 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const STATE: i128 = 28;
+        pub const STATE: u8 = 28;
 
         /// See section 4.1.3 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const CODE: i128 = 29;
+        pub const CODE: u8 = 29;
 
         /// See section 5.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const ERROR: i128 = 30;
+        pub const ERROR: u8 = 30;
 
         /// See section 5.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const ERROR_DESCRIPTION: i128 = 31;
+        pub const ERROR_DESCRIPTION: u8 = 31;
 
         /// See section 5.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const ERROR_URI: i128 = 32;
+        pub const ERROR_URI: u8 = 32;
 
         /// See section 4.4.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const GRANT_TYPE: i128 = 33;
+        pub const GRANT_TYPE: u8 = 33;
 
         /// See section 5.1 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const TOKEN_TYPE: i128 = 34;
+        pub const TOKEN_TYPE: u8 = 34;
 
         /// See section 4.3.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const USERNAME: i128 = 35;
+        pub const USERNAME: u8 = 35;
 
         /// See section 4.3.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const PASSWORD: i128 = 36;
+        pub const PASSWORD: u8 = 36;
 
         /// See section 5.1 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const REFRESH_TOKEN: i128 = 37;
+        pub const REFRESH_TOKEN: u8 = 37;
 
         /// See section 5.8.4.3 of `draft-ietf-ace-oauth-authz-46`.
-        pub const ACE_PROFILE: i128 = 38;
+        pub const ACE_PROFILE: u8 = 38;
 
         /// See section 5.8.4.4 of `draft-ietf-ace-oauth-authz-46`.
-        pub const CNONCE: i128 = 39;
+        pub const CNONCE: u8 = 39;
 
         /// See section 3.2 of `draft-ietf-ace-oauth-params-16`.
-        pub const RS_CNF: i128 = 41;
+        pub const RS_CNF: u8 = 41;
     }
 
     /// Constants for CBOR abbreviations in grant types,
