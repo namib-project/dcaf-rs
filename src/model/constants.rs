@@ -1,11 +1,9 @@
 /// Constants which abbreviate string values as integers in CBOR.
 #[allow(dead_code)]
 pub(crate) mod cbor_abbreviations {
-
     /// Constants for CBOR map keys in AS Request Creation Hints,
     /// as specified in `draft-ietf-ace-oauth-authz-46`, Figure 2.
     pub mod creation_hint {
-
         /// See section 5.3 of `draft-ietf-ace-oauth-authz-46`.
         pub const AS: u8 = 1;
 

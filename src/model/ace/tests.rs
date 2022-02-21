@@ -1,6 +1,9 @@
 use ciborium::de::from_reader;
 use ciborium::ser::into_writer;
-use coset::{CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder, iana, ProtectedHeader};
+use coset::{
+    CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder, iana,
+    ProtectedHeader,
+};
 use coset::iana::Algorithm;
 
 use crate::model::cbor_map::CborMap;
@@ -74,8 +77,8 @@ fn test_access_token_request_asymmetric() -> Result<(), String> {
             0xbb, 0xfc, 0x11, 0x7e,
         ],
     )
-    .key_id(vec![0x11])
-    .build();
+        .key_id(vec![0x11])
+        .build();
     let request = CborMap(AccessTokenRequest {
         client_id: "myclient".to_string(),
         req_cnf: Some(ProofOfPossessionKey::CoseKey(key)),
@@ -103,9 +106,8 @@ fn test_access_token_request_reference() -> Result<(), String> {
 fn test_access_token_request_encrypted() -> Result<(), String> {
     let unprotected_header = HeaderBuilder::new()
         .iv(vec![
-                0x63, 0x68, 0x98, 0x99, 0x4F, 0xF0, 0xEC, 0x7B, 0xFC, 0xF6, 0xD3, 0xF9,
-                0x5B,
-            ])
+            0x63, 0x68, 0x98, 0x99, 0x4F, 0xF0, 0xEC, 0x7B, 0xFC, 0xF6, 0xD3, 0xF9, 0x5B,
+        ])
         .build();
     let protected_header = HeaderBuilder::new()
         .algorithm(Algorithm::AES_CCM_16_64_128)
@@ -131,20 +133,19 @@ fn test_access_token_request_encrypted() -> Result<(), String> {
     // Extract relevant part for comparison (i.e. no protected headers' original data,
     // which can change after serialization)
     fn transform_header(mut request: AccessTokenRequest) -> AccessTokenRequest {
-        let enc = request.req_cnf
-            .expect( "No req_cnf present")
+        let enc = request
+            .req_cnf
+            .expect("No req_cnf present")
             .try_as_encrypted_cose_key()
             .expect("Key is not encrypted")
             .clone();
-        request.req_cnf = Some(ProofOfPossessionKey::EncryptedCoseKey(
-            CoseEncrypt0 {
-                protected: ProtectedHeader {
-                    original_data: None,
-                    ..enc.protected
-                },
-                ..enc
-            }
-        ));
+        request.req_cnf = Some(ProofOfPossessionKey::EncryptedCoseKey(CoseEncrypt0 {
+            protected: ProtectedHeader {
+                original_data: None,
+                ..enc.protected
+            },
+            ..enc
+        }));
         request
     }
 

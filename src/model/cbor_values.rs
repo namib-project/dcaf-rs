@@ -57,7 +57,7 @@ impl ByteString {
 impl Serialize for ByteString {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
-        S: Serializer,
+            S: Serializer,
     {
         // The fact that we have to clone this is a little unfortunate.
         Value::serialize(&self.as_value(), serializer)
@@ -152,8 +152,8 @@ impl AsCborMap for ProofOfPossessionKey {
     }
 
     fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
-    where
-        Self: Sized + AsCborMap,
+        where
+            Self: Sized + AsCborMap,
     {
         if map.len() != 1 {
             None

@@ -5,7 +5,9 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 
 use ciborium::value::Value;
-use coset::{CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseSign1, CoseSign1Builder, Header};
+use coset::{
+    CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseSign1, CoseSign1Builder, Header,
+};
 use coset::cwt::ClaimsSet;
 use erased_serde::Serialize as ErasedSerialize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -16,7 +18,9 @@ use crate::model::cbor_values::{CborMapValue, ProofOfPossessionKey};
 
 use super::cbor_map::AsCborMap;
 use super::cbor_values::{ByteString, TextOrByteString};
-use super::constants::cbor_abbreviations::{ace_profile, creation_hint, error, grant_types, token, token_types};
+use super::constants::cbor_abbreviations::{
+    ace_profile, creation_hint, error, grant_types, token, token_types,
+};
 
 #[cfg(test)]
 mod tests;
@@ -112,7 +116,6 @@ pub enum AceProfile {
     // /// Profile for ACE-OAuth using OSCORE, specified in
     // /// [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.txt).
     // CoapOscore,
-
     /// An unspecified ACE-OAuth profile along with its representation in CBOR.
     Other(i32),
 }
@@ -200,36 +203,70 @@ pub struct ErrorResponse {
 
 // TODO: Better error handling — don't just use Strings
 
-pub fn encrypt_access_token<F>(claims: ClaimsSet, unprotected_header: Header,
-                               protected_header: Header, cipher: F, aad: &[u8])
-                               -> Result<ByteString, String> where F: FnOnce(&[u8], &[u8]) -> Vec<u8> {
-    Ok(ByteString::from(CoseEncrypt0Builder::new()
-        .unprotected(unprotected_header)
-        .protected(protected_header)
-        .create_ciphertext(&claims.to_vec().map_err(|x| x.to_string())?[..],
-                           aad, cipher)
-        .build()
-        .to_vec().map_err(|x| x.to_string())?))
+pub fn encrypt_access_token<F>(
+    claims: ClaimsSet,
+    unprotected_header: Header,
+    protected_header: Header,
+    cipher: F,
+    aad: &[u8],
+) -> Result<ByteString, String>
+    where
+        F: FnOnce(&[u8], &[u8]) -> Vec<u8>,
+{
+    Ok(ByteString::from(
+        CoseEncrypt0Builder::new()
+            .unprotected(unprotected_header)
+            .protected(protected_header)
+            .create_ciphertext(
+                &claims.to_vec().map_err(|x| x.to_string())?[..],
+                aad,
+                cipher,
+            )
+            .build()
+            .to_vec()
+            .map_err(|x| x.to_string())?,
+    ))
 }
 
-pub fn sign_access_token<F>(claims: ClaimsSet, unprotected_header: Header,
-                            protected_header: Header, cipher: F, aad: &[u8])
-                            -> Result<ByteString, String> where F: FnOnce(&[u8]) -> Vec<u8> {
-    Ok(ByteString::from(CoseSign1Builder::new()
-        .unprotected(unprotected_header)
-        .protected(protected_header)
-        .payload(claims.to_vec().map_err(|x| x.to_string())?)
-        .create_signature(aad, cipher)
-        .build().to_vec().map_err(|x| x.to_string())?))
+pub fn sign_access_token<F>(
+    claims: ClaimsSet,
+    unprotected_header: Header,
+    protected_header: Header,
+    cipher: F,
+    aad: &[u8],
+) -> Result<ByteString, String>
+    where
+        F: FnOnce(&[u8]) -> Vec<u8>,
+{
+    Ok(ByteString::from(
+        CoseSign1Builder::new()
+            .unprotected(unprotected_header)
+            .protected(protected_header)
+            .payload(claims.to_vec().map_err(|x| x.to_string())?)
+            .create_signature(aad, cipher)
+            .build()
+            .to_vec()
+            .map_err(|x| x.to_string())?,
+    ))
 }
 
-pub fn validate_access_token<F>(token: ByteString, aad: &[u8], verifier: F) -> Result<(), String> where F: FnOnce(&[u8], &[u8]) -> Result<(), String> {
+pub fn validate_access_token<F>(token: ByteString, aad: &[u8], verifier: F) -> Result<(), String>
+    where
+        F: FnOnce(&[u8], &[u8]) -> Result<(), String>,
+{
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(|x| x.to_string())?;
     // TODO: Validate protected headers
     sign.verify_signature(aad, verifier)
 }
 
-pub fn decrypt_access_token<F>(token: ByteString, aad: &[u8], cipher: F) -> Result<ClaimsSet, String> where F: FnOnce(&[u8], &[u8]) -> Result<Vec<u8>, String> {
+pub fn decrypt_access_token<F>(
+    token: ByteString,
+    aad: &[u8],
+    cipher: F,
+) -> Result<ClaimsSet, String>
+    where
+        F: FnOnce(&[u8], &[u8]) -> Result<Vec<u8>, String>,
+{
     let encrypt = CoseEncrypt0::from_slice(token.as_slice()).map_err(|x| x.to_string())?;
     let result = encrypt.decrypt(aad, cipher)?;
     ClaimsSet::from_slice(result.as_slice()).map_err(|x| x.to_string())
@@ -271,7 +308,7 @@ impl From<GrantType> for i32 {
             GrantType::AuthorizationCode => grant_types::AUTHORIZATION_CODE,
             GrantType::ClientCredentials => grant_types::CLIENT_CREDENTIALS,
             GrantType::RefreshToken => grant_types::REFRESH_TOKEN,
-            GrantType::Other(x) => x.to_owned()
+            GrantType::Other(x) => x.to_owned(),
         }
     }
 }
@@ -281,7 +318,7 @@ impl From<i32> for TokenType {
         match value {
             token_types::BEARER => TokenType::Bearer,
             token_types::POP => TokenType::ProofOfPossession,
-            x => TokenType::Other(x)
+            x => TokenType::Other(x),
         }
     }
 }
@@ -291,7 +328,7 @@ impl From<TokenType> for i32 {
         match token {
             TokenType::Bearer => token_types::BEARER,
             TokenType::ProofOfPossession => token_types::POP,
-            TokenType::Other(x) => x
+            TokenType::Other(x) => x,
         }
     }
 }
@@ -300,7 +337,7 @@ impl From<i32> for AceProfile {
     fn from(value: i32) -> Self {
         match value {
             ace_profile::COAP_DTLS => CoapDtls,
-            x => Other(x)
+            x => Other(x),
         }
     }
 }
@@ -309,7 +346,7 @@ impl From<AceProfile> for i32 {
     fn from(profile: AceProfile) -> Self {
         match profile {
             CoapDtls => ace_profile::COAP_DTLS,
-            Other(x) => x
+            Other(x) => x,
         }
     }
 }
@@ -326,8 +363,8 @@ impl AsCborMap for AuthServerRequestCreationHint {
     }
 
     fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
-    where
-        Self: Sized + AsCborMap,
+        where
+            Self: Sized + AsCborMap,
     {
         let mut hint = AuthServerRequestCreationHint::default();
         for entry in map {
@@ -367,8 +404,8 @@ impl AsCborMap for AccessTokenRequest {
     }
 
     fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
-    where
-        Self: Sized + AsCborMap,
+        where
+            Self: Sized + AsCborMap,
     {
         let mut request = AccessTokenRequest::default();
         for entry in map {
@@ -424,8 +461,8 @@ impl AsCborMap for AccessTokenResponse {
     }
 
     fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
-    where
-        Self: Sized + AsCborMap,
+        where
+            Self: Sized + AsCborMap,
     {
         let mut response = AccessTokenResponse::default();
         for entry in map {
@@ -523,8 +560,8 @@ impl From<&ErrorCode> for u8 {
 
 impl Serialize for ErrorCode {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
+        where
+            S: Serializer,
     {
         Value::from(u8::from(self)).serialize(serializer)
     }
@@ -532,8 +569,8 @@ impl Serialize for ErrorCode {
 
 impl<'de> Deserialize<'de> for ErrorCode {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
     {
         if let Ok(Value::Integer(i)) = Value::deserialize(deserializer) {
             i128::from(i)
@@ -555,8 +592,8 @@ impl AsCborMap for ErrorResponse {
     }
 
     fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
-    where
-        Self: Sized + AsCborMap,
+        where
+            Self: Sized + AsCborMap,
     {
         let mut maybe_error: Option<ErrorCode> = None;
         let mut error_description: Option<String> = None;

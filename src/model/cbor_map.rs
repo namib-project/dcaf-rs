@@ -12,8 +12,8 @@ pub trait AsCborMap {
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)>;
 
     fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
-    where
-        Self: Sized + AsCborMap;
+        where
+            Self: Sized + AsCborMap;
 
     fn to_ciborium_map(&self) -> Value {
         Value::Map(
@@ -68,24 +68,24 @@ impl<T> Deref for CborMap<T>
 }
 
 impl<T> Serialize for CborMap<T>
-where
-    T: AsCborMap,
+    where
+        T: AsCborMap,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
+        where
+            S: Serializer,
     {
         Serialize::serialize(&self.to_ciborium_map(), serializer)
     }
 }
 
 impl<'de, T> Deserialize<'de> for CborMap<T>
-where
-    T: AsCborMap,
+    where
+        T: AsCborMap,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
     {
         match Value::deserialize(deserializer)? {
             Value::Map(map) => {
