@@ -113,10 +113,22 @@ pub(crate) mod cbor_abbreviations {
         pub const REFRESH_TOKEN: u8 = 3;
     }
 
+    /// Constants for CBOR abbreviations in token types,
+    /// as specified in `draft-ietf-ace-oauth-authz-46`, Section 8.7.
+    pub mod token_types {
+        /// Bearer token type, as specified in
+        /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+        pub const BEARER: u8 = 1;
+
+        /// Proof-of-possession token type, as specified in
+        /// `draft-ietf-ace-oauth-authz-46`.
+        pub const POP: u8 = 2;
+    }
+
+
     /// Constants for CBOR abbreviations in error codes,
     /// as specified in `draft-ietf-ace-oauth-authz-46`, Figure 10.
     pub mod error {
-
         /// See section 5.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
         pub const INVALID_REQUEST: u8 = 1;
 
