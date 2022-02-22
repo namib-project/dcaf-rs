@@ -4,9 +4,8 @@ use core::ops::Deref;
 
 use ciborium::value::Value;
 use erased_serde::Serialize as ErasedSerialize;
-use serde::{Deserializer, Serialize, Serializer};
-use serde::de::{Error, Unexpected};
-use serde::Deserialize;
+
+mod conversion;
 
 pub trait AsCborMap {
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)>;
@@ -45,16 +44,10 @@ pub trait AsCborMap {
 
 /// Convenience struct so we can implement a foreign trait on all structs we intend to
 /// (de)serialize as CBOR maps.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct CborMap<T>(pub T)
     where
         T: AsCborMap;
-
-impl<T> From<T> for CborMap<T> where T: AsCborMap {
-    fn from(value: T) -> Self {
-        CborMap(value)
-    }
-}
 
 impl<T> Deref for CborMap<T>
     where
@@ -64,41 +57,5 @@ impl<T> Deref for CborMap<T>
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl<T> Serialize for CborMap<T>
-    where
-        T: AsCborMap,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-    {
-        Serialize::serialize(&self.to_ciborium_map(), serializer)
-    }
-}
-
-impl<'de, T> Deserialize<'de> for CborMap<T>
-    where
-        T: AsCborMap,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-    {
-        match Value::deserialize(deserializer)? {
-            Value::Map(map) => {
-                let map: Vec<(i128, Value)> =
-                    T::cbor_map_from_int(map).map_err(D::Error::custom)?;
-                AsCborMap::try_from_cbor_map(map)
-                    .map(CborMap)
-                    .ok_or_else(|| D::Error::custom("unknown field in CBOR map encountered"))
-            }
-            _ => Err(D::Error::invalid_type(
-                Unexpected::Other("unknown type"),
-                &"a CBOR map",
-            )),
-        }
     }
 }

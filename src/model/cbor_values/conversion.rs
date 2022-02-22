@@ -1,31 +1,11 @@
-use alloc::string::String;
-use alloc::vec::Vec;
-use core::fmt::Debug;
-use core::ops::Deref;
-
 use ciborium::value::Value;
 use coset::{AsCborValue, CoseEncrypt0, CoseKey};
 use erased_serde::Serialize as ErasedSerialize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error;
 
+use crate::cbor_values::{ByteString, ByteStringValue, CborMapValue, ProofOfPossessionKey, TextOrByteString};
 use crate::model::cbor_map::AsCborMap;
-
-type ByteStringValue = Vec<u8>;
-
-#[derive(Debug, Deserialize, PartialEq, Eq, Default)]
-pub struct ByteString(ByteStringValue);
-
-pub struct CborMapValue<T>(pub T) where i32: Into<T>, T: Into<i32> + Copy;
-
-impl<T> Deref for CborMapValue<T> where T: From<i32> + Into<i32> + Copy
-{
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 impl<T> Serialize for CborMapValue<T> where T: From<i32> + Into<i32> + Copy {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
@@ -48,12 +28,6 @@ impl<'de, T> Deserialize<'de> for CborMapValue<T> where T: From<i32> + Into<i32>
     }
 }
 
-impl ByteString {
-    fn as_value(&self) -> Value {
-        Value::Bytes(self.to_vec())
-    }
-}
-
 impl Serialize for ByteString {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
@@ -64,25 +38,10 @@ impl Serialize for ByteString {
     }
 }
 
-impl Deref for ByteString {
-    type Target = ByteStringValue;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl From<ByteStringValue> for ByteString {
     fn from(x: ByteStringValue) -> Self {
         ByteString(x)
     }
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum TextOrByteString {
-    TextString(String),
-    ByteString(ByteString),
 }
 
 impl From<String> for TextOrByteString {
@@ -95,33 +54,6 @@ impl From<ByteStringValue> for TextOrByteString {
     fn from(s: ByteStringValue) -> Self {
         TextOrByteString::ByteString(ByteString(s))
     }
-}
-
-impl TextOrByteString {
-    pub fn try_as_text_string(&self) -> Option<&str> {
-        if let TextOrByteString::TextString(s) = self {
-            Option::Some(s)
-        } else {
-            Option::None
-        }
-    }
-
-    pub fn try_as_byte_string(&self) -> Option<&ByteString> {
-        if let TextOrByteString::ByteString(s) = self {
-            Option::Some(s)
-        } else {
-            Option::None
-        }
-    }
-}
-
-/// A proof-of-possession key as specified by RFC 8747, section 3.1.
-#[derive(Debug, PartialEq)]
-#[allow(clippy::large_enum_variant)]
-pub enum ProofOfPossessionKey {
-    CoseKey(CoseKey),
-    EncryptedCoseKey(CoseEncrypt0),
-    KeyId(ByteString),
 }
 
 impl AsCborMap for ProofOfPossessionKey {
@@ -200,28 +132,4 @@ impl From<CoseEncrypt0> for ProofOfPossessionKey {
     }
 }
 
-impl ProofOfPossessionKey {
-    pub fn try_as_cose_key(&self) -> Option<&CoseKey> {
-        if let ProofOfPossessionKey::CoseKey(key) = self {
-            Some(key)
-        } else {
-            None
-        }
-    }
 
-    pub fn try_as_encrypted_cose_key(&self) -> Option<&CoseEncrypt0> {
-        if let ProofOfPossessionKey::EncryptedCoseKey(key) = self {
-            Some(key)
-        } else {
-            None
-        }
-    }
-
-    pub fn try_as_key_id(&self) -> Option<&ByteString> {
-        if let ProofOfPossessionKey::KeyId(key) = self {
-            Some(key)
-        } else {
-            None
-        }
-    }
-}
