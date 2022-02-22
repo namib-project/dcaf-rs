@@ -6,8 +6,6 @@ use core::fmt::Debug;
 
 use ciborium::value::Value;
 use erased_serde::Serialize as ErasedSerialize;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde::de::Error;
 
 use crate::ace::AceProfile::{CoapDtls, Other};
 use crate::model::cbor_values::{CborMapValue, ProofOfPossessionKey};
@@ -150,7 +148,7 @@ pub struct AccessTokenResponse {
 }
 
 /// Error code specifying what went wrong for a token request.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ErrorCode {
     /// The request is missing a required parameter, includes an unsupported parameter value (other
     /// than grant type), repeats a parameter, includes multiple credentials, utilizes
@@ -180,6 +178,9 @@ pub enum ErrorCode {
 
     /// The client and the RS it has requested an access token for do not share a common profile.
     IncompatibleAceProfiles,
+
+    /// An unspecified error code along with its representation in CBOR.
+    Other(i32)
 }
 
 /// Details about an error which occurred for an access token request.
@@ -275,6 +276,39 @@ impl From<AceProfile> for i32 {
         }
     }
 }
+
+impl From<i32> for ErrorCode {
+    fn from(value: i32) -> Self {
+        match value {
+            error::INVALID_REQUEST => ErrorCode::InvalidRequest,
+            error::INVALID_CLIENT => ErrorCode::InvalidClient,
+            error::INVALID_GRANT => ErrorCode::InvalidGrant,
+            error::UNAUTHORIZED_CLIENT => ErrorCode::UnauthorizedClient,
+            error::UNSUPPORTED_GRANT_TYPE => ErrorCode::UnsupportedGrantType,
+            error::INVALID_SCOPE => ErrorCode::InvalidScope,
+            error::UNSUPPORTED_POP_KEY => ErrorCode::UnsupportedPopKey,
+            error::INCOMPATIBLE_ACE_PROFILES => ErrorCode::IncompatibleAceProfiles,
+            x => ErrorCode::Other(x)
+        }
+    }
+}
+
+impl From<ErrorCode> for i32 {
+    fn from(code: ErrorCode) -> Self {
+        match code {
+            ErrorCode::InvalidRequest => error::INVALID_REQUEST,
+            ErrorCode::InvalidClient => error::INVALID_CLIENT,
+            ErrorCode::InvalidGrant => error::INVALID_GRANT,
+            ErrorCode::UnauthorizedClient => error::UNAUTHORIZED_CLIENT,
+            ErrorCode::UnsupportedGrantType => error::UNSUPPORTED_GRANT_TYPE,
+            ErrorCode::InvalidScope => error::INVALID_SCOPE,
+            ErrorCode::UnsupportedPopKey => error::UNSUPPORTED_POP_KEY,
+            ErrorCode::IncompatibleAceProfiles => error::INCOMPATIBLE_ACE_PROFILES,
+            ErrorCode::Other(x) => x
+        }
+    }
+}
+
 
 impl AsCborMap for AuthServerRequestCreationHint {
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
@@ -442,75 +476,11 @@ impl AsCborMap for AccessTokenResponse {
     }
 }
 
-impl TryFrom<u8> for ErrorCode {
-    type Error = ();
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            error::INVALID_REQUEST => Ok(ErrorCode::InvalidRequest),
-            error::INVALID_CLIENT => Ok(ErrorCode::InvalidClient),
-            error::INVALID_GRANT => Ok(ErrorCode::InvalidGrant),
-            error::UNAUTHORIZED_CLIENT => Ok(ErrorCode::UnauthorizedClient),
-            error::UNSUPPORTED_GRANT_TYPE => Ok(ErrorCode::UnsupportedGrantType),
-            error::INVALID_SCOPE => Ok(ErrorCode::InvalidScope),
-            error::UNSUPPORTED_POP_KEY => Ok(ErrorCode::UnsupportedPopKey),
-            error::INCOMPATIBLE_ACE_PROFILES => Ok(ErrorCode::IncompatibleAceProfiles),
-            _ => Err(()),
-        }
-    }
-}
-
-impl TryFrom<i128> for ErrorCode {
-    type Error = ();
-
-    fn try_from(value: i128) -> Result<Self, Self::Error> {
-        u8::try_from(value).map_err(|_| ())?.try_into()
-    }
-}
-
-impl From<&ErrorCode> for u8 {
-    fn from(code: &ErrorCode) -> Self {
-        match code {
-            ErrorCode::InvalidRequest => error::INVALID_REQUEST,
-            ErrorCode::InvalidClient => error::INVALID_CLIENT,
-            ErrorCode::InvalidGrant => error::INVALID_GRANT,
-            ErrorCode::UnauthorizedClient => error::UNAUTHORIZED_CLIENT,
-            ErrorCode::UnsupportedGrantType => error::UNSUPPORTED_GRANT_TYPE,
-            ErrorCode::InvalidScope => error::INVALID_SCOPE,
-            ErrorCode::UnsupportedPopKey => error::UNSUPPORTED_POP_KEY,
-            ErrorCode::IncompatibleAceProfiles => error::INCOMPATIBLE_ACE_PROFILES,
-        }
-    }
-}
-
-impl Serialize for ErrorCode {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-    {
-        Value::from(u8::from(self)).serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for ErrorCode {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-    {
-        if let Ok(Value::Integer(i)) = Value::deserialize(deserializer) {
-            i128::from(i)
-                .try_into()
-                .map_err(|_| D::Error::custom("Invalid value"))
-        } else {
-            Err(D::Error::custom("Error code must be an Integer!"))
-        }
-    }
-}
-
 impl AsCborMap for ErrorResponse {
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
+        let error = CborMapValue(self.error);
         cbor_map_vec! {
-            token::ERROR => Some(u8::from(&self.error)),
+            token::ERROR => Some(error),
             token::ERROR_DESCRIPTION => self.error_description.as_ref(),
             token::ERROR_URI => self.error_uri.as_ref()
         }
@@ -526,8 +496,8 @@ impl AsCborMap for ErrorResponse {
         for entry in map {
             match (entry.0 as u8, entry.1) {
                 (token::ERROR, Value::Integer(x)) => {
-                    if let Ok(i) = u8::try_from(x) {
-                        maybe_error = ErrorCode::try_from(i).ok();
+                    if let Ok(i) = i32::try_from(x) {
+                        maybe_error = Some(ErrorCode::from(i));
                     } else {
                         return None;
                     }

@@ -147,27 +147,27 @@ pub(crate) mod cbor_abbreviations {
     /// as specified in `draft-ietf-ace-oauth-authz-46`, Figure 10.
     pub mod error {
         /// See section 5.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const INVALID_REQUEST: u8 = 1;
+        pub const INVALID_REQUEST: i32 = 1;
 
         /// See section 5.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const INVALID_CLIENT: u8 = 2;
+        pub const INVALID_CLIENT: i32 = 2;
 
         /// See section 5.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const INVALID_GRANT: u8 = 3;
+        pub const INVALID_GRANT: i32 = 3;
 
         /// See section 5.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const UNAUTHORIZED_CLIENT: u8 = 4;
+        pub const UNAUTHORIZED_CLIENT: i32 = 4;
 
         /// See section 5.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const UNSUPPORTED_GRANT_TYPE: u8 = 5;
+        pub const UNSUPPORTED_GRANT_TYPE: i32 = 5;
 
         /// See section 5.2 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-        pub const INVALID_SCOPE: u8 = 6;
+        pub const INVALID_SCOPE: i32 = 6;
 
         /// See section 5.8.3 of `draft-ietf-ace-oauth-authz-46`.
-        pub const UNSUPPORTED_POP_KEY: u8 = 7;
+        pub const UNSUPPORTED_POP_KEY: i32 = 7;
 
         /// See section 5.8.3 of `draft-ietf-ace-oauth-authz-46`.
-        pub const INCOMPATIBLE_ACE_PROFILES: u8 = 8;
+        pub const INCOMPATIBLE_ACE_PROFILES: i32 = 8;
     }
 }
