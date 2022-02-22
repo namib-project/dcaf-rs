@@ -4,7 +4,7 @@ use erased_serde::Serialize as ErasedSerialize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error;
 
-use crate::cbor_values::{ByteString, ByteStringValue, CborMapValue, ProofOfPossessionKey, TextOrByteString};
+use crate::cbor_values::{ByteString, ByteStringValue, CborMapValue, KeyId, ProofOfPossessionKey, TextOrByteString};
 use crate::model::cbor_map::AsCborMap;
 
 impl<T> Serialize for CborMapValue<T> where T: From<i32> + Into<i32> + Copy {
@@ -34,7 +34,7 @@ impl Serialize for ByteString {
             S: Serializer,
     {
         // The fact that we have to clone this is a little unfortunate.
-        Value::serialize(&self.as_value(), serializer)
+        Value::serialize(&self.into(), serializer)
     }
 }
 
@@ -129,6 +129,73 @@ impl From<ByteString> for ProofOfPossessionKey {
 impl From<CoseEncrypt0> for ProofOfPossessionKey {
     fn from(enc: CoseEncrypt0) -> Self {
         ProofOfPossessionKey::EncryptedCoseKey(enc)
+    }
+}
+
+impl From<&ByteString> for Value {
+    fn from(bytestring: &ByteString) -> Self {
+        Value::Bytes(bytestring.to_vec())
+    }
+}
+
+impl TryFrom<TextOrByteString> for String {
+    type Error = ();
+
+    fn try_from(value: TextOrByteString) -> Result<Self, Self::Error> {
+        if let TextOrByteString::TextString(s) = value {
+            Ok(s)
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl TryFrom<TextOrByteString> for ByteString {
+    type Error = ();
+
+    fn try_from(value: TextOrByteString) -> Result<Self, Self::Error> {
+        if let TextOrByteString::ByteString(s) = value {
+            Ok(s)
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl TryFrom<ProofOfPossessionKey> for CoseKey {
+    type Error = ();
+
+    fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
+        if let ProofOfPossessionKey::CoseKey(key) = value {
+            Ok(key)
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl TryFrom<ProofOfPossessionKey> for CoseEncrypt0 {
+    type Error = ();
+
+    fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
+        if let ProofOfPossessionKey::EncryptedCoseKey(key) = value {
+            Ok(key)
+        } else {
+            Err(())
+        }
+    }
+}
+
+/// Converts from
+impl TryFrom<ProofOfPossessionKey> for KeyId {
+    type Error = ();
+
+    fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
+        if let ProofOfPossessionKey::KeyId(kid) = value {
+            Ok(kid)
+        } else {
+            Err(())
+        }
     }
 }
 

@@ -133,12 +133,11 @@ fn test_access_token_request_encrypted() -> Result<(), String> {
     // Extract relevant part for comparison (i.e. no protected headers' original data,
     // which can change after serialization)
     fn transform_header(mut request: AccessTokenRequest) -> AccessTokenRequest {
-        let enc = request
+        let enc: CoseEncrypt0 = request
             .req_cnf
             .expect("No req_cnf present")
-            .try_as_encrypted_cose_key()
-            .expect("Key is not encrypted")
-            .clone();
+            .try_into()
+            .expect("Key is not encrypted");
         request.req_cnf = Some(ProofOfPossessionKey::EncryptedCoseKey(CoseEncrypt0 {
             protected: ProtectedHeader {
                 original_data: None,
