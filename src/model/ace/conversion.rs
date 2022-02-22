@@ -114,13 +114,10 @@ mod cbor_map {
     use erased_serde::Serialize as ErasedSerialize;
 
     use crate::ace::{AccessTokenRequest, AccessTokenResponse, AceProfile, AuthServerRequestCreationHint, ErrorCode, ErrorResponse, GrantType, TokenType};
-    use crate::ace::AceProfile::{CoapDtls, Other};
     use crate::cbor_values::{ByteString, TextOrByteString};
     use crate::model::cbor_map::AsCborMap;
     use crate::model::cbor_values::{CborMapValue, ProofOfPossessionKey};
-    use crate::model::constants::cbor_abbreviations::{
-        creation_hint, error, grant_types, token, token_types,
-    };
+    use crate::model::constants::cbor_abbreviations::{creation_hint, token};
 
     // Macro adapted from https://github.com/enarx/ciborium/blob/main/ciborium/tests/macro.rs#L13
     macro_rules! cbor_map_vec {

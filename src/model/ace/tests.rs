@@ -6,6 +6,7 @@ use coset::{
 };
 use coset::iana::Algorithm;
 
+use crate::ace::AceProfile::CoapDtls;
 use crate::model::cbor_map::CborMap;
 use crate::model::cbor_values::{ByteString, TextOrByteString};
 
@@ -162,4 +163,22 @@ fn test_access_token_request_other_fields() -> Result<(), String> {
         ..Default::default()
     });
     test_ser_de!(request => "A51818686D79636C69656E74181B781A636F6170733A2F2F7365727665722E6578616D706C652E636F6D1821021826F61827450001020304")
+}
+
+#[test]
+fn test_access_token_response() -> Result<(), String> {
+    let key = CoseKeyBuilder::new_symmetric_key(vec![
+        0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c, 0x42,
+        0x71, 0x08,
+    ])
+        .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
+        .build();
+    let response = CborMap(AccessTokenResponse {
+        access_token: ByteString::from(hex::decode("4a5015df686428").map_err(|x| x.to_string())?),
+        ace_profile: Some(CoapDtls),
+        expires_in: Some(3600),
+        cnf: Some(ProofOfPossessionKey::CoseKey(key)),
+        ..Default::default()
+    });
+    test_ser_de!(response => "A401474A5015DF68642802190E1008A101A301040246849B5786457C2051849B5786457C1491BE3A76DCEA6C427108182601")
 }
