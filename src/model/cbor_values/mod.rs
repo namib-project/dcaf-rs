@@ -1,9 +1,10 @@
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::fmt::Debug;
+use core::fmt::{Debug, Display, Formatter};
 use core::ops::Deref;
 
 use coset::{CoseEncrypt0, CoseKey};
+
 use serde::{Deserialize, Serialize};
 
 mod conversion;
@@ -52,5 +53,30 @@ impl<T> Deref for CborMapValue<T>
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl Display for TextOrByteString {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        match self {
+            TextOrByteString::TextString(s) => write!(f, "{}", s),
+            TextOrByteString::ByteString(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+impl Display for ByteString {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(f, "{:02X?}", self.0)
+    }
+}
+
+impl<T> Display for CborMapValue<T>
+    where
+        i32: Into<T>,
+        T: Into<i32> + Copy + Display,
+{
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }

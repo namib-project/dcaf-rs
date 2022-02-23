@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::fmt::{Display, Formatter};
 use core::ops::Deref;
 
 use ciborium::value::Value;
@@ -48,6 +49,15 @@ pub trait AsCborMap {
 pub struct CborMap<T>(pub T)
     where
         T: AsCborMap;
+
+impl<T> Display for CborMap<T>
+    where
+        T: AsCborMap + Display,
+{
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl<T> Deref for CborMap<T>
     where
