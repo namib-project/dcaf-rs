@@ -142,7 +142,6 @@ pub(crate) mod cbor_abbreviations {
         // // pub const COAP_OSCORE: i32;
     }
 
-
     /// Constants for CBOR abbreviations in error codes,
     /// as specified in `draft-ietf-ace-oauth-authz-46`, Figure 10.
     pub mod error {

@@ -4,24 +4,38 @@ use erased_serde::Serialize as ErasedSerialize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error;
 
-use crate::cbor_values::{ByteString, ByteStringValue, CborMapValue, KeyId, ProofOfPossessionKey, TextOrByteString};
+use crate::cbor_values::{
+    ByteString, ByteStringValue, CborMapValue, KeyId, ProofOfPossessionKey, TextOrByteString,
+};
 use crate::model::cbor_map::AsCborMap;
 
-impl<T> Serialize for CborMapValue<T> where T: From<i32> + Into<i32> + Copy {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+impl<T> Serialize for CborMapValue<T>
+    where
+        T: From<i32> + Into<i32> + Copy,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+    {
         let cbor_value: i32 = self.0.into();
         Value::from(cbor_value).serialize(serializer)
     }
 }
 
-impl<'de, T> Deserialize<'de> for CborMapValue<T> where T: From<i32> + Into<i32> + Copy {
+impl<'de, T> Deserialize<'de> for CborMapValue<T>
+    where
+        T: From<i32> + Into<i32> + Copy,
+{
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
     {
         if let Ok(Value::Integer(i)) = Value::deserialize(deserializer) {
-            Ok(CborMapValue(i32::try_from(i)
-                .map_err(|x| D::Error::custom(x.to_string()))?.into()))
+            Ok(CborMapValue(
+                i32::try_from(i)
+                    .map_err(|x| D::Error::custom(x.to_string()))?
+                    .into(),
+            ))
         } else {
             Err(D::Error::custom("CBOR map value must be an Integer!"))
         }
@@ -197,5 +211,3 @@ impl TryFrom<ProofOfPossessionKey> for KeyId {
         }
     }
 }
-
-

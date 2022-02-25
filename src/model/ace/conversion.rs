@@ -113,7 +113,10 @@ mod cbor_map {
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
 
-    use crate::ace::{AccessTokenRequest, AccessTokenResponse, AceProfile, AuthServerRequestCreationHint, ErrorCode, ErrorResponse, GrantType, TokenType};
+    use crate::ace::{
+        AccessTokenRequest, AccessTokenResponse, AceProfile, AuthServerRequestCreationHint,
+        ErrorCode, ErrorResponse, GrantType, TokenType,
+    };
     use crate::cbor_values::{ByteString, TextOrByteString};
     use crate::model::cbor_map::AsCborMap;
     use crate::model::cbor_values::{CborMapValue, ProofOfPossessionKey};
