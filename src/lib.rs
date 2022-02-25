@@ -2,6 +2,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
 extern crate core;
+#[macro_use]
+extern crate derive_builder;
 
 pub use model::*;
 pub use token::*;

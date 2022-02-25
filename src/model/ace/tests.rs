@@ -8,7 +8,7 @@ use coset::iana::Algorithm;
 
 use crate::ace::AceProfile::CoapDtls;
 use crate::model::cbor_map::CborMap;
-use crate::model::cbor_values::{ByteString, TextOrByteString};
+use crate::model::cbor_values::ByteString;
 
 use super::*;
 
@@ -39,26 +39,28 @@ macro_rules! test_ser_de {
 /// Example data taken from draft-ietf-ace-oauth-authz-46, Figure 3 and 4.
 #[test]
 fn test_creation_hint() -> Result<(), String> {
-    let hint = CborMap(AuthServerRequestCreationHint {
-        auth_server: Some("coaps://as.example.com/token".to_string()),
-        audience: Some("coaps://rs.example.com".to_string()),
-        scope: Some(TextOrByteString::TextString("rTempC".to_string())),
-        client_nonce: Some(ByteString::from(
-            hex::decode("e0a156bb3f").map_err(|x| x.to_string())?,
-        )),
-        ..Default::default()
-    });
+    let hint = CborMap(
+        AuthServerRequestCreationHintBuilder::default()
+            .auth_server("coaps://as.example.com/token")
+            .audience("coaps://rs.example.com")
+            .scope("rTempC".to_string())
+            .client_nonce(hex::decode("e0a156bb3f").map_err(|x| x.to_string())?)
+            .build()
+            .map_err(|x| x.to_string())?,
+    );
     test_ser_de!(hint => "a401781c636f6170733a2f2f61732e6578616d706c652e636f6d2f746f6b656e0576636f6170733a2f2f72732e6578616d706c652e636f6d09667254656d7043182745e0a156bb3f")
 }
 
 /// Example data taken from draft-ietf-ace-oauth-authz-46, Figure 5.
 #[test]
 fn test_access_token_request_symmetric() -> Result<(), String> {
-    let request = CborMap(AccessTokenRequest {
-        client_id: "myclient".to_string(),
-        audience: Some("tempSensor4711".to_string()),
-        ..Default::default()
-    });
+    let request = CborMap(
+        AccessTokenRequestBuilder::default()
+            .client_id("myclient")
+            .audience("tempSensor4711")
+            .build()
+            .map_err(|x| x.to_string())?,
+    );
     test_ser_de!(request => "A2056E74656D7053656E736F72343731311818686D79636C69656E74")
 }
 
@@ -80,26 +82,30 @@ fn test_access_token_request_asymmetric() -> Result<(), String> {
     )
         .key_id(vec![0x11])
         .build();
-    let request = CborMap(AccessTokenRequest {
-        client_id: "myclient".to_string(),
-        req_cnf: Some(ProofOfPossessionKey::CoseKey(key)),
-        ..Default::default()
-    });
+    let request = CborMap(
+        AccessTokenRequestBuilder::default()
+            .client_id("myclient")
+            .req_cnf(key)
+            .build()
+            .map_err(|x| x.to_string())?,
+    );
     test_ser_de!(request => "A204A101A501020241112001215820BAC5B11CAD8F99F9C72B05CF4B9E26D244DC189F745228255A219A86D6A09EFF22582020138BF82DC1B6D562BE0FA54AB7804A3A64B6D72CCFED6B6FB6ED28BBFC117E1818686D79636C69656E74")
 }
 
 /// Example data taken from draft-ietf-ace-oauth-authz-46, Figure 7.
 #[test]
 fn test_access_token_request_reference() -> Result<(), String> {
-    let request = CborMap(AccessTokenRequest {
-        client_id: "myclient".to_string(),
-        audience: Some("valve424".to_string()),
-        scope: Some(TextOrByteString::from("read".to_string())),
-        req_cnf: Some(ProofOfPossessionKey::KeyId(ByteString::from(vec![
-            0xea, 0x48, 0x34, 0x75, 0x72, 0x4c, 0xd7, 0x75,
-        ]))),
-        ..Default::default()
-    });
+    let request = CborMap(
+        AccessTokenRequestBuilder::default()
+            .client_id("myclient")
+            .audience("valve424")
+            .scope("read".to_string())
+            .req_cnf(ByteString::from(vec![
+                0xea, 0x48, 0x34, 0x75, 0x72, 0x4c, 0xd7, 0x75,
+            ]))
+            .build()
+            .map_err(|x| x.to_string())?,
+    );
     test_ser_de!(request => "A404A10348EA483475724CD775056876616C76653432340964726561641818686D79636C69656E74")
 }
 
@@ -125,11 +131,13 @@ fn test_access_token_request_encrypted() -> Result<(), String> {
         .build();
     assert_eq!(hex::encode_upper(encrypted.clone().to_vec().map_err(|x| x.to_string())?),
                "8343A1010AA1054D636898994FF0EC7BFCF6D3F95B58300573318A3573EB983E55A7C2F06CADD0796C9E584F1D0E3EA8C5B052592A8B2694BE9654F0431F38D5BBC8049FA7F13F");
-    let request = CborMap(AccessTokenRequest {
-        client_id: "myclient".to_string(),
-        req_cnf: Some(ProofOfPossessionKey::EncryptedCoseKey(encrypted)),
-        ..Default::default()
-    });
+    let request = CborMap(
+        AccessTokenRequestBuilder::default()
+            .client_id("myclient")
+            .req_cnf(encrypted)
+            .build()
+            .map_err(|x| x.to_string())?,
+    );
 
     // Extract relevant part for comparison (i.e. no protected headers' original data,
     // which can change after serialization)
@@ -154,14 +162,16 @@ fn test_access_token_request_encrypted() -> Result<(), String> {
 
 #[test]
 fn test_access_token_request_other_fields() -> Result<(), String> {
-    let request = CborMap(AccessTokenRequest {
-        client_id: "myclient".to_string(),
-        redirect_uri: Some("coaps://server.example.com".to_string()),
-        grant_type: Some(GrantType::ClientCredentials),
-        ace_profile: Some(()),
-        client_nonce: Some(ByteString::from(vec![0, 1, 2, 3, 4])),
-        ..Default::default()
-    });
+    let request = CborMap(
+        AccessTokenRequestBuilder::default()
+            .client_id("myclient")
+            .redirect_uri("coaps://server.example.com")
+            .grant_type(GrantType::ClientCredentials)
+            .ace_profile()
+            .client_nonce(vec![0, 1, 2, 3, 4])
+            .build()
+            .map_err(|x| x.to_string())?,
+    );
     test_ser_de!(request => "A51818686D79636C69656E74181B781A636F6170733A2F2F7365727665722E6578616D706C652E636F6D1821021826F61827450001020304")
 }
 
@@ -173,12 +183,16 @@ fn test_access_token_response() -> Result<(), String> {
     ])
         .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
         .build();
-    let response = CborMap(AccessTokenResponse {
-        access_token: ByteString::from(hex::decode("4a5015df686428").map_err(|x| x.to_string())?),
-        ace_profile: Some(CoapDtls),
-        expires_in: Some(3600),
-        cnf: Some(ProofOfPossessionKey::CoseKey(key)),
-        ..Default::default()
-    });
+    // We need to specify this here because otherwise it'd be typed as an i32.
+    let expires_in: u32 = 3600;
+    let response = CborMap(
+        AccessTokenResponseBuilder::default()
+            .access_token(hex::decode("4a5015df686428").map_err(|x| x.to_string())?)
+            .ace_profile(CoapDtls)
+            .expires_in(expires_in)
+            .cnf(key)
+            .build()
+            .map_err(|x| x.to_string())?,
+    );
     test_ser_de!(response => "A401474A5015DF68642802190E1008A101A301040246849B5786457C2051849B5786457C1491BE3A76DCEA6C427108182601")
 }

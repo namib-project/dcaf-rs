@@ -33,7 +33,6 @@ impl Serialize for ByteString {
         where
             S: Serializer,
     {
-        // The fact that we have to clone this is a little unfortunate.
         Value::serialize(&self.into(), serializer)
     }
 }

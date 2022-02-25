@@ -4,7 +4,6 @@ use core::fmt::{Debug, Display, Formatter};
 use core::ops::Deref;
 
 use coset::{CoseEncrypt0, CoseKey};
-
 use serde::{Deserialize, Serialize};
 
 mod conversion;
@@ -13,7 +12,7 @@ type ByteStringValue = Vec<u8>;
 
 type KeyId = ByteString;
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Default, Hash)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Default, Hash, Clone)]
 pub struct ByteString(ByteStringValue);
 
 pub struct CborMapValue<T>(pub T)
@@ -21,7 +20,7 @@ pub struct CborMapValue<T>(pub T)
         i32: Into<T>,
         T: Into<i32> + Copy;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(untagged)]
 pub enum TextOrByteString {
     TextString(String),
@@ -29,7 +28,7 @@ pub enum TextOrByteString {
 }
 
 /// A proof-of-possession key as specified by RFC 8747, section 3.1.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum ProofOfPossessionKey {
     CoseKey(CoseKey),

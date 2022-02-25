@@ -5,15 +5,22 @@ use crate::model::cbor_values::ProofOfPossessionKey;
 
 use super::cbor_values::{ByteString, TextOrByteString};
 
+mod builder;
+mod conversion;
 #[cfg(test)]
 mod tests;
-
-mod conversion;
 
 /// This message is sent by an RS as a response to an Unauthorized Resource Request Message
 /// to help the sender of the Unauthorized Resource Request Message acquire a valid access token.
 /// For more information, see [section 5.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3).
-#[derive(Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, PartialEq, Eq, Hash, Builder)]
+#[builder(
+no_std,
+setter(into, strip_option),
+default,
+derive(Debug, PartialEq, Eq),
+build_fn(validate = "Self::validate")
+)]
 pub struct AuthServerRequestCreationHint {
     /// An absolute URI that identifies the appropriate AS for the RS.
     auth_server: Option<String>,
@@ -44,30 +51,43 @@ pub enum GrantType {
 }
 
 /// Request for an access token, sent from the client.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Builder)]
+#[builder(
+no_std,
+setter(into, strip_option),
+derive(Debug, PartialEq),
+build_fn(validate = "Self::validate")
+)]
 pub struct AccessTokenRequest {
     /// Grant type used for this request. Defaults to `client_credentials`.
+    #[builder(default)]
     grant_type: Option<GrantType>,
 
     /// The logical name of the target service where the client intends to use the requested security token.
+    #[builder(default)]
     audience: Option<String>,
 
     /// URI to redirect the client to after authorization is complete.
+    #[builder(default)]
     redirect_uri: Option<String>,
 
     /// Client nonce to ensure the token is still fresh.
+    #[builder(default)]
     client_nonce: Option<ByteString>,
 
     /// Scope of the access request as described by section 3.3 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+    #[builder(default)]
     scope: Option<TextOrByteString>,
 
     /// Included in the request if the AS shall include the `ace_profile` parameter in its
     /// response.
+    #[builder(setter(custom, strip_option), default = "None")]
     ace_profile: Option<()>,
 
     /// Contains information about the key the client would like to bind to the
     /// access token for proof-of-possession.
+    #[builder(default)]
     req_cnf: Option<ProofOfPossessionKey>,
 
     /// The client identifier as described in section 2.2 of
@@ -106,35 +126,48 @@ pub enum AceProfile {
 }
 
 /// Response to an AccessTokenRequest containing the Access Information.
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Builder)]
+#[builder(
+no_std,
+setter(into, strip_option),
+derive(Debug, PartialEq),
+build_fn(validate = "Self::validate")
+)]
 pub struct AccessTokenResponse {
     /// The access token issued by the authorization server.
     access_token: ByteString,
 
     /// The lifetime in seconds of the access token.
+    #[builder(default)]
     expires_in: Option<u32>,
 
     /// The scope of the access token as described by
     /// section 3.3 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-3.3).
+    #[builder(default)]
     scope: Option<TextOrByteString>,
 
     /// The type of the token issued as described in section 7.1 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1) and section 5.8.4.2
     /// of `draft-ietf-ace-oauth-authz-46`.
+    #[builder(default)]
     token_type: Option<TokenType>,
 
     /// The refresh token, which can be used to obtain new access tokens using the same
     /// authorization grant as described in section 6 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html)
+    #[builder(default)]
     refresh_token: Option<ByteString>,
 
     /// This indicates the profile that the client must use towards the RS.
+    #[builder(default)]
     ace_profile: Option<AceProfile>,
 
     /// The proof-of-possession key that the AS selected for the token.
+    #[builder(default)]
     cnf: Option<ProofOfPossessionKey>,
 
     /// Information about the public key used by the RS to authenticate.
+    #[builder(default)]
     rs_cnf: Option<ProofOfPossessionKey>,
 }
 
@@ -171,21 +204,29 @@ pub enum ErrorCode {
     IncompatibleAceProfiles,
 
     /// An unspecified error code along with its representation in CBOR.
-    Other(i32)
+    Other(i32),
 }
 
 /// Details about an error which occurred for an access token request.
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Builder)]
+#[builder(
+no_std,
+setter(into, strip_option),
+derive(Debug, PartialEq),
+build_fn(validate = "Self::validate")
+)]
 pub struct ErrorResponse {
     /// Error code for this error.
     error: ErrorCode,
 
     /// Human-readable ASCII text providing additional information, used to assist the
     /// client developer in understanding the error that occurred.
+    #[builder(default)]
     error_description: Option<String>,
 
     /// A URI identifying a human-readable web page with information about the error, used to
     /// provide the client developer with additional information about the error.
+    #[builder(default)]
     error_uri: Option<String>,
 }
 
