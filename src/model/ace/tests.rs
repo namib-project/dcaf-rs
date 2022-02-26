@@ -43,7 +43,7 @@ fn test_creation_hint() -> Result<(), String> {
         AuthServerRequestCreationHintBuilder::default()
             .auth_server("coaps://as.example.com/token")
             .audience("coaps://rs.example.com")
-            .scope("rTempC".to_string())
+            .scope(TextEncodedScope::from("rTempC"))
             .client_nonce(hex::decode("e0a156bb3f").map_err(|x| x.to_string())?)
             .build()
             .map_err(|x| x.to_string())?,
@@ -99,7 +99,7 @@ fn test_access_token_request_reference() -> Result<(), String> {
         AccessTokenRequestBuilder::default()
             .client_id("myclient")
             .audience("valve424")
-            .scope("read".to_string())
+            .scope(TextEncodedScope::from("read"))
             .req_cnf(ByteString::from(vec![
                 0xea, 0x48, 0x34, 0x75, 0x72, 0x4c, 0xd7, 0x75,
             ]))

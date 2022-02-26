@@ -1,25 +1,54 @@
 use alloc::string::String;
-use core::fmt::Debug;
+
+use serde::{Deserialize, Serialize};
 
 use crate::model::cbor_values::ProofOfPossessionKey;
 
-use super::cbor_values::{ByteString, TextOrByteString};
+use super::cbor_values::ByteString;
 
 mod builder;
 mod conversion;
 #[cfg(test)]
 mod tests;
 
+/// A scope encoded as a space-delimited list of strings, as defined in
+/// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3).
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
+pub struct TextEncodedScope(String);
+
+/// A scope encoded using a custom binary encoding.
+/// See [Scope] for more information.
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
+pub struct BinaryEncodedScope(ByteString);
+
+/// Scope of an access token as specified in
+/// [`draft-ietf-ace-oauth-authz`, section 5.8.1](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1-2.4).
+/// May be used both for [AccessTokenRequest]s and [AccessTokenResponse]s.
+///
+/// AIF (from [`draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif))
+/// support is planned, but not yet implemented.
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Scope {
+    /// Scope encoded using Text, as specified in
+    /// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3).
+    TextEncoded(TextEncodedScope),
+
+    /// Scope encoded using custom binary encoding.
+    BinaryEncoded(BinaryEncodedScope),
+    // TODO: Implement proper AIF support
+}
+
 /// This message is sent by an RS as a response to an Unauthorized Resource Request Message
 /// to help the sender of the Unauthorized Resource Request Message acquire a valid access token.
 /// For more information, see [section 5.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3).
 #[derive(Debug, Default, PartialEq, Eq, Hash, Builder)]
 #[builder(
-no_std,
-setter(into, strip_option),
-default,
-derive(Debug, PartialEq, Eq),
-build_fn(validate = "Self::validate")
+    no_std,
+    setter(into, strip_option),
+    default,
+    derive(Debug, PartialEq, Eq),
+    build_fn(validate = "Self::validate")
 )]
 pub struct AuthServerRequestCreationHint {
     /// An absolute URI that identifies the appropriate AS for the RS.
@@ -33,7 +62,7 @@ pub struct AuthServerRequestCreationHint {
     audience: Option<String>,
 
     /// The suggested scope that the client should request towards the AS.
-    scope: Option<TextOrByteString>,
+    scope: Option<Scope>,
 
     /// A client nonce as described in [section 5.3.1 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3.1).
     client_nonce: Option<ByteString>,
@@ -53,10 +82,10 @@ pub enum GrantType {
 /// Request for an access token, sent from the client.
 #[derive(Debug, Default, PartialEq, Builder)]
 #[builder(
-no_std,
-setter(into, strip_option),
-derive(Debug, PartialEq),
-build_fn(validate = "Self::validate")
+    no_std,
+    setter(into, strip_option),
+    derive(Debug, PartialEq),
+    build_fn(validate = "Self::validate")
 )]
 pub struct AccessTokenRequest {
     /// Grant type used for this request. Defaults to `client_credentials`.
@@ -78,7 +107,7 @@ pub struct AccessTokenRequest {
     /// Scope of the access request as described by section 3.3 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
     #[builder(default)]
-    scope: Option<TextOrByteString>,
+    scope: Option<Scope>,
 
     /// Included in the request if the AS shall include the `ace_profile` parameter in its
     /// response.
@@ -128,10 +157,10 @@ pub enum AceProfile {
 /// Response to an AccessTokenRequest containing the Access Information.
 #[derive(Debug, PartialEq, Default, Builder)]
 #[builder(
-no_std,
-setter(into, strip_option),
-derive(Debug, PartialEq),
-build_fn(validate = "Self::validate")
+    no_std,
+    setter(into, strip_option),
+    derive(Debug, PartialEq),
+    build_fn(validate = "Self::validate")
 )]
 pub struct AccessTokenResponse {
     /// The access token issued by the authorization server.
@@ -144,7 +173,7 @@ pub struct AccessTokenResponse {
     /// The scope of the access token as described by
     /// section 3.3 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-3.3).
     #[builder(default)]
-    scope: Option<TextOrByteString>,
+    scope: Option<Scope>,
 
     /// The type of the token issued as described in section 7.1 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1) and section 5.8.4.2
@@ -210,10 +239,10 @@ pub enum ErrorCode {
 /// Details about an error which occurred for an access token request.
 #[derive(Debug, PartialEq, Eq, Hash, Builder)]
 #[builder(
-no_std,
-setter(into, strip_option),
-derive(Debug, PartialEq),
-build_fn(validate = "Self::validate")
+    no_std,
+    setter(into, strip_option),
+    derive(Debug, PartialEq),
+    build_fn(validate = "Self::validate")
 )]
 pub struct ErrorResponse {
     /// Error code for this error.

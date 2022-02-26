@@ -3,6 +3,67 @@
 //! [`cbor_abbreviations`], another part is implementing the [`AsCborMap`] type for the
 //! models which are represented as CBOR maps.
 
+use crate::ace::{BinaryEncodedScope, Scope, TextEncodedScope};
+use crate::cbor_values::ByteString;
+
+impl TextEncodedScope {
+    pub fn elements(&self) -> impl Iterator<Item=&str> {
+        self.0.split(' ')
+    }
+}
+
+impl From<&str> for TextEncodedScope {
+    fn from(value: &str) -> Self {
+        TextEncodedScope(value.into())
+    }
+}
+
+impl TryFrom<Vec<&str>> for TextEncodedScope {
+    type Error = String;
+
+    fn try_from(value: Vec<&str>) -> Result<Self, String> {
+        if value.iter().any(|x| x.contains(' ')) {
+            Err(String::from("Individual scope elements may not contain the space character!"))
+        } else {
+            // Fold the vec into a single string, appending a space as a separator
+            Ok(TextEncodedScope(value.iter().fold(String::from(" "), |x, y| format!("{} {}", x, y))))
+        }
+    }
+}
+
+impl BinaryEncodedScope {
+    pub fn elements(&self, separator: u8) -> impl Iterator<Item=&[u8]> {
+        self.0.split(move |x| x == &separator)
+    }
+}
+
+impl From<&[u8]> for BinaryEncodedScope {
+    fn from(value: &[u8]) -> Self {
+        BinaryEncodedScope(ByteString::from(value.to_vec()))
+    }
+}
+
+impl From<TextEncodedScope> for Scope {
+    fn from(value: TextEncodedScope) -> Self {
+        Scope::TextEncoded(value)
+    }
+}
+
+impl TryFrom<Vec<&str>> for Scope {
+    type Error = String;
+
+    fn try_from(value: Vec<&str>) -> Result<Self, String> {
+        value.try_into()
+    }
+}
+
+impl From<BinaryEncodedScope> for Scope {
+    fn from(value: BinaryEncodedScope) -> Self {
+        Scope::BinaryEncoded(value)
+    }
+}
+
+
 mod cbor_abbreviations {
     use crate::ace::{AceProfile, ErrorCode, GrantType, TokenType};
     use crate::ace::AceProfile::{CoapDtls, Other};
@@ -113,11 +174,8 @@ mod cbor_map {
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
 
-    use crate::ace::{
-        AccessTokenRequest, AccessTokenResponse, AceProfile, AuthServerRequestCreationHint,
-        ErrorCode, ErrorResponse, GrantType, TokenType,
-    };
-    use crate::cbor_values::{ByteString, TextOrByteString};
+    use crate::ace::{AccessTokenRequest, AccessTokenResponse, AceProfile, AuthServerRequestCreationHint, BinaryEncodedScope, ErrorCode, ErrorResponse, GrantType, Scope, TextEncodedScope, TokenType};
+    use crate::cbor_values::ByteString;
     use crate::model::cbor_map::AsCborMap;
     use crate::model::cbor_values::{CborMapValue, ProofOfPossessionKey};
     use crate::model::constants::cbor_abbreviations::{creation_hint, token};
@@ -161,10 +219,11 @@ mod cbor_map {
                     (creation_hint::KID, Value::Bytes(x)) => hint.kid = Some(ByteString::from(x)),
                     (creation_hint::AUDIENCE, Value::Text(x)) => hint.audience = Some(x),
                     (creation_hint::SCOPE, Value::Text(x)) => {
-                        hint.scope = Some(TextOrByteString::from(x))
+                        hint.scope = Some(Scope::from(TextEncodedScope::from(x.as_str())))
                     }
                     (creation_hint::SCOPE, Value::Bytes(x)) => {
-                        hint.scope = Some(TextOrByteString::from(x))
+                        hint.scope = Some(Scope::from(BinaryEncodedScope::from(x.as_slice())))
+                        // TODO: Handle AIF
                     }
                     (creation_hint::CNONCE, Value::Bytes(x)) => {
                         hint.client_nonce = Some(ByteString::from(x))
@@ -207,10 +266,11 @@ mod cbor_map {
                     }
                     (token::AUDIENCE, Value::Text(x)) => request.audience = Some(x),
                     (token::SCOPE, Value::Text(x)) => {
-                        request.scope = Some(TextOrByteString::TextString(x))
+                        request.scope = Some(Scope::from(TextEncodedScope::from(x.as_str())))
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
-                        request.scope = Some(TextOrByteString::ByteString(ByteString::from(x)))
+                        request.scope = Some(Scope::from(BinaryEncodedScope::from(x.as_slice())))
+                        // TODO: Handle AIF
                     }
                     (token::CLIENT_ID, Value::Text(x)) => request.client_id = x,
                     (token::REDIRECT_URI, Value::Text(x)) => request.redirect_uri = Some(x),
@@ -273,10 +333,11 @@ mod cbor_map {
                         }
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
-                        response.scope = Some(TextOrByteString::from(x))
+                        response.scope = Some(Scope::from(BinaryEncodedScope::from(x.as_slice())))
+                        // TODO: Handle AIF
                     }
                     (token::SCOPE, Value::Text(x)) => {
-                        response.scope = Some(TextOrByteString::from(x))
+                        response.scope = Some(Scope::from(TextEncodedScope::from(x.as_str())))
                     }
                     (token::TOKEN_TYPE, Value::Integer(x)) => {
                         if let Ok(i) = i32::try_from(x) {
