@@ -7,14 +7,37 @@ use crate::ace::{BinaryEncodedScope, Scope, TextEncodedScope};
 use crate::cbor_values::ByteString;
 
 impl TextEncodedScope {
+    /// Return the individual elements (i.e., access ranges) of this scope.
+    /// Post-condition: The returned iterator will not be empty, and none of its elements
+    /// may contain spaces (` `), double-quotes (`"`) or backslashes (`\\'`).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use dcaf::ace::TextEncodedScope;
+    /// let simple = TextEncodedScope::try_from("this is a test")?;
+    /// assert!(simple.elements().eq(vec!["this", "is", "a", "test"]));
+    /// # Ok::<(), String>(())
+    /// ```
     pub fn elements(&self) -> impl Iterator<Item=&str> {
         self.0.split(' ')
     }
 }
 
-impl From<&str> for TextEncodedScope {
-    fn from(value: &str) -> Self {
-        TextEncodedScope(value.into())
+impl TryFrom<&str> for TextEncodedScope {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value.ends_with(' ')
+            || value.starts_with(' ')
+            || value.contains(['"', '\\'])
+            || value.contains("  ")  // may only contain single spaces
+            || value.is_empty()
+        {
+            Err("Text-encoded scope must follow format specified in RFC 6749".to_string())
+        } else {
+            Ok(TextEncodedScope(value.into()))
+        }
     }
 }
 
@@ -22,11 +45,18 @@ impl TryFrom<Vec<&str>> for TextEncodedScope {
     type Error = String;
 
     fn try_from(value: Vec<&str>) -> Result<Self, String> {
-        if value.iter().any(|x| x.contains(' ')) {
-            Err(String::from("Individual scope elements may not contain the space character!"))
+        if value
+            .iter()
+            .any(|x| x.is_empty() || x.contains([' ', '\\', '"']))
+        {
+            Err(String::from(
+                "Individual scope elements may neither be empty nor contain illegal characters!",
+            ))
+        } else if value.is_empty() {
+            Err(String::from("Scope may not be empty!"))
         } else {
-            // Fold the vec into a single string, appending a space as a separator
-            Ok(TextEncodedScope(value.iter().fold(String::from(" "), |x, y| format!("{} {}", x, y))))
+            // Fold the vec into a single string, using space as a separator
+            Ok(TextEncodedScope(value.join(" ")))
         }
     }
 }
@@ -62,7 +92,6 @@ impl From<BinaryEncodedScope> for Scope {
         Scope::BinaryEncoded(value)
     }
 }
-
 
 mod cbor_abbreviations {
     use crate::ace::{AceProfile, ErrorCode, GrantType, TokenType};
@@ -174,7 +203,11 @@ mod cbor_map {
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
 
-    use crate::ace::{AccessTokenRequest, AccessTokenResponse, AceProfile, AuthServerRequestCreationHint, BinaryEncodedScope, ErrorCode, ErrorResponse, GrantType, Scope, TextEncodedScope, TokenType};
+    use crate::ace::{
+        AccessTokenRequest, AccessTokenResponse, AceProfile, AuthServerRequestCreationHint,
+        BinaryEncodedScope, ErrorCode, ErrorResponse, GrantType, Scope, TextEncodedScope,
+        TokenType,
+    };
     use crate::cbor_values::ByteString;
     use crate::model::cbor_map::AsCborMap;
     use crate::model::cbor_values::{CborMapValue, ProofOfPossessionKey};
@@ -219,7 +252,11 @@ mod cbor_map {
                     (creation_hint::KID, Value::Bytes(x)) => hint.kid = Some(ByteString::from(x)),
                     (creation_hint::AUDIENCE, Value::Text(x)) => hint.audience = Some(x),
                     (creation_hint::SCOPE, Value::Text(x)) => {
-                        hint.scope = Some(Scope::from(TextEncodedScope::from(x.as_str())))
+                        if let Ok(scope) = TextEncodedScope::try_from(x.as_str()) {
+                            hint.scope = Some(Scope::from(scope))
+                        } else {
+                            return None;
+                        }
                     }
                     (creation_hint::SCOPE, Value::Bytes(x)) => {
                         hint.scope = Some(Scope::from(BinaryEncodedScope::from(x.as_slice())))
@@ -266,7 +303,11 @@ mod cbor_map {
                     }
                     (token::AUDIENCE, Value::Text(x)) => request.audience = Some(x),
                     (token::SCOPE, Value::Text(x)) => {
-                        request.scope = Some(Scope::from(TextEncodedScope::from(x.as_str())))
+                        if let Ok(scope) = TextEncodedScope::try_from(x.as_str()) {
+                            request.scope = Some(Scope::from(scope))
+                        } else {
+                            return None;
+                        }
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
                         request.scope = Some(Scope::from(BinaryEncodedScope::from(x.as_slice())))
@@ -337,7 +378,11 @@ mod cbor_map {
                         // TODO: Handle AIF
                     }
                     (token::SCOPE, Value::Text(x)) => {
-                        response.scope = Some(Scope::from(TextEncodedScope::from(x.as_str())))
+                        if let Ok(scope) = TextEncodedScope::try_from(x.as_str()) {
+                            response.scope = Some(Scope::from(scope))
+                        } else {
+                            return None;
+                        }
                     }
                     (token::TOKEN_TYPE, Value::Integer(x)) => {
                         if let Ok(i) = i32::try_from(x) {
