@@ -83,6 +83,10 @@ impl BinaryEncodedScope {
     /// assert!(simple.elements(0xDC).is_err());
     /// # Ok::<(), String>(())
     /// ```
+    ///
+    /// # Panics
+    /// If the pre-condition that the scope isn't empty is violated.
+    /// This shouldn't occur, as it's an invariant of [BinaryEncodedScope].
     pub fn elements(&self, separator: u8) -> Result<impl Iterator<Item=&[u8]>, String> {
         let split = self.0.split(move |x| x == &separator);
         assert!(
@@ -104,7 +108,7 @@ impl BinaryEncodedScope {
         } else if self.0.windows(2).any(|x| x[0] == x[1] && x[1] == separator) {
             Err("Separator can't exist twice in a row within Scope!".to_string())
         } else {
-            assert!(
+            debug_assert!(
                 split.clone().all(|x| !x.is_empty()),
                 "Post-condition violated: Result may not contain empty slices"
             );

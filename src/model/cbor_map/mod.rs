@@ -8,7 +8,7 @@ use erased_serde::Serialize as ErasedSerialize;
 
 mod conversion;
 
-pub trait AsCborMap {
+pub trait AsCborMap: private::Sealed {
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)>;
 
     fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
@@ -68,4 +68,22 @@ impl<T> Deref for CborMap<T>
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+mod private {
+    use crate::ace::{AccessTokenRequest, AccessTokenResponse, AuthServerRequestCreationHint, ErrorResponse};
+    use crate::cbor_values::ProofOfPossessionKey;
+
+    /// Sealed trait according to C-SEALED.
+    pub trait Sealed {}
+
+    impl Sealed for AuthServerRequestCreationHint {}
+
+    impl Sealed for AccessTokenRequest {}
+
+    impl Sealed for AccessTokenResponse {}
+
+    impl Sealed for ErrorResponse {}
+
+    impl Sealed for ProofOfPossessionKey {}
 }

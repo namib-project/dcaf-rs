@@ -10,3 +10,4 @@ pub use token::*;
 
 mod model;
 mod token;
+mod error;
