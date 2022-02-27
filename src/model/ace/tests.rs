@@ -12,6 +12,94 @@ use crate::model::cbor_values::ByteString;
 
 use super::*;
 
+mod scope {
+    use crate::ace::TextEncodedScope;
+
+    #[test]
+    fn test_text_encoded_scope_element_normal() -> Result<(), String> {
+        let simple = TextEncodedScope::try_from("this is a test")?;
+        assert!(simple.elements().eq(vec!["this", "is", "a", "test"]));
+
+        let single = TextEncodedScope::try_from("single")?;
+        assert!(single.elements().eq(vec!["single"]));
+
+        let third = TextEncodedScope::try_from("another quick test")?;
+        assert!(third.elements().eq(vec!["another", "quick", "test"]));
+
+        let array = TextEncodedScope::try_from(vec!["array", "test"])?;
+        assert!(array.elements().eq(vec!["array", "test"]));
+
+        let array_single = TextEncodedScope::try_from(vec!["justme"])?;
+        assert!(array_single.elements().eq(vec!["justme"]));
+        Ok(())
+    }
+
+    #[test]
+    fn test_text_encoded_scope_elements_empty() {
+        let empty_inputs: Vec<&str> = vec!["    ", " ", ""];
+
+        for input in empty_inputs {
+            assert!(TextEncodedScope::try_from(input).is_err())
+        }
+
+        let empty_arrays: Vec<Vec<&str>> =
+            vec![vec![], vec![""], vec![" "], vec!["   "],
+                 vec!["", ""], vec!["", " "], vec!["", "   "],
+                 vec![" ", " "], vec![" ", ""], vec![" ", "   "],
+                 vec!["   ", "   "], vec!["   ", " "], vec!["   ", ""],
+            ];
+
+        for input in empty_arrays {
+            assert!(TextEncodedScope::try_from(input).is_err())
+        }
+    }
+
+    #[test]
+    fn test_text_encoded_scope_elements_invalid_spaces() {
+        let invalid_inputs = vec![
+            "space at the end ",
+            "spaces at the end   ",
+            " space at the start",
+            "   spaces at the start",
+            " spaces at both ends ",
+            "   spaces at both ends    ",
+            "spaces   in the       middle",
+            "   spaces   wherever  you    look   ",
+        ];
+        for input in invalid_inputs {
+            assert!(TextEncodedScope::try_from(input).is_err())
+        }
+    }
+
+    #[test]
+    fn test_text_encoded_scope_elements_invalid_characters() {
+        let invalid_inputs = vec![
+            "\"", "\\",
+            "a \" in between", "a \\ in between",
+            " \" ", " \\ ",
+            "within\"word", "within\\word",
+        ];
+        for input in invalid_inputs {
+            assert!(TextEncodedScope::try_from(input).is_err())
+        }
+
+        let invalid_arrays = vec![
+            vec!["space within"],
+            vec!["more spaces within"],
+            vec!["normal", "array", "but space"],
+            vec!["normal", "but space", "array"],
+            vec!["but space", "normal", "array"],
+            vec!["\""], vec!["\\"], vec!["\"\\"], vec!["\" \\"], vec!["\\ \\"], vec!["\" \""],
+            vec!["\\", "\\"], vec!["\"", "\""], vec!["\\", "\""], vec!["\"", "\\"],
+            vec!["normal", "\\", "almost"], vec!["normal", "\"", "allowed"],
+            vec!["normal", "in\"word\""], vec!["normal", "in\\word"],
+        ];
+        for input in invalid_arrays {
+            assert!(TextEncodedScope::try_from(input).is_err())
+        }
+    }
+}
+
 macro_rules! test_ser_de {
     ($value:ident$(;$transform_value:expr)? => $hex:literal) => {{
         let mut result = Vec::new();
@@ -43,7 +131,7 @@ fn test_creation_hint() -> Result<(), String> {
         AuthServerRequestCreationHintBuilder::default()
             .auth_server("coaps://as.example.com/token")
             .audience("coaps://rs.example.com")
-            .scope(TextEncodedScope::from("rTempC"))
+            .scope(TextEncodedScope::try_from("rTempC")?)
             .client_nonce(hex::decode("e0a156bb3f").map_err(|x| x.to_string())?)
             .build()
             .map_err(|x| x.to_string())?,
@@ -99,7 +187,7 @@ fn test_access_token_request_reference() -> Result<(), String> {
         AccessTokenRequestBuilder::default()
             .client_id("myclient")
             .audience("valve424")
-            .scope(TextEncodedScope::from("read"))
+            .scope(TextEncodedScope::try_from("read")?)
             .req_cnf(ByteString::from(vec![
                 0xea, 0x48, 0x34, 0x75, 0x72, 0x4c, 0xd7, 0x75,
             ]))
