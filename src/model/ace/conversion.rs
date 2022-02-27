@@ -62,14 +62,67 @@ impl TryFrom<Vec<&str>> for TextEncodedScope {
 }
 
 impl BinaryEncodedScope {
-    pub fn elements(&self, separator: u8) -> impl Iterator<Item=&[u8]> {
-        self.0.split(move |x| x == &separator)
+    /// Return the individual elements (i.e., access ranges) of this scope.
+    ///
+    /// ## Pre-conditions
+    /// - The given separator may neither be the first nor last element of the scope.
+    /// - The given separator may not occur twice in a row in the scope.
+    /// - The scope must not be empty.
+    ///
+    /// ## Post-conditions
+    /// - The returned iterator will not be empty
+    /// - None of its elements will be empty
+    /// - None of its elements will contain the given separator.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use dcaf::ace::BinaryEncodedScope;
+    /// let simple = BinaryEncodedScope::try_from(vec![0xDC, 0x21, 0xAF].as_slice())?;
+    /// assert!(simple.elements(0x21)?.eq(vec![vec![0xDC], vec![0xAF]]));
+    /// assert!(simple.elements(0xDC).is_err());
+    /// # Ok::<(), String>(())
+    /// ```
+    pub fn elements(&self, separator: u8) -> Result<impl Iterator<Item=&[u8]>, String> {
+        let split = self.0.split(move |x| x == &separator);
+        assert!(
+            !self.0.is_empty(),
+            "Invariant violated: Scope may not be empty"
+        );
+        if self
+            .0
+            // May not start with separator
+            .first()
+            .filter(|x| **x != separator)
+            // May not end with separator
+            .and(self.0.last().filter(|x| **x != separator))
+            .is_none()
+        {
+            Err(format!(
+                "Scope may not start with or end in given separator '{separator}'"
+            ))
+        } else if self.0.windows(2).any(|x| x[0] == x[1] && x[1] == separator) {
+            Err("Separator can't exist twice in a row within Scope!".to_string())
+        } else {
+            assert!(
+                split.clone().all(|x| !x.is_empty()),
+                "Post-condition violated: Result may not contain empty slices"
+            );
+            Ok(split)
+        }
     }
 }
 
-impl From<&[u8]> for BinaryEncodedScope {
-    fn from(value: &[u8]) -> Self {
-        BinaryEncodedScope(ByteString::from(value.to_vec()))
+impl TryFrom<&[u8]> for BinaryEncodedScope {
+    type Error = String;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let vec = value.to_vec();
+        if vec.is_empty() {
+            Err("Scope cannot be empty!".to_string())
+        } else {
+            Ok(BinaryEncodedScope(ByteString::from(value.to_vec())))
+        }
     }
 }
 
@@ -259,7 +312,11 @@ mod cbor_map {
                         }
                     }
                     (creation_hint::SCOPE, Value::Bytes(x)) => {
-                        hint.scope = Some(Scope::from(BinaryEncodedScope::from(x.as_slice())))
+                        if let Ok(scope) = BinaryEncodedScope::try_from(x.as_slice()) {
+                            hint.scope = Some(Scope::from(scope));
+                        } else {
+                            return None
+                        }
                         // TODO: Handle AIF
                     }
                     (creation_hint::CNONCE, Value::Bytes(x)) => {
@@ -310,7 +367,11 @@ mod cbor_map {
                         }
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
-                        request.scope = Some(Scope::from(BinaryEncodedScope::from(x.as_slice())))
+                        if let Ok(scope) = BinaryEncodedScope::try_from(x.as_slice()) {
+                            request.scope = Some(Scope::from(scope));
+                        } else {
+                            return None
+                        }
                         // TODO: Handle AIF
                     }
                     (token::CLIENT_ID, Value::Text(x)) => request.client_id = x,
@@ -374,7 +435,11 @@ mod cbor_map {
                         }
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
-                        response.scope = Some(Scope::from(BinaryEncodedScope::from(x.as_slice())))
+                        if let Ok(scope) = BinaryEncodedScope::try_from(x.as_slice()) {
+                            response.scope = Some(Scope::from(scope));
+                        } else {
+                            return None
+                        }
                         // TODO: Handle AIF
                     }
                     (token::SCOPE, Value::Text(x)) => {

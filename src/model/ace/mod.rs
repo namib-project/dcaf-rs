@@ -42,7 +42,7 @@ mod tests;
 /// But note that you have to follow the syntax from the RFC (which implicitly specifies
 /// that given scopes can't be empty):
 /// ```
-/// use dcaf::ace::TextEncodedScope;
+/// # use dcaf::ace::TextEncodedScope;
 /// assert!(TextEncodedScope::try_from("can't use \\ or \"").is_err());
 /// assert!(TextEncodedScope::try_from("  no   weird spaces ").is_err());
 /// assert!(TextEncodedScope::try_from(vec![]).is_err());
@@ -58,10 +58,18 @@ pub struct TextEncodedScope(String);
 /// Simply create a `BinaryEncodedScope` from a byte array (we're using the byte `0x21` as
 /// a separator in this example):
 /// ```
-/// use dcaf::ace::BinaryEncodedScope;
-/// let scope = BinaryEncodedScope::from(vec![0x00, 0x21, 0xDC, 0xAF].as_slice());
-/// assert!(scope.elements(0x21).eq(vec![vec![0x00], vec![0xDC, 0xAF]]));
+/// # use dcaf::ace::BinaryEncodedScope;
+/// let scope = BinaryEncodedScope::try_from(vec![0x00, 0x21, 0xDC, 0xAF].as_slice())?;
+/// assert!(scope.elements(0x21)?.eq(vec![vec![0x00], vec![0xDC, 0xAF]]));
+/// # Ok::<(), String>(())
 /// ```
+///
+/// But note that the input array can't be empty:
+/// ```
+/// # use dcaf::ace::BinaryEncodedScope;
+/// assert!(BinaryEncodedScope::try_from(vec![].as_slice()).is_err());
+/// ```
+///
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub struct BinaryEncodedScope(ByteString);
 
@@ -74,13 +82,16 @@ pub struct BinaryEncodedScope(ByteString);
 ///
 /// # Example
 ///
+/// You can create binary or text encoded scopes:
 /// ```
 /// # use dcaf::ace::{BinaryEncodedScope, Scope, TextEncodedScope};
-/// let scope = Scope::from(BinaryEncodedScope::from(vec![0xDC, 0xAF].as_slice()));
+/// let binary_scope = Scope::from(BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice())?);
+/// let text_scope = Scope::from(TextEncodedScope::try_from("dcaf rs")?);
+/// # Ok::<(), String>(())
 /// ```
 ///
 /// For information on how to initialize [BinaryEncodedScope] and [TextEncodedScope],
-/// see their respective documentation pages.
+/// or retrieve the individual elements inside them, see their respective documentation pages.
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Scope {
