@@ -13,11 +13,55 @@ mod tests;
 
 /// A scope encoded as a space-delimited list of strings, as defined in
 /// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3).
+///
+/// Note that the syntax specified in the RFC has to be followed:
+/// ```text
+/// scope       = scope-token *( SP scope-token )
+/// scope-token = 1*( %x21 / %x23-5B / %x5D-7E )
+/// ```
+///
+/// # Example
+///
+/// You can create a `TextEncodedScope` from a space-separated string:
+/// ```
+/// # use dcaf::ace::TextEncodedScope;
+/// let scope = TextEncodedScope::try_from("first second third")?;
+/// assert!(scope.elements().eq(["first", "second", "third"]));
+/// # Ok::<(), String>(())
+/// ```
+/// It's also possible to pass in a vector of strings:
+/// ```
+/// # use dcaf::ace::TextEncodedScope;
+/// let scope = TextEncodedScope::try_from(vec!["first", "second", "third"])?;
+/// dbg!(&scope);
+/// assert!(scope.elements().eq(["first", "second", "third"]));
+/// assert!(TextEncodedScope::try_from(vec!["not allowed"]).is_err());
+/// # Ok::<(), String>(())
+/// ```
+///
+/// But note that you have to follow the syntax from the RFC (which implicitly specifies
+/// that given scopes can't be empty):
+/// ```
+/// use dcaf::ace::TextEncodedScope;
+/// assert!(TextEncodedScope::try_from("can't use \\ or \"").is_err());
+/// assert!(TextEncodedScope::try_from("  no   weird spaces ").is_err());
+/// assert!(TextEncodedScope::try_from(vec![]).is_err());
+/// ```
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub struct TextEncodedScope(String);
 
 /// A scope encoded using a custom binary encoding.
 /// See [Scope] for more information.
+///
+/// # Example
+///
+/// Simply create a `BinaryEncodedScope` from a byte array (we're using the byte `0x21` as
+/// a separator in this example):
+/// ```
+/// use dcaf::ace::BinaryEncodedScope;
+/// let scope = BinaryEncodedScope::from(vec![0x00, 0x21, 0xDC, 0xAF].as_slice());
+/// assert!(scope.elements(0x21).eq(vec![vec![0x00], vec![0xDC, 0xAF]]));
+/// ```
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub struct BinaryEncodedScope(ByteString);
 
@@ -27,6 +71,16 @@ pub struct BinaryEncodedScope(ByteString);
 ///
 /// AIF (from [`draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif))
 /// support is planned, but not yet implemented.
+///
+/// # Example
+///
+/// ```
+/// # use dcaf::ace::{BinaryEncodedScope, Scope, TextEncodedScope};
+/// let scope = Scope::from(BinaryEncodedScope::from(vec![0xDC, 0xAF].as_slice()));
+/// ```
+///
+/// For information on how to initialize [BinaryEncodedScope] and [TextEncodedScope],
+/// see their respective documentation pages.
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Scope {
