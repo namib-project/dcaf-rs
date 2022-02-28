@@ -29,11 +29,12 @@ fn example_aad() -> Vec<u8> {
     vec![0x01, 0x02, 0x03, 0x04, 0x05]
 }
 
-fn example_claims(key: CoseKey) -> Result<ClaimsSet, String> {
+fn example_claims(key: CoseKey) -> Result<ClaimsSet, AccessTokenError> {
     Ok(ClaimsSetBuilder::new()
         .claim(
             CwtClaimName::Cnf,
-            key.to_cbor_value().map_err(|x| x.to_string())?,
+            key.to_cbor_value()
+                .map_err(AccessTokenError::from_cose_error)?,
         )
         .build())
 }
@@ -84,7 +85,7 @@ impl FakeCrypto {
 }
 
 #[test]
-fn test_encrypt_decrypt() -> Result<(), String> {
+fn test_encrypt_decrypt() -> Result<(), AccessTokenError> {
     let crypto = FakeCrypto {};
     let key = example_key();
     let (unprotected_header, protected_header) = example_headers();
@@ -105,7 +106,7 @@ fn test_encrypt_decrypt() -> Result<(), String> {
 }
 
 #[test]
-fn test_sign_validate() -> Result<(), String> {
+fn test_sign_validate() -> Result<(), AccessTokenError> {
     let signer = FakeSigner {};
     let key = example_key();
     let (unprotected_header, protected_header) = example_headers();

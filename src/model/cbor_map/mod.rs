@@ -6,15 +6,18 @@ use core::ops::Deref;
 use ciborium::value::Value;
 use erased_serde::Serialize as ErasedSerialize;
 
+use crate::error::{TryFromCborMapError, ValueIsNotIntegerError};
+
 mod conversion;
 
 pub trait AsCborMap: private::Sealed {
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)>;
 
-    fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
+    fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
         where
             Self: Sized + AsCborMap;
 
+    // TODO: Document panics
     fn to_ciborium_map(&self) -> Value {
         Value::Map(
             self.as_cbor_map()
@@ -30,16 +33,16 @@ pub trait AsCborMap: private::Sealed {
         )
     }
 
-    fn cbor_map_from_int(map: Vec<(Value, Value)>) -> Result<Vec<(i128, Value)>, String> {
+    fn cbor_map_from_int(map: Vec<(Value, Value)>) -> Result<Vec<(i128, Value)>, ValueIsNotIntegerError> {
         // We want to convert (Value, Value) to (i128, Value), assuming that the first
         // Value is always a Value::Integer.
         map.into_iter()
             .map(|x| (x.0.as_integer().map(i128::from), x.1))
             .map(|x| match x {
-                (None, _) => Err("CBOR map key needs to be integer".to_string()),
+                (None, _) => Err(ValueIsNotIntegerError),
                 (Some(x), y) => Ok((x, y)),
             })
-            .collect::<Result<Vec<(i128, Value)>, String>>()
+            .collect::<Result<Vec<(i128, Value)>, ValueIsNotIntegerError>>()
     }
 }
 

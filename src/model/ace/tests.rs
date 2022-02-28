@@ -3,9 +3,10 @@ mod scope {
     /// Tests for text encoded scopes.
     mod text {
         use crate::ace::TextEncodedScope;
+        use crate::error::{InvalidTextEncodedScopeError, WrongSourceTypeError};
 
         #[test]
-        fn test_scope_element_normal() -> Result<(), String> {
+        fn test_scope_element_normal() -> Result<(), InvalidTextEncodedScopeError> {
             let simple = TextEncodedScope::try_from("this is a test")?;
             assert!(simple.elements().eq(vec!["this", "is", "a", "test"]));
 
@@ -115,9 +116,10 @@ mod scope {
     /// Tests for binary encoded scopes.
     mod binary {
         use crate::ace::BinaryEncodedScope;
+        use crate::error::InvalidBinaryEncodedScopeError;
 
         #[test]
-        fn test_scope_elements_normal() -> Result<(), String> {
+        fn test_scope_elements_normal() -> Result<(), InvalidBinaryEncodedScopeError> {
             let single = BinaryEncodedScope::try_from(vec![0].as_slice())?;
             assert!(single.elements(0x20)?.eq(vec![vec![0]]));
 
@@ -137,7 +139,7 @@ mod scope {
         }
 
         #[test]
-        fn test_scope_elements_empty() -> Result<(), String> {
+        fn test_scope_elements_empty() -> Result<(), InvalidBinaryEncodedScopeError> {
             assert!(BinaryEncodedScope::try_from(vec![].as_slice()).is_err());
             // Assuming 0 is separator
             let empty_vecs = vec![
@@ -153,7 +155,7 @@ mod scope {
         }
 
         #[test]
-        fn test_scope_elements_invalid_separators() -> Result<(), String> {
+        fn test_scope_elements_invalid_separators() -> Result<(), InvalidBinaryEncodedScopeError> {
             // Assuming 0 is separator
             let invalid = vec![
                 vec![0xDC, 0xAF, 0],
@@ -192,6 +194,7 @@ mod serde {
     use coset::iana::Algorithm;
 
     use crate::ace::AceProfile::CoapDtls;
+    use crate::error::InvalidTextEncodedScopeError;
     use crate::model::cbor_map::CborMap;
     use crate::model::cbor_values::ByteString;
 
@@ -228,7 +231,7 @@ mod serde {
             AuthServerRequestCreationHintBuilder::default()
                 .auth_server("coaps://as.example.com/token")
                 .audience("coaps://rs.example.com")
-                .scope(TextEncodedScope::try_from("rTempC")?)
+                .scope(TextEncodedScope::try_from("rTempC").map_err(|x| x.to_string())?)
                 .client_nonce(hex::decode("e0a156bb3f").map_err(|x| x.to_string())?)
                 .build()
                 .map_err(|x| x.to_string())?,
@@ -284,7 +287,7 @@ mod serde {
             AccessTokenRequestBuilder::default()
                 .client_id("myclient")
                 .audience("valve424")
-                .scope(TextEncodedScope::try_from("read")?)
+                .scope(TextEncodedScope::try_from("read").map_err(|x| x.to_string())?)
                 .req_cnf(ByteString::from(vec![
                     0xea, 0x48, 0x34, 0x75, 0x72, 0x4c, 0xd7, 0x75,
                 ]))

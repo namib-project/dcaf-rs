@@ -1,4 +1,5 @@
 use alloc::string::String;
+use core::fmt::{Display, Formatter};
 
 use serde::{Deserialize, Serialize};
 
@@ -25,18 +26,20 @@ mod tests;
 /// You can create a `TextEncodedScope` from a space-separated string:
 /// ```
 /// # use dcaf::ace::TextEncodedScope;
+/// # use dcaf::InvalidTextEncodedScopeError;
 /// let scope = TextEncodedScope::try_from("first second third")?;
 /// assert!(scope.elements().eq(["first", "second", "third"]));
-/// # Ok::<(), String>(())
+/// # Ok::<(), InvalidTextEncodedScopeError>(())
 /// ```
 /// It's also possible to pass in a vector of strings:
 /// ```
 /// # use dcaf::ace::TextEncodedScope;
+/// # use dcaf::InvalidTextEncodedScopeError;
 /// let scope = TextEncodedScope::try_from(vec!["first", "second", "third"])?;
 /// dbg!(&scope);
 /// assert!(scope.elements().eq(["first", "second", "third"]));
 /// assert!(TextEncodedScope::try_from(vec!["not allowed"]).is_err());
-/// # Ok::<(), String>(())
+/// # Ok::<(), InvalidTextEncodedScopeError>(())
 /// ```
 ///
 /// But note that you have to follow the syntax from the RFC (which implicitly specifies
@@ -50,6 +53,12 @@ mod tests;
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub struct TextEncodedScope(String);
 
+impl Display for TextEncodedScope {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// A scope encoded using a custom binary encoding.
 /// See [Scope] for more information.
 ///
@@ -59,9 +68,10 @@ pub struct TextEncodedScope(String);
 /// a separator in this example):
 /// ```
 /// # use dcaf::ace::BinaryEncodedScope;
+/// # use dcaf::InvalidBinaryEncodedScopeError;
 /// let scope = BinaryEncodedScope::try_from(vec![0x00, 0x21, 0xDC, 0xAF].as_slice())?;
 /// assert!(scope.elements(0x21)?.eq(vec![vec![0x00], vec![0xDC, 0xAF]]));
-/// # Ok::<(), String>(())
+/// # Ok::<(), InvalidBinaryEncodedScopeError>(())
 /// ```
 ///
 /// But note that the input array can't be empty:
@@ -85,9 +95,18 @@ pub struct BinaryEncodedScope(ByteString);
 /// You can create binary or text encoded scopes:
 /// ```
 /// # use dcaf::ace::{BinaryEncodedScope, Scope, TextEncodedScope};
-/// let binary_scope = Scope::from(BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice())?);
+/// # use dcaf::InvalidTextEncodedScopeError;
+/// # use dcaf::InvalidBinaryEncodedScopeError;
+/// # // We need to trick around a little due to the different error types.
+/// # fn main() -> Result<(), InvalidTextEncodedScopeError> {
 /// let text_scope = Scope::from(TextEncodedScope::try_from("dcaf rs")?);
-/// # Ok::<(), String>(())
+/// # fn binary() -> Result<(), InvalidBinaryEncodedScopeError> {
+/// let binary_scope = Scope::from(BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice())?);
+/// # Ok(())
+/// # }
+/// # binary().map_err(|x| InvalidTextEncodedScopeError::Other(x.to_string()))?;
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// For information on how to initialize [BinaryEncodedScope] and [TextEncodedScope],

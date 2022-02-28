@@ -9,7 +9,7 @@ impl AuthServerRequestCreationHint {
 
 impl AuthServerRequestCreationHintBuilder {
     /// Validates this builder's fields for correctness.
-    pub(crate) fn validate(&self) -> Result<(), String> {
+    pub(crate) fn validate(&self) -> Result<(), AuthServerRequestCreationHintBuilderError> {
         // TODO: Check whether there are invariants to validate
         Ok(())
     }
@@ -23,7 +23,7 @@ impl AccessTokenRequest {
 }
 
 impl AccessTokenRequestBuilder {
-    pub(crate) fn validate(&self) -> Result<(), String> {
+    pub(crate) fn validate(&self) -> Result<(), AccessTokenRequestBuilderError> {
         // TODO: Check whether there are invariants to validate
         Ok(())
     }
@@ -43,7 +43,7 @@ impl AccessTokenResponse {
 }
 
 impl AccessTokenResponseBuilder {
-    pub(crate) fn validate(&self) -> Result<(), String> {
+    pub(crate) fn validate(&self) -> Result<(), AccessTokenResponseBuilderError> {
         // TODO: Check whether there are invariants to validate
         Ok(())
     }
@@ -56,7 +56,7 @@ impl ErrorResponse {
 }
 
 impl ErrorResponseBuilder {
-    pub(crate) fn validate(&self) -> Result<(), String> {
+    pub(crate) fn validate(&self) -> Result<(), ErrorResponseBuilderError> {
         // TODO: Check whether there are invariants to validate
         Ok(())
     }

@@ -7,6 +7,7 @@ use serde::de::Error;
 use crate::cbor_values::{
     ByteString, ByteStringValue, CborMapValue, KeyId, ProofOfPossessionKey, TextOrByteString,
 };
+use crate::error::{TryFromCborMapError, WrongSourceTypeError};
 use crate::model::cbor_map::AsCborMap;
 
 impl<T> Serialize for CborMapValue<T>
@@ -33,11 +34,11 @@ impl<'de, T> Deserialize<'de> for CborMapValue<T>
         if let Ok(Value::Integer(i)) = Value::deserialize(deserializer) {
             Ok(CborMapValue(
                 i32::try_from(i)
-                    .map_err(|x| D::Error::custom(x.to_string()))?
+                    .map_err(|_| D::Error::custom("CBOR map key too high for i32"))?
                     .into(),
             ))
         } else {
-            Err(D::Error::custom("CBOR map value must be an Integer!"))
+            Err(D::Error::custom("CBOR map value must be an Integer"))
         }
     }
 }
@@ -96,33 +97,35 @@ impl AsCborMap for ProofOfPossessionKey {
         }
     }
 
-    fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
+    fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
         where
             Self: Sized + AsCborMap,
     {
         if map.len() != 1 {
-            None
-        } else {
-            match map.into_iter().next() {
-                Some((1, x)) => {
-                    if let Ok(key) = CoseKey::from_cbor_value(x) {
-                        Some(ProofOfPossessionKey::CoseKey(key))
-                    } else {
-                        None
-                    }
-                }
-                Some((2, x)) => {
-                    if let Ok(enc) = CoseEncrypt0::from_cbor_value(x) {
-                        Some(ProofOfPossessionKey::EncryptedCoseKey(enc))
-                    } else {
-                        None
-                    }
-                }
-                Some((3, Value::Bytes(x))) => {
-                    Some(ProofOfPossessionKey::KeyId(ByteString::from(x)))
-                }
-                _ => None,
+            Err(TryFromCborMapError::from_message(
+                "given CBOR map must contain exactly one element",
+            ))
+        } else if let Some(entry) = map.into_iter().next() {
+            match entry {
+                (1, x) => CoseKey::from_cbor_value(x)
+                    .map(ProofOfPossessionKey::CoseKey)
+                    .map_err(|x| {
+                        TryFromCborMapError::from_message(format!(
+                            "couldn't create CoseKey from CBOR value: {x}"
+                        ))
+                    }),
+                (2, x) => CoseEncrypt0::from_cbor_value(x)
+                    .map(ProofOfPossessionKey::EncryptedCoseKey)
+                    .map_err(|x| {
+                        TryFromCborMapError::from_message(format!(
+                            "couldn't create CoseEncrypt0 from CBOR value: {x}"
+                        ))
+                    }),
+                (3, Value::Bytes(x)) => Ok(ProofOfPossessionKey::KeyId(ByteString::from(x))),
+                (x, _) => Err(TryFromCborMapError::unknown_field(x as u8)),
             }
+        } else {
+            unreachable!("we have previously verified that map.len() == 1, so map.into_iter().next() must return a next element")
         }
     }
 }
@@ -152,62 +155,64 @@ impl From<&ByteString> for Value {
 }
 
 impl TryFrom<TextOrByteString> for String {
-    type Error = ();
+    type Error = WrongSourceTypeError;
 
     fn try_from(value: TextOrByteString) -> Result<Self, Self::Error> {
         if let TextOrByteString::TextString(s) = value {
             Ok(s)
         } else {
-            Err(())
+            Err(WrongSourceTypeError::new("TextOrByteString", "ByteString"))
         }
     }
 }
 
 impl TryFrom<TextOrByteString> for ByteString {
-    type Error = ();
+    type Error = WrongSourceTypeError;
 
     fn try_from(value: TextOrByteString) -> Result<Self, Self::Error> {
         if let TextOrByteString::ByteString(s) = value {
             Ok(s)
         } else {
-            Err(())
+            Err(WrongSourceTypeError::new("TextOrByteString", "ByteString"))
         }
     }
 }
 
 impl TryFrom<ProofOfPossessionKey> for CoseKey {
-    type Error = ();
+    type Error = WrongSourceTypeError;
 
     fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
         if let ProofOfPossessionKey::CoseKey(key) = value {
             Ok(key)
         } else {
-            Err(())
+            Err(WrongSourceTypeError::new("ProofOfPossessionKey", "CoseKey"))
         }
     }
 }
 
 impl TryFrom<ProofOfPossessionKey> for CoseEncrypt0 {
-    type Error = ();
+    type Error = WrongSourceTypeError;
 
     fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
         if let ProofOfPossessionKey::EncryptedCoseKey(key) = value {
             Ok(key)
         } else {
-            Err(())
+            Err(WrongSourceTypeError::new(
+                "ProofOfPossessionKey",
+                "CoseEncrypt0",
+            ))
         }
     }
 }
 
-/// Converts from
 impl TryFrom<ProofOfPossessionKey> for KeyId {
-    type Error = ();
+    type Error = WrongSourceTypeError;
 
     fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
         if let ProofOfPossessionKey::KeyId(kid) = value {
             Ok(kid)
         } else {
-            Err(())
+            Err(WrongSourceTypeError::new("ProofOfPossessionKey", "KeyId"))
         }
     }
 }

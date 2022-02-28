@@ -5,6 +5,7 @@ extern crate core;
 #[macro_use]
 extern crate derive_builder;
 
+pub use error::*;
 pub use model::*;
 pub use token::*;
 

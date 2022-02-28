@@ -5,6 +5,7 @@
 
 use crate::ace::{BinaryEncodedScope, Scope, TextEncodedScope};
 use crate::cbor_values::ByteString;
+use crate::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError};
 
 impl TextEncodedScope {
     /// Return the individual elements (i.e., access ranges) of this scope.
@@ -15,9 +16,10 @@ impl TextEncodedScope {
     ///
     /// ```
     /// # use dcaf::ace::TextEncodedScope;
+    /// # use dcaf::InvalidTextEncodedScopeError;
     /// let simple = TextEncodedScope::try_from("this is a test")?;
     /// assert!(simple.elements().eq(vec!["this", "is", "a", "test"]));
-    /// # Ok::<(), String>(())
+    /// # Ok::<(), InvalidTextEncodedScopeError>(())
     /// ```
     pub fn elements(&self) -> impl Iterator<Item=&str> {
         self.0.split(' ')
@@ -25,16 +27,19 @@ impl TextEncodedScope {
 }
 
 impl TryFrom<&str> for TextEncodedScope {
-    type Error = String;
+    type Error = InvalidTextEncodedScopeError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if value.ends_with(' ')
-            || value.starts_with(' ')
-            || value.contains(['"', '\\'])
-            || value.contains("  ")  // may only contain single spaces
-            || value.is_empty()
-        {
-            Err("Text-encoded scope must follow format specified in RFC 6749".to_string())
+        if value.ends_with(' ') {
+            Err(InvalidTextEncodedScopeError::EndsWithSeparator)
+        } else if value.starts_with(' ') {
+            Err(InvalidTextEncodedScopeError::StartsWithSeparator)
+        } else if value.contains(['"', '\\']) {
+            Err(InvalidTextEncodedScopeError::IllegalCharacters)
+        } else if value.contains("  ") {
+            Err(InvalidTextEncodedScopeError::ConsecutiveSeparators)
+        } else if value.is_empty() {
+            Err(InvalidTextEncodedScopeError::EmptyScope)
         } else {
             Ok(TextEncodedScope(value.into()))
         }
@@ -42,18 +47,15 @@ impl TryFrom<&str> for TextEncodedScope {
 }
 
 impl TryFrom<Vec<&str>> for TextEncodedScope {
-    type Error = String;
+    type Error = InvalidTextEncodedScopeError;
 
-    fn try_from(value: Vec<&str>) -> Result<Self, String> {
-        if value
-            .iter()
-            .any(|x| x.is_empty() || x.contains([' ', '\\', '"']))
-        {
-            Err(String::from(
-                "Individual scope elements may neither be empty nor contain illegal characters!",
-            ))
+    fn try_from(value: Vec<&str>) -> Result<Self, Self::Error> {
+        if value.iter().any(|x| x.contains([' ', '\\', '"'])) {
+            Err(InvalidTextEncodedScopeError::IllegalCharacters)
+        } else if value.iter().any(|x| x.is_empty()) {
+            Err(InvalidTextEncodedScopeError::EmptyElement)
         } else if value.is_empty() {
-            Err(String::from("Scope may not be empty!"))
+            Err(InvalidTextEncodedScopeError::EmptyScope)
         } else {
             // Fold the vec into a single string, using space as a separator
             Ok(TextEncodedScope(value.join(" ")))
@@ -78,35 +80,36 @@ impl BinaryEncodedScope {
     ///
     /// ```
     /// # use dcaf::ace::BinaryEncodedScope;
+    /// # use dcaf::InvalidBinaryEncodedScopeError;
     /// let simple = BinaryEncodedScope::try_from(vec![0xDC, 0x21, 0xAF].as_slice())?;
     /// assert!(simple.elements(0x21)?.eq(vec![vec![0xDC], vec![0xAF]]));
     /// assert!(simple.elements(0xDC).is_err());
-    /// # Ok::<(), String>(())
+    /// # Ok::<(), InvalidBinaryEncodedScopeError>(())
     /// ```
     ///
     /// # Panics
     /// If the pre-condition that the scope isn't empty is violated.
     /// This shouldn't occur, as it's an invariant of [BinaryEncodedScope].
-    pub fn elements(&self, separator: u8) -> Result<impl Iterator<Item=&[u8]>, String> {
+    pub fn elements(
+        &self,
+        separator: u8,
+    ) -> Result<impl Iterator<Item=&[u8]>, InvalidBinaryEncodedScopeError> {
         let split = self.0.split(move |x| x == &separator);
+        // We use an assert rather than an Error because the client is not expected to handle this.
         assert!(
             !self.0.is_empty(),
             "Invariant violated: Scope may not be empty"
         );
-        if self
-            .0
-            // May not start with separator
-            .first()
-            .filter(|x| **x != separator)
-            // May not end with separator
-            .and(self.0.last().filter(|x| **x != separator))
-            .is_none()
-        {
-            Err(format!(
-                "Scope may not start with or end in given separator '{separator}'"
+        if self.0.first().filter(|x| **x != separator).is_none() {
+            Err(InvalidBinaryEncodedScopeError::StartsWithSeparator(
+                separator,
             ))
+        } else if self.0.last().filter(|x| **x != separator).is_none() {
+            Err(InvalidBinaryEncodedScopeError::EndsWithSeparator(separator))
         } else if self.0.windows(2).any(|x| x[0] == x[1] && x[1] == separator) {
-            Err("Separator can't exist twice in a row within Scope!".to_string())
+            Err(InvalidBinaryEncodedScopeError::ConsecutiveSeparators(
+                separator,
+            ))
         } else {
             debug_assert!(
                 split.clone().all(|x| !x.is_empty()),
@@ -118,12 +121,12 @@ impl BinaryEncodedScope {
 }
 
 impl TryFrom<&[u8]> for BinaryEncodedScope {
-    type Error = String;
+    type Error = InvalidBinaryEncodedScopeError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let vec = value.to_vec();
         if vec.is_empty() {
-            Err("Scope cannot be empty!".to_string())
+            Err(InvalidBinaryEncodedScopeError::EmptyScope)
         } else {
             Ok(BinaryEncodedScope(ByteString::from(value.to_vec())))
         }
@@ -137,9 +140,17 @@ impl From<TextEncodedScope> for Scope {
 }
 
 impl TryFrom<Vec<&str>> for Scope {
-    type Error = String;
+    type Error = InvalidTextEncodedScopeError;
 
-    fn try_from(value: Vec<&str>) -> Result<Self, String> {
+    fn try_from(value: Vec<&str>) -> Result<Self, InvalidTextEncodedScopeError> {
+        value.try_into()
+    }
+}
+
+impl TryFrom<&[u8]> for Scope {
+    type Error = InvalidBinaryEncodedScopeError;
+
+    fn try_from(value: &[u8]) -> Result<Self, InvalidBinaryEncodedScopeError> {
         value.try_into()
     }
 }
@@ -256,8 +267,10 @@ mod cbor_map {
     use alloc::boxed::Box;
     use alloc::vec;
     use alloc::vec::Vec;
+    use core::any::type_name;
+    use core::fmt::Display;
 
-    use ciborium::value::Value;
+    use ciborium::value::{Integer, Value};
     use erased_serde::Serialize as ErasedSerialize;
 
     use crate::ace::{
@@ -266,6 +279,7 @@ mod cbor_map {
         TokenType,
     };
     use crate::cbor_values::ByteString;
+    use crate::error::TryFromCborMapError;
     use crate::model::cbor_map::AsCborMap;
     use crate::model::cbor_values::{CborMapValue, ProofOfPossessionKey};
     use crate::model::constants::cbor_abbreviations::{creation_hint, token};
@@ -287,6 +301,41 @@ mod cbor_map {
      };
      }
 
+    fn decode_scope<T, S>(scope: T) -> Result<Option<Scope>, TryFromCborMapError>
+        where
+            S: TryFrom<T>,
+            Scope: From<S>,
+            S::Error: Display,
+    {
+        match S::try_from(scope) {
+            Ok(scope) => Ok(Some(Scope::from(scope))),
+            Err(e) => {
+                return Err(TryFromCborMapError::from_message(format!(
+                    "couldn't decode scope: {e}"
+                )))
+            }
+        }
+    }
+
+    fn decode_number<T>(number: Integer, name: &str) -> Result<T, TryFromCborMapError> where T: TryFrom<Integer> {
+        match T::try_from(number) {
+            Ok(i) => Ok(i),
+            Err(_) => {
+                return Err(TryFromCborMapError::from_message(
+                    format!("{name} must be a valid {}", type_name::<T>()),
+                ))
+            }
+        }
+    }
+
+    fn decode_int_map<T>(map: Vec<(Value, Value)>, name: &str) -> Result<Vec<(i128, Value)>, TryFromCborMapError> where T: AsCborMap {
+        T::cbor_map_from_int(map).map_err(|_|
+            TryFromCborMapError::from_message(format!(
+                "{name} is not a valid CBOR map"
+            ))
+        )
+    }
+
     impl AsCborMap for AuthServerRequestCreationHint {
         fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             cbor_map_vec! {
@@ -298,7 +347,7 @@ mod cbor_map {
             }
         }
 
-        fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
+        fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
             where
                 Self: Sized + AsCborMap,
         {
@@ -309,27 +358,18 @@ mod cbor_map {
                     (creation_hint::KID, Value::Bytes(x)) => hint.kid = Some(ByteString::from(x)),
                     (creation_hint::AUDIENCE, Value::Text(x)) => hint.audience = Some(x),
                     (creation_hint::SCOPE, Value::Text(x)) => {
-                        if let Ok(scope) = TextEncodedScope::try_from(x.as_str()) {
-                            hint.scope = Some(Scope::from(scope))
-                        } else {
-                            return None;
-                        }
+                        hint.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?
                     }
                     (creation_hint::SCOPE, Value::Bytes(x)) => {
-                        if let Ok(scope) = BinaryEncodedScope::try_from(x.as_slice()) {
-                            hint.scope = Some(Scope::from(scope));
-                        } else {
-                            return None
-                        }
-                        // TODO: Handle AIF
+                        hint.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?
                     }
                     (creation_hint::CNONCE, Value::Bytes(x)) => {
                         hint.client_nonce = Some(ByteString::from(x))
                     }
-                    (_, _) => return None,
+                    (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 };
             }
-            Some(hint)
+            Ok(hint)
         }
     }
 
@@ -348,7 +388,7 @@ mod cbor_map {
             }
         }
 
-        fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
+        fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
             where
                 Self: Sized + AsCborMap,
         {
@@ -356,45 +396,29 @@ mod cbor_map {
             for entry in map {
                 match (entry.0 as u8, entry.1) {
                     (token::REQ_CNF, Value::Map(x)) => {
-                        if let Ok(pop_map) = Self::cbor_map_from_int(x) {
-                            request.req_cnf = ProofOfPossessionKey::try_from_cbor_map(pop_map)
-                        } else {
-                            return None;
-                        }
+                        request.req_cnf = Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<Self>(x, "req_cnf")?)?)
                     }
                     (token::AUDIENCE, Value::Text(x)) => request.audience = Some(x),
                     (token::SCOPE, Value::Text(x)) => {
-                        if let Ok(scope) = TextEncodedScope::try_from(x.as_str()) {
-                            request.scope = Some(Scope::from(scope))
-                        } else {
-                            return None;
-                        }
+                        request.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
-                        if let Ok(scope) = BinaryEncodedScope::try_from(x.as_slice()) {
-                            request.scope = Some(Scope::from(scope));
-                        } else {
-                            return None
-                        }
+                        request.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?
                         // TODO: Handle AIF
                     }
                     (token::CLIENT_ID, Value::Text(x)) => request.client_id = x,
                     (token::REDIRECT_URI, Value::Text(x)) => request.redirect_uri = Some(x),
                     (token::GRANT_TYPE, Value::Integer(x)) => {
-                        if let Ok(i) = i32::try_from(x) {
-                            request.grant_type = Some(GrantType::from(i))
-                        } else {
-                            return None;
-                        }
+                        request.grant_type = Some(GrantType::from(decode_number::<i32>(x, "grant_type")?));
                     }
                     (token::ACE_PROFILE, Value::Null) => request.ace_profile = Some(()),
                     (token::CNONCE, Value::Bytes(x)) => {
                         request.client_nonce = Some(ByteString::from(x))
                     }
-                    (_, _) => return None,
+                    (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 };
             }
-            Some(request)
+            Ok(request)
         }
     }
 
@@ -414,7 +438,7 @@ mod cbor_map {
             }
         }
 
-        fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
+        fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
             where
                 Self: Sized + AsCborMap,
         {
@@ -425,62 +449,34 @@ mod cbor_map {
                         response.access_token = ByteString::from(x)
                     }
                     (token::EXPIRES_IN, Value::Integer(x)) => {
-                        if let Ok(i) = x.try_into() {
-                            response.expires_in = Some(i)
-                        } else {
-                            return None;
-                        }
+                        response.expires_in = Some(decode_number::<u32>(x, "expires_in")?);
                     }
                     (token::CNF, Value::Map(x)) => {
-                        if let Ok(pop_map) = Self::cbor_map_from_int(x) {
-                            response.cnf = ProofOfPossessionKey::try_from_cbor_map(pop_map)
-                        } else {
-                            return None;
-                        }
+                        response.cnf = Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<Self>(x, "cnf")?)?);
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
-                        if let Ok(scope) = BinaryEncodedScope::try_from(x.as_slice()) {
-                            response.scope = Some(Scope::from(scope));
-                        } else {
-                            return None
-                        }
+                        response.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?
                         // TODO: Handle AIF
                     }
                     (token::SCOPE, Value::Text(x)) => {
-                        if let Ok(scope) = TextEncodedScope::try_from(x.as_str()) {
-                            response.scope = Some(Scope::from(scope))
-                        } else {
-                            return None;
-                        }
+                        response.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?
                     }
                     (token::TOKEN_TYPE, Value::Integer(x)) => {
-                        if let Ok(i) = i32::try_from(x) {
-                            response.token_type = Some(TokenType::from(i))
-                        } else {
-                            return None;
-                        }
+                        response.token_type = Some(TokenType::from(decode_number::<i32>(x, "token_type")?));
                     }
                     (token::REFRESH_TOKEN, Value::Bytes(x)) => {
                         response.refresh_token = Some(ByteString::from(x))
                     }
                     (token::ACE_PROFILE, Value::Integer(x)) => {
-                        if let Ok(i) = i32::try_from(x) {
-                            response.ace_profile = Some(AceProfile::from(i))
-                        } else {
-                            return None;
-                        }
+                        response.ace_profile = Some(AceProfile::from(decode_number::<i32>(x, "ace_profile")?));
                     }
                     (token::RS_CNF, Value::Map(x)) => {
-                        if let Ok(pop_map) = Self::cbor_map_from_int(x) {
-                            response.rs_cnf = ProofOfPossessionKey::try_from_cbor_map(pop_map)
-                        } else {
-                            return None;
-                        }
+                        response.rs_cnf = Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<Self>(x, "rs_cnf")?)?);
                     }
-                    _ => return None,
+                    (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 }
             }
-            Some(response)
+            Ok(response)
         }
     }
 
@@ -494,7 +490,7 @@ mod cbor_map {
             }
         }
 
-        fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Option<Self>
+        fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
             where
                 Self: Sized + AsCborMap,
         {
@@ -504,22 +500,18 @@ mod cbor_map {
             for entry in map {
                 match (entry.0 as u8, entry.1) {
                     (token::ERROR, Value::Integer(x)) => {
-                        if let Ok(i) = i32::try_from(x) {
-                            maybe_error = Some(ErrorCode::from(i));
-                        } else {
-                            return None;
-                        }
+                        maybe_error = Some(ErrorCode::from(decode_number::<i32>(x, "error")?));
                     }
                     (token::ERROR_URI, Value::Text(x)) => error_description = Some(x),
                     (token::ERROR_DESCRIPTION, Value::Text(x)) => error_uri = Some(x),
-                    _ => return None,
+                    (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 }
             }
             maybe_error.map(|error| ErrorResponse {
                 error,
                 error_uri,
                 error_description,
-            })
+            }).ok_or_else(|| TryFromCborMapError::missing_field("error"))
         }
     }
 }

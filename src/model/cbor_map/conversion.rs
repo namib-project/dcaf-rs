@@ -42,7 +42,7 @@ impl<'de, T> Deserialize<'de> for CborMap<T>
                     T::cbor_map_from_int(map).map_err(D::Error::custom)?;
                 AsCborMap::try_from_cbor_map(map)
                     .map(CborMap)
-                    .ok_or_else(|| D::Error::custom("unknown field in CBOR map encountered"))
+                    .map_err(D::Error::custom)
             }
             _ => Err(D::Error::invalid_type(
                 Unexpected::Other("unknown type"),
