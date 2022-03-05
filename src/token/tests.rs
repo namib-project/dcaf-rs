@@ -39,28 +39,11 @@ fn example_claims(key: CoseKey) -> Result<ClaimsSet, AccessTokenError> {
         .build())
 }
 
-/// This FakeSigner was taken from the `coset` library.
-/// Its sign function is simply the identity function.
 #[derive(Copy, Clone)]
-struct FakeSigner {}
-
-impl FakeSigner {
-    fn sign(&self, data: &[u8]) -> Vec<u8> {
-        data.to_vec()
-    }
-    fn verify(&self, sig: &[u8], data: &[u8]) -> Result<(), String> {
-        if sig != self.sign(data) {
-            Err("failed to verify".to_owned())
-        } else {
-            Ok(())
-        }
-    }
-}
-
 struct FakeCrypto {}
 
-impl FakeCrypto {
-    fn encrypt(&self, data: &[u8], aad: &[u8]) -> Vec<u8> {
+impl CipherProvider for FakeCrypto {
+    fn encrypt(&mut self, data: &[u8], aad: &[u8]) -> Vec<u8> {
         // We simply put AAD behind the data and call it a day.
         let mut result: Vec<u8> = vec![];
         result.append(&mut data.to_vec());
@@ -68,7 +51,7 @@ impl FakeCrypto {
         result
     }
 
-    fn decrypt(&self, data: &[u8], aad: &[u8]) -> Result<Vec<u8>, String> {
+    fn decrypt(&mut self, data: &[u8], aad: &[u8]) -> Result<Vec<u8>, String> {
         // Now we just split off the AAD we previously put at the end of the data.
         // We return an error if it does not match.
         if data.len() < aad.len() {
@@ -82,11 +65,23 @@ impl FakeCrypto {
             Ok(result)
         }
     }
+
+    fn sign(&mut self, data: &[u8]) -> Vec<u8> {
+        data.to_vec()
+    }
+
+    fn verify(&mut self, sig: &[u8], data: &[u8]) -> Result<(), String> {
+        if sig != self.sign(data) {
+            Err("failed to verify".to_string())
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[test]
 fn test_encrypt_decrypt() -> Result<(), AccessTokenError> {
-    let crypto = FakeCrypto {};
+    let mut crypto = FakeCrypto {};
     let key = example_key();
     let (unprotected_header, protected_header) = example_headers();
     let claims = example_claims(key)?;
@@ -95,11 +90,11 @@ fn test_encrypt_decrypt() -> Result<(), AccessTokenError> {
         claims.clone(),
         unprotected_header,
         protected_header,
-        |x, y| crypto.encrypt(x, y),
+        &mut crypto,
         &aad,
     )?;
     assert_eq!(
-        decrypt_access_token(encrypted, &aad, |x, y| crypto.decrypt(x, y))?,
+        decrypt_access_token(encrypted, &aad, &mut crypto)?,
         claims
     );
     Ok(())
@@ -107,7 +102,7 @@ fn test_encrypt_decrypt() -> Result<(), AccessTokenError> {
 
 #[test]
 fn test_sign_validate() -> Result<(), AccessTokenError> {
-    let signer = FakeSigner {};
+    let mut signer = FakeCrypto {};
     let key = example_key();
     let (unprotected_header, protected_header) = example_headers();
     let claims = example_claims(key)?;
@@ -116,9 +111,9 @@ fn test_sign_validate() -> Result<(), AccessTokenError> {
         claims,
         unprotected_header,
         protected_header,
-        |x| signer.sign(x),
+        &mut signer,
         &aad,
     )?;
-    validate_access_token(signed, &aad, |x, y| signer.verify(x, y))?;
+    validate_access_token(signed, &aad, &mut signer)?;
     Ok(())
 }
