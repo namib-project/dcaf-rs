@@ -1,12 +1,10 @@
-use coset::cwt::ClaimsSet;
 use coset::{
     CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseSign1, CoseSign1Builder, Header,
 };
+use coset::cwt::ClaimsSet;
 
-use crate::cbor_values::ByteString;
-use crate::AccessTokenError;
-
-// TODO: Better error handling — don't just use Strings
+use crate::common::ByteString;
+use crate::error::AccessTokenError;
 
 #[cfg(test)]
 mod tests;
@@ -18,8 +16,8 @@ pub fn encrypt_access_token<F>(
     cipher: F,
     aad: &[u8],
 ) -> Result<ByteString, AccessTokenError>
-where
-    F: FnOnce(&[u8], &[u8]) -> Vec<u8>,
+    where
+        F: FnOnce(&[u8], &[u8]) -> Vec<u8>,
 {
     Ok(ByteString::from(
         CoseEncrypt0Builder::new()
@@ -43,8 +41,8 @@ pub fn sign_access_token<F>(
     cipher: F,
     aad: &[u8],
 ) -> Result<ByteString, AccessTokenError>
-where
-    F: FnOnce(&[u8]) -> Vec<u8>,
+    where
+        F: FnOnce(&[u8]) -> Vec<u8>,
 {
     Ok(ByteString::from(
         CoseSign1Builder::new()
@@ -63,8 +61,8 @@ pub fn validate_access_token<F>(
     aad: &[u8],
     verifier: F,
 ) -> Result<(), AccessTokenError>
-where
-    F: FnOnce(&[u8], &[u8]) -> Result<(), String>,
+    where
+        F: FnOnce(&[u8], &[u8]) -> Result<(), String>,
 {
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
     // TODO: Validate protected headers
@@ -77,8 +75,8 @@ pub fn decrypt_access_token<F>(
     aad: &[u8],
     cipher: F,
 ) -> Result<ClaimsSet, AccessTokenError>
-where
-    F: FnOnce(&[u8], &[u8]) -> Result<Vec<u8>, String>,
+    where
+        F: FnOnce(&[u8], &[u8]) -> Result<Vec<u8>, String>,
 {
     let encrypt =
         CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from_cose_error)?;

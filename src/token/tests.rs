@@ -1,6 +1,6 @@
+use coset::{AsCborValue, CoseKey, CoseKeyBuilder, HeaderBuilder};
 use coset::cwt::ClaimsSetBuilder;
 use coset::iana::{Algorithm, CwtClaimName};
-use coset::{AsCborValue, CoseKey, CoseKeyBuilder, HeaderBuilder};
 
 use super::*;
 
@@ -9,8 +9,8 @@ fn example_key() -> CoseKey {
         0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c, 0x42,
         0x71, 0x08,
     ])
-    .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
-    .build()
+        .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
+        .build()
 }
 
 fn example_headers() -> (Header, Header) {

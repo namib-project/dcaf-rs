@@ -1,172 +1,259 @@
-//! Contains conversion methods for ACE-OAuth data types.
-//! One part of this is converting enum types from and to their CBOR abbreviations in
-//! [`cbor_abbreviations`], another part is implementing the [`AsCborMap`] type for the
-//! models which are represented as CBOR maps.
+use alloc::string::String;
 
-use crate::ace::{BinaryEncodedScope, Scope, TextEncodedScope};
-use crate::cbor_values::ByteString;
-use crate::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError};
+use crate::common::{ByteString, ProofOfPossessionKey};
+use crate::common::scope::Scope;
 
-impl TextEncodedScope {
-    /// Return the individual elements (i.e., access ranges) of this scope.
-    /// Post-condition: The returned iterator will not be empty, and none of its elements
-    /// may contain spaces (` `), double-quotes (`"`) or backslashes (`\\'`).
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use dcaf::ace::TextEncodedScope;
-    /// # use dcaf::InvalidTextEncodedScopeError;
-    /// let simple = TextEncodedScope::try_from("this is a test")?;
-    /// assert!(simple.elements().eq(vec!["this", "is", "a", "test"]));
-    /// # Ok::<(), InvalidTextEncodedScopeError>(())
-    /// ```
-    pub fn elements(&self) -> impl Iterator<Item=&str> {
-        self.0.split(' ')
+#[cfg(test)]
+mod tests;
+
+/// Type of the resource owner's authorization used by the client to obtain an access token.
+/// For more information, see [section 1.3 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+pub enum GrantType {
+    Password,
+    AuthorizationCode,
+    ClientCredentials,
+    RefreshToken,
+    Other(i32),
+}
+
+/// Request for an access token, sent from the client.
+#[derive(Debug, Default, PartialEq, Builder)]
+#[builder(
+no_std,
+setter(into, strip_option),
+derive(Debug, PartialEq),
+build_fn(validate = "Self::validate")
+)]
+pub struct AccessTokenRequest {
+    /// Grant type used for this request. Defaults to `client_credentials`.
+    #[builder(default)]
+    pub grant_type: Option<GrantType>,
+
+    /// The logical name of the target service where the client intends to use the requested security token.
+    #[builder(default)]
+    pub audience: Option<String>,
+
+    /// URI to redirect the client to after authorization is complete.
+    #[builder(default)]
+    pub redirect_uri: Option<String>,
+
+    /// Client nonce to ensure the token is still fresh.
+    #[builder(default)]
+    pub client_nonce: Option<ByteString>,
+
+    /// Scope of the access request as described by section 3.3 of
+    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+    #[builder(default)]
+    pub scope: Option<Scope>,
+
+    /// Included in the request if the AS shall include the `ace_profile` parameter in its
+    /// response.
+    #[builder(setter(custom, strip_option), default = "None")]
+    pub ace_profile: Option<()>,
+
+    /// Contains information about the key the client would like to bind to the
+    /// access token for proof-of-possession.
+    #[builder(default)]
+    pub req_cnf: Option<ProofOfPossessionKey>,
+
+    /// The client identifier as described in section 2.2 of
+    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+    pub client_id: String,
+}
+
+/// The type of the token issued as described in section 7.1 of
+/// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1).
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+pub enum TokenType {
+    /// Bearer token type as defined in [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750).
+    Bearer,
+
+    /// Proof-of-possession token type, as specified in
+    /// [`draft-ietf-ace-oauth-params-16`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-params-16.txt).
+    ProofOfPossession,
+
+    /// An unspecified token type along with its representation in CBOR.
+    Other(i32),
+}
+
+/// Profiles for ACE-OAuth as specified in section 5.8.4.3 of `draft-ietf-ace-oauth-authz`.
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+pub enum AceProfile {
+    /// Profile for ACE-OAuth using Datagram Transport Layer Security, specified in
+    /// [`draft-ietf-ace-dtls-authorize`](https://www.ietf.org/archive/id/draft-ietf-ace-dtls-authorize-18.html).
+    CoapDtls,
+
+    // The below is commented out because no CBOR value has been specified yet for this profile.
+    // /// Profile for ACE-OAuth using OSCORE, specified in
+    // /// [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.txt).
+    // CoapOscore,
+    /// An unspecified ACE-OAuth profile along with its representation in CBOR.
+    Other(i32),
+}
+
+/// Response to an AccessTokenRequest containing the Access Information.
+#[derive(Debug, PartialEq, Default, Builder)]
+#[builder(
+no_std,
+setter(into, strip_option),
+derive(Debug, PartialEq),
+build_fn(validate = "Self::validate")
+)]
+pub struct AccessTokenResponse {
+    /// The access token issued by the authorization server.
+    access_token: ByteString,
+
+    /// The lifetime in seconds of the access token.
+    #[builder(default)]
+    expires_in: Option<u32>,
+
+    /// The scope of the access token as described by
+    /// section 3.3 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-3.3).
+    #[builder(default)]
+    scope: Option<Scope>,
+
+    /// The type of the token issued as described in section 7.1 of
+    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1) and section 5.8.4.2
+    /// of `draft-ietf-ace-oauth-authz-46`.
+    #[builder(default)]
+    token_type: Option<TokenType>,
+
+    /// The refresh token, which can be used to obtain new access tokens using the same
+    /// authorization grant as described in section 6 of
+    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html)
+    #[builder(default)]
+    refresh_token: Option<ByteString>,
+
+    /// This indicates the profile that the client must use towards the RS.
+    #[builder(default)]
+    ace_profile: Option<AceProfile>,
+
+    /// The proof-of-possession key that the AS selected for the token.
+    #[builder(default)]
+    cnf: Option<ProofOfPossessionKey>,
+
+    /// Information about the public key used by the RS to authenticate.
+    #[builder(default)]
+    rs_cnf: Option<ProofOfPossessionKey>,
+}
+
+/// Error code specifying what went wrong for a token request.
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+pub enum ErrorCode {
+    /// The request is missing a required parameter, includes an unsupported parameter value (other
+    /// than grant type), repeats a parameter, includes multiple credentials, utilizes
+    /// more than one mechanism for authenticating the client, or is otherwise malformed.
+    InvalidRequest,
+
+    /// Client authentication failed (e.g., unknown client, no client authentication included, or
+    /// unsupported authentication method)
+    InvalidClient,
+
+    /// The provided authorization grant (e.g., authorization code, resource owner credentials) or
+    /// refresh token is invalid, expired, revoked, does not match the redirection URI used in the
+    /// authorization request, or was issued to another client.
+    InvalidGrant,
+
+    /// The authenticated client is not authorized to use this authorization grant type.
+    UnauthorizedClient,
+
+    /// The authorization grant type is not supported by the authorization server.
+    UnsupportedGrantType,
+
+    /// The authorization grant type is not supported by the authorization server.
+    InvalidScope,
+
+    /// The client submitted an asymmetric key in the token request that the RS cannot process.
+    UnsupportedPopKey,
+
+    /// The client and the RS it has requested an access token for do not share a common profile.
+    IncompatibleAceProfiles,
+
+    /// An unspecified error code along with its representation in CBOR.
+    Other(i32),
+}
+
+/// Details about an error which occurred for an access token request.
+#[derive(Debug, PartialEq, Eq, Hash, Builder)]
+#[builder(
+no_std,
+setter(into, strip_option),
+derive(Debug, PartialEq),
+build_fn(validate = "Self::validate")
+)]
+pub struct ErrorResponse {
+    /// Error code for this error.
+    error: ErrorCode,
+
+    /// Human-readable ASCII text providing additional information, used to assist the
+    /// client developer in understanding the error that occurred.
+    #[builder(default)]
+    error_description: Option<String>,
+
+    /// A URI identifying a human-readable web page with information about the error, used to
+    /// provide the client developer with additional information about the error.
+    #[builder(default)]
+    error_uri: Option<String>,
+}
+
+impl AccessTokenRequest {
+    /// Returns a new builder for this struct.
+    pub fn builder() -> AccessTokenRequestBuilder {
+        AccessTokenRequestBuilder::default()
     }
 }
 
-impl TryFrom<&str> for TextEncodedScope {
-    type Error = InvalidTextEncodedScopeError;
+impl AccessTokenRequestBuilder {
+    pub(crate) fn validate(&self) -> Result<(), AccessTokenRequestBuilderError> {
+        // TODO: Check whether there are invariants to validate
+        Ok(())
+    }
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if value.ends_with(' ') {
-            Err(InvalidTextEncodedScopeError::EndsWithSeparator)
-        } else if value.starts_with(' ') {
-            Err(InvalidTextEncodedScopeError::StartsWithSeparator)
-        } else if value.contains(['"', '\\']) {
-            Err(InvalidTextEncodedScopeError::IllegalCharacters)
-        } else if value.contains("  ") {
-            Err(InvalidTextEncodedScopeError::ConsecutiveSeparators)
-        } else if value.is_empty() {
-            Err(InvalidTextEncodedScopeError::EmptyScope)
-        } else {
-            Ok(TextEncodedScope(value.into()))
-        }
+    /// Sets the [ace_profile] field to an empty value, which indicates a request for the
+    /// Authorization Server to respond with the ace_profile field in the response.
+    pub fn ace_profile(&mut self) -> &mut Self {
+        self.ace_profile = Some(Some(()));
+        self
     }
 }
 
-impl TryFrom<Vec<&str>> for TextEncodedScope {
-    type Error = InvalidTextEncodedScopeError;
-
-    fn try_from(value: Vec<&str>) -> Result<Self, Self::Error> {
-        if value.iter().any(|x| x.contains([' ', '\\', '"'])) {
-            Err(InvalidTextEncodedScopeError::IllegalCharacters)
-        } else if value.iter().any(|x| x.is_empty()) {
-            Err(InvalidTextEncodedScopeError::EmptyElement)
-        } else if value.is_empty() {
-            Err(InvalidTextEncodedScopeError::EmptyScope)
-        } else {
-            // Fold the vec into a single string, using space as a separator
-            Ok(TextEncodedScope(value.join(" ")))
-        }
+impl AccessTokenResponse {
+    pub fn builder() -> AccessTokenResponseBuilder {
+        AccessTokenResponseBuilder::default()
     }
 }
 
-impl BinaryEncodedScope {
-    /// Return the individual elements (i.e., access ranges) of this scope.
-    ///
-    /// ## Pre-conditions
-    /// - The given separator may neither be the first nor last element of the scope.
-    /// - The given separator may not occur twice in a row in the scope.
-    /// - The scope must not be empty.
-    ///
-    /// ## Post-conditions
-    /// - The returned iterator will not be empty
-    /// - None of its elements will be empty
-    /// - None of its elements will contain the given separator.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use dcaf::ace::BinaryEncodedScope;
-    /// # use dcaf::InvalidBinaryEncodedScopeError;
-    /// let simple = BinaryEncodedScope::try_from(vec![0xDC, 0x21, 0xAF].as_slice())?;
-    /// assert!(simple.elements(0x21)?.eq(vec![vec![0xDC], vec![0xAF]]));
-    /// assert!(simple.elements(0xDC).is_err());
-    /// # Ok::<(), InvalidBinaryEncodedScopeError>(())
-    /// ```
-    ///
-    /// # Panics
-    /// If the pre-condition that the scope isn't empty is violated.
-    /// This shouldn't occur, as it's an invariant of [BinaryEncodedScope].
-    pub fn elements(
-        &self,
-        separator: u8,
-    ) -> Result<impl Iterator<Item=&[u8]>, InvalidBinaryEncodedScopeError> {
-        let split = self.0.split(move |x| x == &separator);
-        // We use an assert rather than an Error because the client is not expected to handle this.
-        assert!(
-            !self.0.is_empty(),
-            "Invariant violated: Scope may not be empty"
-        );
-        if self.0.first().filter(|x| **x != separator).is_none() {
-            Err(InvalidBinaryEncodedScopeError::StartsWithSeparator(
-                separator,
-            ))
-        } else if self.0.last().filter(|x| **x != separator).is_none() {
-            Err(InvalidBinaryEncodedScopeError::EndsWithSeparator(separator))
-        } else if self.0.windows(2).any(|x| x[0] == x[1] && x[1] == separator) {
-            Err(InvalidBinaryEncodedScopeError::ConsecutiveSeparators(
-                separator,
-            ))
-        } else {
-            debug_assert!(
-                split.clone().all(|x| !x.is_empty()),
-                "Post-condition violated: Result may not contain empty slices"
-            );
-            Ok(split)
-        }
+impl AccessTokenResponseBuilder {
+    pub(crate) fn validate(&self) -> Result<(), AccessTokenResponseBuilderError> {
+        // TODO: Check whether there are invariants to validate
+        Ok(())
     }
 }
 
-impl TryFrom<&[u8]> for BinaryEncodedScope {
-    type Error = InvalidBinaryEncodedScopeError;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let vec = value.to_vec();
-        if vec.is_empty() {
-            Err(InvalidBinaryEncodedScopeError::EmptyScope)
-        } else {
-            Ok(BinaryEncodedScope(ByteString::from(value.to_vec())))
-        }
+impl ErrorResponse {
+    pub fn builder() -> ErrorResponseBuilder {
+        ErrorResponseBuilder::default()
     }
 }
 
-impl From<TextEncodedScope> for Scope {
-    fn from(value: TextEncodedScope) -> Self {
-        Scope::TextEncoded(value)
+impl ErrorResponseBuilder {
+    pub(crate) fn validate(&self) -> Result<(), ErrorResponseBuilderError> {
+        // TODO: Check whether there are invariants to validate
+        Ok(())
     }
 }
 
-impl TryFrom<Vec<&str>> for Scope {
-    type Error = InvalidTextEncodedScopeError;
+mod conversion {
+    use ciborium::value::Value;
+    use erased_serde::Serialize as ErasedSerialize;
 
-    fn try_from(value: Vec<&str>) -> Result<Self, InvalidTextEncodedScopeError> {
-        value.try_into()
-    }
-}
+    use crate::common::{AsCborMap, cbor_map_vec, CborMapValue, decode_int_map, decode_number, decode_scope, scope::{BinaryEncodedScope, TextEncodedScope}};
+    use crate::common::constants::cbor_abbreviations::{ace_profile, error, grant_types, token, token_types};
+    use crate::endpoints::token::AceProfile::CoapDtls;
+    use crate::error::TryFromCborMapError;
 
-impl TryFrom<&[u8]> for Scope {
-    type Error = InvalidBinaryEncodedScopeError;
-
-    fn try_from(value: &[u8]) -> Result<Self, InvalidBinaryEncodedScopeError> {
-        value.try_into()
-    }
-}
-
-impl From<BinaryEncodedScope> for Scope {
-    fn from(value: BinaryEncodedScope) -> Self {
-        Scope::BinaryEncoded(value)
-    }
-}
-
-mod cbor_abbreviations {
-    use crate::ace::{AceProfile, ErrorCode, GrantType, TokenType};
-    use crate::ace::AceProfile::{CoapDtls, Other};
-    use crate::model::constants::cbor_abbreviations::{
-        ace_profile, error, grant_types, token_types,
-    };
+    use super::*;
 
     impl From<i32> for GrantType {
         fn from(value: i32) -> Self {
@@ -216,7 +303,7 @@ mod cbor_abbreviations {
         fn from(value: i32) -> Self {
             match value {
                 ace_profile::COAP_DTLS => CoapDtls,
-                x => Other(x),
+                x => AceProfile::Other(x),
             }
         }
     }
@@ -225,7 +312,7 @@ mod cbor_abbreviations {
         fn from(profile: AceProfile) -> Self {
             match profile {
                 CoapDtls => ace_profile::COAP_DTLS,
-                Other(x) => x,
+                AceProfile::Other(x) => x,
             }
         }
     }
@@ -259,117 +346,6 @@ mod cbor_abbreviations {
                 ErrorCode::IncompatibleAceProfiles => error::INCOMPATIBLE_ACE_PROFILES,
                 ErrorCode::Other(x) => x,
             }
-        }
-    }
-}
-
-mod cbor_map {
-    use alloc::boxed::Box;
-    use alloc::vec;
-    use alloc::vec::Vec;
-    use core::any::type_name;
-    use core::fmt::Display;
-
-    use ciborium::value::{Integer, Value};
-    use erased_serde::Serialize as ErasedSerialize;
-
-    use crate::ace::{
-        AccessTokenRequest, AccessTokenResponse, AceProfile, AuthServerRequestCreationHint,
-        BinaryEncodedScope, ErrorCode, ErrorResponse, GrantType, Scope, TextEncodedScope,
-        TokenType,
-    };
-    use crate::cbor_values::ByteString;
-    use crate::error::TryFromCborMapError;
-    use crate::model::cbor_map::AsCborMap;
-    use crate::model::cbor_values::{CborMapValue, ProofOfPossessionKey};
-    use crate::model::constants::cbor_abbreviations::{creation_hint, token};
-
-    // Macro adapted from https://github.com/enarx/ciborium/blob/main/ciborium/tests/macro.rs#L13
-    macro_rules! cbor_map_vec {
-    ($($key:expr => $val:expr),* $(,)*) => {
-         vec![$(
-             (
-                 $key as i128,
-                 $val.map(|x| {
-                         // It's unclear to me why `Box::<dyn ErasedSerialize>` doesn't work.
-                         let a_box: Box<dyn ErasedSerialize> = Box::new(x);
-                         a_box
-                         // Box::<dyn ErasedSerialize>::new(x)
-                     })
-             )
-         ),*]
-     };
-     }
-
-    fn decode_scope<T, S>(scope: T) -> Result<Option<Scope>, TryFromCborMapError>
-        where
-            S: TryFrom<T>,
-            Scope: From<S>,
-            S::Error: Display,
-    {
-        match S::try_from(scope) {
-            Ok(scope) => Ok(Some(Scope::from(scope))),
-            Err(e) => {
-                return Err(TryFromCborMapError::from_message(format!(
-                    "couldn't decode scope: {e}"
-                )))
-            }
-        }
-    }
-
-    fn decode_number<T>(number: Integer, name: &str) -> Result<T, TryFromCborMapError> where T: TryFrom<Integer> {
-        match T::try_from(number) {
-            Ok(i) => Ok(i),
-            Err(_) => {
-                return Err(TryFromCborMapError::from_message(
-                    format!("{name} must be a valid {}", type_name::<T>()),
-                ))
-            }
-        }
-    }
-
-    fn decode_int_map<T>(map: Vec<(Value, Value)>, name: &str) -> Result<Vec<(i128, Value)>, TryFromCborMapError> where T: AsCborMap {
-        T::cbor_map_from_int(map).map_err(|_|
-            TryFromCborMapError::from_message(format!(
-                "{name} is not a valid CBOR map"
-            ))
-        )
-    }
-
-    impl AsCborMap for AuthServerRequestCreationHint {
-        fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
-            cbor_map_vec! {
-                creation_hint::AS => self.auth_server.as_ref(),
-                creation_hint::KID => self.kid.as_ref(),
-                creation_hint::AUDIENCE => self.audience.as_ref(),
-                creation_hint::SCOPE => self.scope.as_ref(),
-                creation_hint::CNONCE => self.client_nonce.as_ref()
-            }
-        }
-
-        fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
-            where
-                Self: Sized + AsCborMap,
-        {
-            let mut hint = AuthServerRequestCreationHint::default();
-            for entry in map {
-                match (entry.0 as u8, entry.1) {
-                    (creation_hint::AS, Value::Text(x)) => hint.auth_server = Some(x),
-                    (creation_hint::KID, Value::Bytes(x)) => hint.kid = Some(ByteString::from(x)),
-                    (creation_hint::AUDIENCE, Value::Text(x)) => hint.audience = Some(x),
-                    (creation_hint::SCOPE, Value::Text(x)) => {
-                        hint.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?
-                    }
-                    (creation_hint::SCOPE, Value::Bytes(x)) => {
-                        hint.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?
-                    }
-                    (creation_hint::CNONCE, Value::Bytes(x)) => {
-                        hint.client_nonce = Some(ByteString::from(x))
-                    }
-                    (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
-                };
-            }
-            Ok(hint)
         }
     }
 

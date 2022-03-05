@@ -24,8 +24,8 @@ impl Display for WrongSourceTypeError {
 
 impl WrongSourceTypeError {
     pub fn new<T>(target_type: T, expected_type: T) -> WrongSourceTypeError
-    where
-        T: Into<String>,
+        where
+            T: Into<String>,
     {
         WrongSourceTypeError {
             target_type: target_type.into(),
@@ -47,8 +47,8 @@ impl Display for TryFromCborMapError {
 
 impl TryFromCborMapError {
     pub fn from_message<T>(message: T) -> TryFromCborMapError
-    where
-        T: Into<String>,
+        where
+            T: Into<String>,
     {
         TryFromCborMapError {
             message: message.into(),
@@ -177,8 +177,8 @@ impl AccessTokenError {
     }
 
     pub fn with_validation_error_details<T>(details: T) -> AccessTokenError
-    where
-        T: Into<String>,
+        where
+            T: Into<String>,
     {
         AccessTokenError::ValidationError(Some(details.into()))
     }
