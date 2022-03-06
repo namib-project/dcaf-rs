@@ -18,7 +18,7 @@ pub enum GrantType {
 }
 
 /// Request for an access token, sent from the client.
-#[derive(Debug, Default, PartialEq, Builder)]
+#[derive(Debug, Default, PartialEq, Clone, Builder)]
 #[builder(
 no_std,
 setter(into, strip_option),
@@ -93,7 +93,7 @@ pub enum AceProfile {
 }
 
 /// Response to an AccessTokenRequest containing the Access Information.
-#[derive(Debug, PartialEq, Default, Builder)]
+#[derive(Debug, PartialEq, Default, Clone, Builder)]
 #[builder(
 no_std,
 setter(into, strip_option),

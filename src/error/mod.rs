@@ -8,7 +8,7 @@ use coset::CoseError;
 
 #[derive(Debug)]
 pub struct WrongSourceTypeError {
-    target_type: String,
+    given_type: String,
     expected_type: String,
 }
 
@@ -17,7 +17,7 @@ impl Display for WrongSourceTypeError {
         write!(
             f,
             "the given {} is not a {}",
-            self.target_type, self.expected_type
+            self.given_type, self.expected_type
         )
     }
 }
@@ -28,7 +28,7 @@ impl WrongSourceTypeError {
             T: Into<String>,
     {
         WrongSourceTypeError {
-            target_type: target_type.into(),
+            given_type: target_type.into(),
             expected_type: expected_type.into(),
         }
     }

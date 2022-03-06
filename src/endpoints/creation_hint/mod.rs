@@ -8,7 +8,7 @@ mod tests;
 /// This message is sent by an RS as a response to an Unauthorized Resource Request Message
 /// to help the sender of the Unauthorized Resource Request Message acquire a valid access token.
 /// For more information, see [section 5.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3).
-#[derive(Debug, Default, PartialEq, Eq, Hash, Builder)]
+#[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Builder)]
 #[builder(
 no_std,
 setter(into, strip_option),

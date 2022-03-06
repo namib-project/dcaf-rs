@@ -6,4 +6,5 @@ mod cbor_map;
 mod cbor_values;
 pub mod scope;
 
+#[cfg(test)]
 pub(crate) mod test_helper;

@@ -1,10 +1,13 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::fmt::{Display, Formatter};
+use core::fmt::{Debug, Display, Formatter};
 use core::ops::Deref;
 use std::any::type_name;
+use ciborium::de::from_reader;
+use ciborium::ser::{into_writer};
 
 use ciborium::value::{Integer, Value};
+use ciborium_io::{Read, Write};
 use erased_serde::Serialize as ErasedSerialize;
 
 use crate::common::scope::Scope;
@@ -32,6 +35,14 @@ pub(crate) use cbor_map_vec;
 
 
 pub trait AsCborMap: private::Sealed {
+    fn serialize_into<W>(self, writer: W) -> Result<(), ciborium::ser::Error<W::Error>> where Self: Sized, W: Write, W::Error: Debug {
+        into_writer(&CborMap(self), writer)
+    }
+
+    fn deserialize_from<R>(reader: R) -> Result<Self, ciborium::de::Error<R::Error>> where Self: Sized, R: Read, R::Error: Debug {
+        from_reader(reader).map(|x: CborMap<Self>| x.0)
+    }
+
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)>;
 
     fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
@@ -105,9 +116,7 @@ pub(crate) fn decode_int_map<T>(map: Vec<(Value, Value)>, name: &str) -> Result<
 /// Convenience struct so we can implement a foreign trait on all structs we intend to
 /// (de)serialize as CBOR maps.
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct CborMap<T>(pub T)
-    where
-        T: AsCborMap;
+struct CborMap<T>(T) where T: AsCborMap;
 
 impl<T> Display for CborMap<T>
     where
@@ -115,17 +124,6 @@ impl<T> Display for CborMap<T>
 {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-impl<T> Deref for CborMap<T>
-    where
-        T: AsCborMap,
-{
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 
@@ -153,7 +151,8 @@ mod conversion {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use serde::de::{Error, Unexpected};
 
-    use crate::common::{AsCborMap, CborMap};
+    use crate::common::{AsCborMap};
+    use crate::common::cbor_map::CborMap;
 
     impl<T> From<T> for CborMap<T>
         where
@@ -172,7 +171,7 @@ mod conversion {
             where
                 S: Serializer,
         {
-            Serialize::serialize(&self.to_ciborium_map(), serializer)
+            Serialize::serialize(&self.0.to_ciborium_map(), serializer)
         }
     }
 

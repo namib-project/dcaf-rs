@@ -78,7 +78,11 @@ pub struct BinaryEncodedScope(ByteString);
 
 /// Scope of an access token as specified in
 /// [`draft-ietf-ace-oauth-authz`, section 5.8.1](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1-2.4).
+///
 /// May be used both for [AccessTokenRequest]s and [AccessTokenResponse]s.
+/// Note that you rarely need to create instances of this type for that purpose,
+/// instead you can just pass in the concrete [TextEncodedScope] or [BinaryEncodedScope] directly
+/// into the builder.
 ///
 /// AIF (from [`draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif))
 /// support is planned, but not yet implemented.
@@ -121,7 +125,7 @@ mod conversion {
     //! [`cbor_abbreviations`], another part is implementing the [`AsCborMap`] type for the
     //! models which are represented as CBOR maps.
 
-    use crate::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError};
+    use crate::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError, WrongSourceTypeError};
 
     use super::*;
 
@@ -277,6 +281,30 @@ mod conversion {
     impl From<BinaryEncodedScope> for Scope {
         fn from(value: BinaryEncodedScope) -> Self {
             Scope::BinaryEncoded(value)
+        }
+    }
+
+    impl TryFrom<Scope> for BinaryEncodedScope {
+        type Error = WrongSourceTypeError;
+
+        fn try_from(value: Scope) -> Result<Self, Self::Error> {
+            if let Scope::BinaryEncoded(scope) = value {
+                Ok(scope)
+            } else {
+                Err(WrongSourceTypeError::new("Scope", "BinaryEncodedScope"))
+            }
+        }
+    }
+
+    impl TryFrom<Scope> for TextEncodedScope {
+        type Error = WrongSourceTypeError;
+
+        fn try_from(value: Scope) -> Result<Self, Self::Error> {
+            if let Scope::TextEncoded(scope) = value {
+                Ok(scope)
+            } else {
+                Err(WrongSourceTypeError::new("Scope", "TextEncodedScope"))
+            }
         }
     }
 }
