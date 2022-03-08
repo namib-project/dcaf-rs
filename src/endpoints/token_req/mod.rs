@@ -353,7 +353,7 @@ mod conversion {
         fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             let grant_type: Option<CborMapValue<GrantType>> = self.grant_type.map(CborMapValue);
             cbor_map_vec! {
-                token::REQ_CNF => self.req_cnf.as_ref().map(|x| x.to_ciborium_map()),
+                token::REQ_CNF => self.req_cnf.as_ref().map(|x| x.as_ciborium_value()),
                 token::AUDIENCE => self.audience.as_ref(),
                 token::SCOPE => self.scope.as_ref(),
                 token::CLIENT_ID => Some(&self.client_id),
@@ -405,12 +405,12 @@ mod conversion {
             cbor_map_vec! {
                 token::ACCESS_TOKEN => Some(&self.access_token),
                 token::EXPIRES_IN => self.expires_in,
-                token::CNF => self.cnf.as_ref().map(|x| x.to_ciborium_map()),
+                token::CNF => self.cnf.as_ref().map(|x| x.as_ciborium_value()),
                 token::SCOPE => self.scope.as_ref(),
                 token::TOKEN_TYPE => token_type,
                 token::REFRESH_TOKEN => self.refresh_token.as_ref(),
                 token::ACE_PROFILE => ace_profile,
-                token::RS_CNF => self.rs_cnf.as_ref().map(|x| x.to_ciborium_map())
+                token::RS_CNF => self.rs_cnf.as_ref().map(|x| x.as_ciborium_value())
             }
         }
 

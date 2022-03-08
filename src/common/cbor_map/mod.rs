@@ -50,7 +50,7 @@ pub trait AsCborMap: private::Sealed {
             Self: Sized + AsCborMap;
 
     // TODO: Document panics
-    fn to_ciborium_map(&self) -> Value {
+    fn as_ciborium_value(&self) -> Value {
         Value::Map(
             self.as_cbor_map()
                 .into_iter()
@@ -171,7 +171,7 @@ mod conversion {
             where
                 S: Serializer,
         {
-            Serialize::serialize(&self.0.to_ciborium_map(), serializer)
+            Serialize::serialize(&self.0.as_ciborium_value(), serializer)
         }
     }
 
