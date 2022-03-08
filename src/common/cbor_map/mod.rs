@@ -1,7 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::{Debug, Display, Formatter};
-use core::ops::Deref;
 use std::any::type_name;
 use ciborium::de::from_reader;
 use ciborium::ser::{into_writer};
@@ -130,7 +129,7 @@ impl<T> Display for CborMap<T>
 mod private {
     use crate::common::ProofOfPossessionKey;
     use crate::endpoints::creation_hint::AuthServerRequestCreationHint;
-    use crate::endpoints::token::{AccessTokenRequest, AccessTokenResponse, ErrorResponse};
+    use crate::endpoints::token_req::{AccessTokenRequest, AccessTokenResponse, ErrorResponse};
 
     /// Sealed trait according to C-SEALED.
     pub trait Sealed {}

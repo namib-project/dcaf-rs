@@ -7,7 +7,7 @@ use coset::iana::Algorithm;
 
 use crate::common::scope::TextEncodedScope;
 use crate::common::test_helper::{expect_ser_de};
-use crate::endpoints::token::AceProfile::CoapDtls;
+use crate::endpoints::token_req::AceProfile::CoapDtls;
 
 use super::*;
 

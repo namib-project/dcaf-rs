@@ -250,7 +250,7 @@ mod conversion {
 
     use crate::common::{AsCborMap, cbor_map_vec, CborMapValue, decode_int_map, decode_number, decode_scope, scope::{BinaryEncodedScope, TextEncodedScope}};
     use crate::common::constants::cbor_abbreviations::{ace_profile, error, grant_types, token, token_types};
-    use crate::endpoints::token::AceProfile::CoapDtls;
+    use crate::endpoints::token_req::AceProfile::CoapDtls;
     use crate::error::TryFromCborMapError;
 
     use super::*;
