@@ -478,8 +478,8 @@ mod conversion {
                     (token::ERROR, Value::Integer(x)) => {
                         maybe_error = Some(ErrorCode::from(decode_number::<i32>(x, "error")?));
                     }
-                    (token::ERROR_URI, Value::Text(x)) => error_description = Some(x),
-                    (token::ERROR_DESCRIPTION, Value::Text(x)) => error_uri = Some(x),
+                    (token::ERROR_URI, Value::Text(x)) => error_uri = Some(x),
+                    (token::ERROR_DESCRIPTION, Value::Text(x)) => error_description = Some(x),
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 }
             }
