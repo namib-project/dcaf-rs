@@ -29,7 +29,7 @@ pub enum TextOrByteString {
 #[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum ProofOfPossessionKey {
-    CoseKey(CoseKey),
+    PlainCoseKey(CoseKey),
     EncryptedCoseKey(CoseEncrypt0),
     KeyId(KeyId),
 }
@@ -154,7 +154,7 @@ mod conversion {
         fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             // The fact that we have to clone this is a little unfortunate.
             match self {
-                Self::CoseKey(key) => {
+                Self::PlainCoseKey(key) => {
                     let x: i128 = 1;
                     vec![(
                         x,
@@ -188,7 +188,7 @@ mod conversion {
             } else if let Some(entry) = map.into_iter().next() {
                 match entry {
                     (1, x) => CoseKey::from_cbor_value(x)
-                        .map(ProofOfPossessionKey::CoseKey)
+                        .map(ProofOfPossessionKey::PlainCoseKey)
                         .map_err(|x| {
                             TryFromCborMapError::from_message(format!(
                                 "couldn't create CoseKey from CBOR value: {x}"
@@ -212,7 +212,7 @@ mod conversion {
 
     impl From<CoseKey> for ProofOfPossessionKey {
         fn from(key: CoseKey) -> Self {
-            ProofOfPossessionKey::CoseKey(key)
+            ProofOfPossessionKey::PlainCoseKey(key)
         }
     }
 
@@ -262,7 +262,7 @@ mod conversion {
         type Error = WrongSourceTypeError;
 
         fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
-            if let ProofOfPossessionKey::CoseKey(key) = value {
+            if let ProofOfPossessionKey::PlainCoseKey(key) = value {
                 Ok(key)
             } else {
                 Err(WrongSourceTypeError::new("ProofOfPossessionKey", "CoseKey"))
