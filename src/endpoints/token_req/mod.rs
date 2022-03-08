@@ -102,40 +102,40 @@ build_fn(validate = "Self::validate")
 )]
 pub struct AccessTokenResponse {
     /// The access token issued by the authorization server.
-    access_token: ByteString,
+    pub access_token: ByteString,
 
     /// The lifetime in seconds of the access token.
     #[builder(default)]
-    expires_in: Option<u32>,
+    pub expires_in: Option<u32>,
 
     /// The scope of the access token as described by
     /// section 3.3 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-3.3).
     #[builder(default)]
-    scope: Option<Scope>,
+    pub scope: Option<Scope>,
 
     /// The type of the token issued as described in section 7.1 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1) and section 5.8.4.2
     /// of `draft-ietf-ace-oauth-authz-46`.
     #[builder(default)]
-    token_type: Option<TokenType>,
+    pub token_type: Option<TokenType>,
 
     /// The refresh token, which can be used to obtain new access tokens using the same
     /// authorization grant as described in section 6 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html)
     #[builder(default)]
-    refresh_token: Option<ByteString>,
+    pub refresh_token: Option<ByteString>,
 
     /// This indicates the profile that the client must use towards the RS.
     #[builder(default)]
-    ace_profile: Option<AceProfile>,
+    pub ace_profile: Option<AceProfile>,
 
     /// The proof-of-possession key that the AS selected for the token.
     #[builder(default)]
-    cnf: Option<ProofOfPossessionKey>,
+    pub cnf: Option<ProofOfPossessionKey>,
 
     /// Information about the public key used by the RS to authenticate.
     #[builder(default)]
-    rs_cnf: Option<ProofOfPossessionKey>,
+    pub rs_cnf: Option<ProofOfPossessionKey>,
 }
 
 /// Error code specifying what went wrong for a token request.
@@ -175,7 +175,7 @@ pub enum ErrorCode {
 }
 
 /// Details about an error which occurred for an access token request.
-#[derive(Debug, PartialEq, Eq, Hash, Builder)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Builder)]
 #[builder(
 no_std,
 setter(into, strip_option),
@@ -184,17 +184,17 @@ build_fn(validate = "Self::validate")
 )]
 pub struct ErrorResponse {
     /// Error code for this error.
-    error: ErrorCode,
+    pub error: ErrorCode,
 
     /// Human-readable ASCII text providing additional information, used to assist the
     /// client developer in understanding the error that occurred.
     #[builder(default)]
-    error_description: Option<String>,
+    pub error_description: Option<String>,
 
     /// A URI identifying a human-readable web page with information about the error, used to
     /// provide the client developer with additional information about the error.
     #[builder(default)]
-    error_uri: Option<String>,
+    pub error_uri: Option<String>,
 }
 
 impl AccessTokenRequest {
