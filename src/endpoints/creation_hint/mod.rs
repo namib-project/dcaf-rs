@@ -1,6 +1,6 @@
 use alloc::string::String;
-
-use crate::common::{ByteString, scope::Scope};
+use crate::common::cbor_values::ByteString;
+use crate::Scope;
 
 #[cfg(test)]
 mod tests;
@@ -61,11 +61,12 @@ mod conversion {
 
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
+    use crate::common::cbor_map::{AsCborMap, cbor_map_vec, decode_scope};
 
-    use crate::common::{AsCborMap, decode_scope, scope::{BinaryEncodedScope, TextEncodedScope}};
-    use crate::common::cbor_map_vec;
     use crate::common::constants::cbor_abbreviations::creation_hint;
     use crate::error::{TryFromCborMapError};
+    use crate::common::scope::{BinaryEncodedScope, TextEncodedScope};
+    use crate::common::cbor_values::ByteString;
 
     use super::*;
 

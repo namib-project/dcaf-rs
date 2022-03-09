@@ -1,4 +1,4 @@
-use crate::common::AsCborMap;
+use crate::common::cbor_map::AsCborMap;
 use core::fmt::Debug;
 use core::convert::identity;
 use crate::CipherProvider;

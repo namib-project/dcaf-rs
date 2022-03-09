@@ -1,9 +1,8 @@
-pub use cbor_map::*;
-pub use cbor_values::*;
+//! Contains common data types used across the crate.
 
-pub(crate) mod constants;
-mod cbor_map;
-mod cbor_values;
+pub mod constants;
+pub mod cbor_map;
+pub mod cbor_values;
 pub mod scope;
 
 #[cfg(test)]

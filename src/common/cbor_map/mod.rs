@@ -127,7 +127,7 @@ impl<T> Display for CborMap<T>
 }
 
 mod private {
-    use crate::common::ProofOfPossessionKey;
+    use crate::common::cbor_values::ProofOfPossessionKey;
     use crate::endpoints::creation_hint::AuthServerRequestCreationHint;
     use crate::endpoints::token_req::{AccessTokenRequest, AccessTokenResponse, ErrorResponse};
 
@@ -150,8 +150,7 @@ mod conversion {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use serde::de::{Error, Unexpected};
 
-    use crate::common::{AsCborMap};
-    use crate::common::cbor_map::CborMap;
+    use crate::common::cbor_map::{AsCborMap, CborMap};
 
     impl<T> From<T> for CborMap<T>
         where

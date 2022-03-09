@@ -1,3 +1,5 @@
+//! Contains methods for encrypting, decrypting, signing and verifying access tokens.
+//!
 //! **NOTE: The APIs in this module are experimental and likely to change in the future!**
 //! This is due to the COSE support being very basic right now (e.g. only `CoseEncrypt0` instead of
 //! `CoseEncrypt`) and due to the `CipherProvider` carrying more data which is present in the
@@ -7,8 +9,8 @@ use coset::{
     CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseSign1, CoseSign1Builder, Header,
 };
 use coset::cwt::ClaimsSet;
+use crate::common::cbor_values::ByteString;
 
-use crate::common::ByteString;
 use crate::error::AccessTokenError;
 
 #[cfg(test)]

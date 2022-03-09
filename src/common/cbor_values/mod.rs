@@ -84,8 +84,8 @@ mod conversion {
     use erased_serde::Serialize as ErasedSerialize;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use serde::de::Error;
+    use crate::common::cbor_map::AsCborMap;
 
-    use crate::common::AsCborMap;
     use crate::error::{TryFromCborMapError, WrongSourceTypeError};
 
     use super::*;

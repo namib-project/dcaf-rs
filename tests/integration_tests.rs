@@ -1,7 +1,82 @@
-use std::fmt::Debug;
-use dcaf::common::scope::{TextEncodedScope};
+use coset::cwt::{ClaimsSet, ClaimsSetBuilder, Timestamp};
+use coset::iana::{Algorithm, CwtClaimName};
+use coset::iana::EllipticCurve::P_256;
+use coset::{CoseKeyBuilder, Header, HeaderBuilder, CoseKey, AsCborValue};
+use dcaf::common::scope::TextEncodedScope;
+use dcaf::common::cbor_map::AsCborMap;
 use dcaf::endpoints::creation_hint::AuthServerRequestCreationHint;
-use dcaf::common::{AsCborMap};
+use dcaf::endpoints::token_req::{AccessTokenRequest, AccessTokenResponse, AceProfile, ErrorCode, ErrorResponse, GrantType, TokenType};
+use dcaf::{CipherProvider, sign_access_token};
+use std::fmt::Debug;
+use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
+use dcaf::error::AccessTokenError;
+
+fn example_headers() -> (Header, Header) {
+    let unprotected_header = HeaderBuilder::new()
+        .iv(vec![
+            0x63, 0x68, 0x98, 0x99, 0x4F, 0xF0, 0xEC, 0x7B, 0xFC, 0xF6, 0xD3, 0xF9, 0x5B,
+        ])
+        .build();
+    let protected_header = HeaderBuilder::new()
+        .algorithm(Algorithm::AES_CCM_16_64_128)
+        .build();
+    (unprotected_header, protected_header)
+}
+
+fn example_aad() -> Vec<u8> {
+    vec![0x01, 0x02, 0x03, 0x04, 0x05]
+}
+
+fn example_claims(key: CoseKey) -> Result<ClaimsSet, AccessTokenError> {
+    Ok(ClaimsSetBuilder::new()
+        .claim(
+            CwtClaimName::Cnf,
+            key.to_cbor_value()
+                .map_err(AccessTokenError::from_cose_error)?,
+        )
+        .build())
+}
+
+
+#[derive(Copy, Clone)]
+pub(crate) struct FakeCrypto {}
+
+impl CipherProvider for FakeCrypto {
+    fn encrypt(&mut self, data: &[u8], aad: &[u8]) -> Vec<u8> {
+        // We simply put AAD behind the data and call it a day.
+        let mut result: Vec<u8> = vec![];
+        result.append(&mut data.to_vec());
+        result.append(&mut aad.to_vec());
+        result
+    }
+
+    fn decrypt(&mut self, data: &[u8], aad: &[u8]) -> Result<Vec<u8>, String> {
+        // Now we just split off the AAD we previously put at the end of the data.
+        // We return an error if it does not match.
+        if data.len() < aad.len() {
+            return Err("Encrypted data must be at least as long as AAD!".to_string());
+        }
+        let mut result: Vec<u8> = data.to_vec();
+        let aad_result = result.split_off(data.len() - aad.len());
+        if aad != aad_result {
+            Err("AADs don't match!".to_string())
+        } else {
+            Ok(result)
+        }
+    }
+
+    fn sign(&mut self, data: &[u8]) -> Vec<u8> {
+        data.to_vec()
+    }
+
+    fn verify(&mut self, sig: &[u8], data: &[u8]) -> Result<(), String> {
+        if sig != self.sign(data) {
+            Err("failed to verify".to_string())
+        } else {
+            Ok(())
+        }
+    }
+}
 
 /// We assume the following scenario here:
 /// 1. The client tries to access a protected resource. Since it's still unauthorized,
@@ -32,7 +107,43 @@ fn test_scenario() -> Result<(), String> {
     let aad = example_aad();
 
     let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder()
-        .auth_server("as.example.org")
+        .auth_server(auth_server)
+        .scope(scope.clone())
+        .build()
+        .map_err(|x| x.to_string())?;
+    let result = pseudo_send_receive(hint.clone())?;
+    assert_eq!(hint, result);
+
+    // TODO: cnf & Access Token
+    let request = AccessTokenRequest::builder()
+        .grant_type(GrantType::ClientCredentials)
+        .scope(scope.clone())
+        .audience(resource_server)
+        .client_nonce(nonce)
+        .ace_profile()
+        .client_id(client_id)
+        .req_cnf(key.clone())
+        .build()
+        .map_err(|x| x.to_string())?;
+    let result = pseudo_send_receive(request.clone())?;
+
+    assert_eq!(request, result);
+    let expires_in: u32 = 3600;
+    let token = sign_access_token(
+        ClaimsSetBuilder::new()
+            .audience(resource_server.to_string())
+            .issuer(auth_server.to_string())
+            .issued_at(Timestamp::WholeSeconds(47))
+            .claim(CwtClaimName::Cnf, PlainCoseKey(key).as_ciborium_value())
+            .build(),
+        // TODO: Proper headers
+        unprotected_headers, protected_headers,
+        &mut crypto, aad.as_slice(),
+    ).map_err(|x| x.to_string())?;
+    let response = AccessTokenResponse::builder()
+        .access_token(token)
+        .ace_profile(AceProfile::CoapDtls)
+        .expires_in(expires_in)
         .scope(scope)
         .token_type(TokenType::ProofOfPossession)
         .build()

@@ -2,8 +2,7 @@ use alloc::string::String;
 use core::fmt::{Display, Formatter};
 
 use serde::{Deserialize, Serialize};
-
-use crate::common::ByteString;
+use crate::common::cbor_values::ByteString;
 
 /// A scope encoded as a space-delimited list of strings, as defined in
 /// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3).

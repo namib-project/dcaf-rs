@@ -1,4 +1,4 @@
-//! This module contains common error types used across this crate.
+//! Contains common error types used across this crate.
 
 use core::fmt::{Display, Formatter};
 

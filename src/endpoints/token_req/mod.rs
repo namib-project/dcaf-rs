@@ -1,7 +1,6 @@
 use alloc::string::String;
-
-use crate::common::{ByteString, ProofOfPossessionKey};
-use crate::common::scope::Scope;
+use crate::common::cbor_values::{ByteString, ProofOfPossessionKey};
+use crate::Scope;
 
 #[cfg(test)]
 mod tests;
@@ -247,11 +246,13 @@ impl ErrorResponseBuilder {
 mod conversion {
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
+    use crate::common::cbor_map::{AsCborMap, cbor_map_vec, decode_int_map, decode_number, decode_scope};
+    use crate::common::cbor_values::{ByteString, CborMapValue, ProofOfPossessionKey};
+    use crate::constants::cbor_abbreviations::{ace_profile, error, grant_types, token, token_types};
 
-    use crate::common::{AsCborMap, cbor_map_vec, CborMapValue, decode_int_map, decode_number, decode_scope, scope::{BinaryEncodedScope, TextEncodedScope}};
-    use crate::common::constants::cbor_abbreviations::{ace_profile, error, grant_types, token, token_types};
     use crate::endpoints::token_req::AceProfile::CoapDtls;
     use crate::error::TryFromCborMapError;
+    use crate::common::scope::{BinaryEncodedScope, TextEncodedScope};
 
     use super::*;
 
