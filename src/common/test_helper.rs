@@ -3,6 +3,27 @@ use core::fmt::Debug;
 use core::convert::identity;
 use crate::CipherProvider;
 
+/// Helper function for tests which ensures that [`value`] serializes to the hexadecimal bytestring
+/// [expected_hex] and deserializes back to [`value`].
+///
+/// If [`transform_value`] is given, it will be applied to the deserialized value before comparing it
+/// to [`value`]. `assert` statements are used to validate postconditions.
+///
+/// ## Postconditions
+/// If no error occurred:
+/// - The serialized [`value`] is equal to the bytestring given in [`expected_hex`].
+/// - The deserialized value is equal to [`value`], with [`transform_value`] applied to it.
+///   If [`transform_value`] is `None`, it will be equal to the identity function.
+///
+/// # Errors
+/// This will return an error message if any of the following is true:
+/// - Serialization of [`value`] failed.
+/// - Deserializing of the serialized [`value`] failed.
+/// - Deserializing of the serialized [`value`] does not result in a CBOR map.
+/// - Given [`expected_hex`] is not valid hexadecimal.
+///
+/// # Panics
+/// If any of the postconditions (verified as assertions) fail.
 pub(crate) fn expect_ser_de<T>(
     value: T,
     transform_value: Option<fn(T) -> T>,
@@ -34,9 +55,12 @@ pub(crate) fn expect_ser_de<T>(
     }
 }
 
+/// Used to implement a basic [`CipherProvider`] for tests.
 #[derive(Copy, Clone)]
 pub(crate) struct FakeCrypto {}
 
+/// Implements basic operations from the [`CipherProvider`] trait without actually using any "real"
+/// cryptography. This is purely to be used for testing and obviously offers no security at all.
 impl CipherProvider for FakeCrypto {
     fn encrypt(&mut self, data: &[u8], aad: &[u8]) -> Vec<u8> {
         // We simply put AAD behind the data and call it a day.
