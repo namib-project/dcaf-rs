@@ -2,14 +2,14 @@
 
 use core::fmt::{Display, Formatter};
 
-use coset::CoseError;
+use coset::{CoseError, Label};
 
 // TODO: Check which errors need to be public
 
 /// Error type used when the parameter of the [`given_type`] couldn't be converted into [`expected_type`].
 ///
 /// Used for [`TryFrom`] conversions from a general enum type to a specific member type.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct WrongSourceTypeError {
     /// The general type taken in the [`TryFrom`] conversion.
     given_type: String,
@@ -45,7 +45,7 @@ impl WrongSourceTypeError {
 
 /// Error type used when a given CBOR map can't be converted to a specific type which implements
 /// the [`AsCborMap`] trait.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct TryFromCborMapError {
     /// Error message describing why the conversion failed.
     message: String,
@@ -86,7 +86,7 @@ impl TryFromCborMapError {
 }
 
 /// Error type used when a CBOR map does not use integers as its key type, but was expected to.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct ValueIsNotIntegerError;
 
 impl Display for ValueIsNotIntegerError {
@@ -97,7 +97,7 @@ impl Display for ValueIsNotIntegerError {
 
 /// Error type used when a [`TextEncodedScope`] does not conform to the specification given
 /// in RFC 6749.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum InvalidTextEncodedScopeError {
     /// The scope starts with a separator (i.e. space).
     StartsWithSeparator,
@@ -139,7 +139,7 @@ impl Display for InvalidTextEncodedScopeError {
 
 /// Error type used when a [`BinaryEncodedScope`] does not conform to the specification given
 /// in RFC 6749 and `draft-ietf-ace-oauth-authz`.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum InvalidBinaryEncodedScopeError {
     /// Scope starts with a separator, which is contained in the field here.
     StartsWithSeparator(u8),
@@ -168,7 +168,51 @@ impl Display for InvalidBinaryEncodedScopeError {
     }
 }
 
-// TODO: Rename to VerificationError
+// TODO: Replace all instances of validation with verification
+
+/// Error type used when a [`CoseEncrypt0Cipher`], [`CoseSign1Cipher`], or [`CoseMac0Cipher`]
+/// fails to perform an operation.
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum CoseCipherError {
+    /// A header which the cipher is supposed to set has already been set.
+    HeaderAlreadySet {
+        /// The name of the header which has already been set.
+        existing_header_name: String
+    },
+    /// The given signature or MAC tag is either invalid or does not match the given data.
+    VerificationFailure,
+    /// A different error has occurred. Details are provided in the contained message.
+    Other(String),
+}
+
+impl CoseCipherError {
+    pub fn existing_header_label(label: &Label) -> CoseCipherError {
+        let existing_header_name;
+        match label {
+            Label::Int(i) => existing_header_name = i.to_string(),
+            Label::Text(s) => existing_header_name = s.to_string()
+        }
+        CoseCipherError::HeaderAlreadySet {
+            existing_header_name
+        }
+    }
+
+    pub fn existing_header(name: &str) -> CoseCipherError {
+        CoseCipherError::HeaderAlreadySet {
+            existing_header_name: name.to_string()
+        }
+    }
+}
+
+impl Display for CoseCipherError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            CoseCipherError::HeaderAlreadySet { existing_header_name } => write!(f, "cipher-defined header '{existing_header_name}' already set"),
+            CoseCipherError::VerificationFailure => write!(f, "data verification failed"),
+            CoseCipherError::Other(s) => write!(f, "{s}")
+        }
+    }
+}
 
 /// Error type used when an operation creating or receiving an access token failed.
 #[derive(Debug)]
@@ -177,23 +221,17 @@ pub enum AccessTokenError {
     ///
     /// Details are contained in this field using coset's [`CoseError`].
     CoseError(CoseError),
-    /// Validation of an access token failed.
+    /// A cryptographic CoseCipher operation has failed.
     ///
-    /// An optional message containing details is contained in this field.
-    ValidationError(Option<String>),
+    /// Details are contained in this field.
+    CoseCipherError(CoseCipherError)
 }
 
 impl Display for AccessTokenError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             AccessTokenError::CoseError(e) => write!(f, "{e}"),
-            AccessTokenError::ValidationError(e) => {
-                if let Some(s) = e {
-                    write!(f, "validation failed: {s}")
-                } else {
-                    write!(f, "validation failed")
-                }
-            }
+            AccessTokenError::CoseCipherError(e) => write!(f, "cipher error: {e}")
         }
     }
 }
@@ -204,17 +242,8 @@ impl AccessTokenError {
         AccessTokenError::CoseError(error)
     }
 
-    /// Creates a new validation error without any details.
-    pub fn new_validation_error() -> AccessTokenError {
-        AccessTokenError::ValidationError(None)
-    }
-
-    /// Creates a new validation error with `details` given as an error message.
-    pub fn with_validation_error_details<T>(details: T) -> AccessTokenError
-        where
-            T: Into<String>,
-    {
-        AccessTokenError::ValidationError(Some(details.into()))
+    pub fn from_cose_cipher_error(error: CoseCipherError) -> AccessTokenError {
+        AccessTokenError::CoseCipherError(error)
     }
 }
 

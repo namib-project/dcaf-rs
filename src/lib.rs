@@ -1,4 +1,4 @@
-#![allow(rustdoc::broken_intra_doc_links)]
+#![deny(rustdoc::broken_intra_doc_links)]
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
 extern crate core;
@@ -19,7 +19,7 @@ pub use endpoints::token_req::{
 #[doc(inline)]
 pub use token::{
     decrypt_access_token, encrypt_access_token, sign_access_token, validate_access_token,
-    CipherProvider,
+    CoseEncrypt0Cipher, CoseSign1Cipher, CoseMac0Cipher,
 };
 
 pub mod common;

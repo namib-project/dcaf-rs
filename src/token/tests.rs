@@ -1,7 +1,9 @@
-use coset::{AsCborValue, CoseKey, CoseKeyBuilder, HeaderBuilder};
+use crate::common::test_helper::FakeCrypto;
+use crate::error::CoseCipherError;
+use ciborium::value::Value;
 use coset::cwt::ClaimsSetBuilder;
 use coset::iana::{Algorithm, CwtClaimName};
-use crate::common::test_helper::FakeCrypto;
+use coset::{AsCborValue, CoseKey, CoseKeyBuilder, HeaderBuilder};
 
 use super::*;
 
@@ -20,6 +22,12 @@ fn example_headers() -> (Header, Header) {
             0x63, 0x68, 0x98, 0x99, 0x4F, 0xF0, 0xEC, 0x7B, 0xFC, 0xF6, 0xD3, 0xF9, 0x5B,
         ])
         .build();
+    let protected_header = HeaderBuilder::new().key_id(example_key().key_id).build();
+    (unprotected_header, protected_header)
+}
+
+fn example_invalid_headers() -> (Header, Header) {
+    let unprotected_header = HeaderBuilder::new().value(47, Value::Null).build();
     let protected_header = HeaderBuilder::new()
         .algorithm(Algorithm::AES_CCM_16_64_128)
         .build();
@@ -40,6 +48,41 @@ fn example_claims(key: CoseKey) -> Result<ClaimsSet, AccessTokenError> {
         .build())
 }
 
+fn assert_header_is_part_of(subset: &Header, superset: &Header) {
+    // If the subset contains a field, the superset must have it set to that as well.
+    // All other fields will be ignored.
+    if subset.alg.is_some() {
+        assert_eq!(subset.alg, superset.alg, "'alg' has been changed")
+    }
+    if !subset.crit.is_empty() {
+        assert_eq!(subset.crit, superset.crit, "'crit' has been changed")
+    }
+    if subset.content_type.is_some() {
+        assert_eq!(
+            subset.content_type, superset.content_type,
+            "'content_type' has been changed"
+        )
+    }
+    if !subset.key_id.is_empty() {
+        assert_eq!(subset.key_id, superset.key_id, "'key_id' has been changed")
+    }
+    if !subset.iv.is_empty() {
+        assert_eq!(subset.iv, superset.iv, "'iv' has been changed")
+    }
+    if !subset.partial_iv.is_empty() {
+        assert_eq!(
+            subset.partial_iv, superset.partial_iv,
+            "'partial_iv' has been changed"
+        )
+    }
+    if !subset.counter_signatures.is_empty() {
+        assert_eq!(
+            subset.counter_signatures, superset.counter_signatures,
+            "'counter_signatures' has been changed"
+        )
+    }
+    assert!(subset.rest.iter().all(|x| superset.rest.contains(x)))
+}
 
 #[test]
 fn test_encrypt_decrypt() -> Result<(), AccessTokenError> {
@@ -55,10 +98,54 @@ fn test_encrypt_decrypt() -> Result<(), AccessTokenError> {
         &mut crypto,
         &aad,
     )?;
-    assert_eq!(
-        decrypt_access_token(encrypted, &aad, &mut crypto)?,
-        claims
+    assert_eq!(decrypt_access_token(encrypted, &aad, &mut crypto)?, claims);
+    Ok(())
+}
+
+#[test]
+fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError> {
+    let mut crypto = FakeCrypto {};
+    let key = example_key();
+    let (unprotected_header, protected_header) = example_headers();
+    let (unprotected_invalid, protected_invalid) = example_invalid_headers();
+    let claims = example_claims(key)?;
+    let aad = example_aad();
+    let encrypted = encrypt_access_token(
+        claims.clone(),
+        unprotected_invalid,
+        protected_header,
+        &mut crypto,
+        &aad,
     );
+    assert!(encrypted.is_err());
+    assert!(encrypted
+        .err()
+        .map_or(false, |x| {
+            if let AccessTokenError::CoseCipherError(CoseCipherError::HeaderAlreadySet { existing_header_name }) = x {
+                existing_header_name == "47"
+            } else {
+                false
+            }
+        }));
+
+    let encrypted = encrypt_access_token(
+        claims,
+        unprotected_header,
+        protected_invalid,
+        &mut crypto,
+        &aad,
+    );
+    assert!(encrypted.is_err());
+    assert!(encrypted
+        .err()
+        .map_or(false, |x| {
+            if let AccessTokenError::CoseCipherError(CoseCipherError::HeaderAlreadySet { existing_header_name }) = x {
+                existing_header_name == "alg"
+            } else {
+                false
+            }
+        }));
+
     Ok(())
 }
 

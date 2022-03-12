@@ -5,18 +5,14 @@
 //! `CoseEncrypt`) and due to the `CipherProvider` carrying more data which is present in the
 //! parameters of the respective token functions right now, such as (part of) the headers.
 
-use coset::{
-    CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseSign1, CoseSign1Builder, Header,
-};
+use coset::{CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseSign1, CoseSign1Builder, Header};
 use coset::cwt::ClaimsSet;
 use crate::common::cbor_values::ByteString;
 
-use crate::error::AccessTokenError;
+use crate::error::{AccessTokenError, CoseCipherError};
 
 #[cfg(test)]
 mod tests;
-
-// TODO: Use actual error types for CipherProvider Results.
 
 /// Provides basic operations for encrypting, decrypting, signing and verifying COSE structures.
 ///
@@ -26,8 +22,7 @@ mod tests;
 /// struct behind this strait for that.
 /// The methods provided in this trait accept `&mut self` in case the structure behind it needs to
 /// modify internal fields during any cryptographic operation.
-pub trait CipherProvider {
-
+pub trait CoseEncrypt0Cipher {
     /// Encrypts the given `plaintext` and `aad`, returning the result.
     fn encrypt(&mut self, plaintext: &[u8], aad: &[u8]) -> Vec<u8>;
 
@@ -35,16 +30,36 @@ pub trait CipherProvider {
     ///
     /// # Errors
     /// If the `ciphertext` and `aad` are invalid, i.e., can't be decrypted.
-    fn decrypt(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, String>;
+    fn decrypt(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, CoseCipherError>;
 
+    /// TODO: Documentation
+    /// TODO: Actual error type
+    fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError>;
+}
+
+pub trait CoseSign1Cipher {
     /// Cryptographically signs the given `target` value and returns the signature.
-    fn sign(&mut self, target: &[u8]) -> Vec<u8>;
+    fn generate_signature(&mut self, target: &[u8]) -> Vec<u8>;
 
     /// Verifies the `signature` of the `signed_data`.
     ///
     /// # Errors
     /// If the `signature` is invalid or does not belong to the `signed_data`.
-    fn verify(&mut self, signature: &[u8], signed_data: &[u8]) -> Result<(), String>;
+    fn verify_signature(&mut self, signature: &[u8], signed_data: &[u8]) -> Result<(), CoseCipherError>;
+
+    /// TODO: Documentation
+    /// TODO: Actual error type
+    fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError>;
+}
+
+pub trait CoseMac0Cipher {
+    fn generate_tag(&mut self, target: &[u8]) -> Vec<u8>;
+
+    fn verify_tag(&mut self, tag: &[u8], maced_data: &[u8]) -> Result<(), CoseCipherError>;
+
+    /// TODO: Documentation
+    /// TODO: Actual error type
+    fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError>;
 }
 
 /// Encrypts the given `claims` with the given headers and `aad` using `cipher` for cryptography, 
@@ -56,10 +71,11 @@ pub trait CipherProvider {
 /// # Errors
 /// - When there's a [`CoseError`] while serializing the given `claims` to CBOR.
 /// - When there's a [`CoseError`] while serializing the [`CoseEncrypt0`] structure.
-pub fn encrypt_access_token<T>(claims: ClaimsSet, unprotected_header: Header,
-                               protected_header: Header, cipher: &mut T, aad: &[u8],
-) -> Result<ByteString, AccessTokenError> where T: CipherProvider
+pub fn encrypt_access_token<T>(claims: ClaimsSet, mut unprotected_header: Header,
+                               mut protected_header: Header, cipher: &mut T, aad: &[u8],
+) -> Result<ByteString, AccessTokenError> where T: CoseEncrypt0Cipher
 {
+    cipher.header(&mut unprotected_header, &mut protected_header).map_err(AccessTokenError::from_cose_cipher_error)?;
     Ok(ByteString::from(
         CoseEncrypt0Builder::new()
             .unprotected(unprotected_header)
@@ -86,20 +102,21 @@ pub fn encrypt_access_token<T>(claims: ClaimsSet, unprotected_header: Header,
 /// - When there's a [`CoseError`] while serializing the [`CoseSign1`] structure.
 pub fn sign_access_token<T>(
     claims: ClaimsSet,
-    unprotected_header: Header,
-    protected_header: Header,
+    mut unprotected_header: Header,
+    mut protected_header: Header,
     cipher: &mut T,
     aad: &[u8],
 ) -> Result<ByteString, AccessTokenError>
     where
-        T: CipherProvider
+        T: CoseSign1Cipher
 {
+    cipher.header(&mut unprotected_header, &mut protected_header).map_err(AccessTokenError::from_cose_cipher_error)?;
     Ok(ByteString::from(
         CoseSign1Builder::new()
             .unprotected(unprotected_header)
             .protected(protected_header)
             .payload(claims.to_vec().map_err(AccessTokenError::from_cose_error)?)
-            .create_signature(aad, |x| cipher.sign(x))
+            .create_signature(aad, |x| cipher.generate_signature(x))
             .build()
             .to_vec()
             .map_err(AccessTokenError::from_cose_error)?,
@@ -124,12 +141,12 @@ pub fn validate_access_token<T>(
     verifier: &mut T,
 ) -> Result<(), AccessTokenError>
     where
-        T: CipherProvider
+        T: CoseSign1Cipher
 {
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
     // TODO: Verify protected headers
-    sign.verify_signature(aad, |signature, signed_data| verifier.verify(signature, signed_data))
-        .map_err(AccessTokenError::with_validation_error_details)
+    sign.verify_signature(aad, |signature, signed_data| verifier.verify_signature(signature, signed_data))
+        .map_err(AccessTokenError::from_cose_cipher_error)
 }
 
 /// Decrypts the given `token` and `aad` using `cipher` for cryptography, 
@@ -147,12 +164,12 @@ pub fn decrypt_access_token<T>(
     cipher: &mut T,
 ) -> Result<ClaimsSet, AccessTokenError>
     where
-        T: CipherProvider
+        T: CoseEncrypt0Cipher
 {
     let encrypt =
         CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from_cose_error)?;
     let result = encrypt
         .decrypt(aad, |ciphertext, aad| cipher.decrypt(ciphertext, aad))
-        .map_err(AccessTokenError::with_validation_error_details)?;
+        .map_err(AccessTokenError::from_cose_cipher_error)?;
     ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from_cose_error)
 }
