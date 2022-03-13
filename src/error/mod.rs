@@ -275,5 +275,7 @@ mod std_error {
 
     impl Error for InvalidBinaryEncodedScopeError {}
 
+    impl Error for CoseCipherError {}
+
     impl Error for AccessTokenError {}
 }
