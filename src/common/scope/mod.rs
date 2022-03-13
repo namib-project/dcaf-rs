@@ -4,6 +4,9 @@ use core::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 use crate::common::cbor_values::ByteString;
 
+#[cfg(test)]
+mod tests;
+
 /// A scope encoded as a space-delimited list of strings, as defined in
 /// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3).
 ///
@@ -120,7 +123,7 @@ pub enum Scope {
     /// # use dcaf::error::InvalidTextEncodedScopeError;
     /// let scope = TextEncodedScope::try_from(vec!["device_alpha", "device_beta"])?;
     /// assert_eq!(scope, TextEncodedScope::try_from("device_alpha device_beta")?);
-    /// assert_eq!(scope.elements(), vec!["device_alpha", "device_beta"]);
+    /// assert!(scope.elements().eq(vec!["device_alpha", "device_beta"]));
     /// assert!(TextEncodedScope::try_from(vec!["device alpha", "device beta"]).is_err());
     /// # Ok::<(), InvalidTextEncodedScopeError>(())
     /// ```
@@ -132,8 +135,8 @@ pub enum Scope {
     /// ```
     /// # use dcaf::common::scope::BinaryEncodedScope;
     /// # use dcaf::error::InvalidBinaryEncodedScopeError;
-    /// let scope = BinaryEncodedScope::try_from(vec![0xDC, 0xAF, 0x00, 0xAF, 0xDC])?;
-    /// assert_eq!(scope.elements(0x00)?, vec![vec![0xDC, 0xAF], vec![0xAF, 0xDC]]);
+    /// let scope = BinaryEncodedScope::try_from(vec![0xDC, 0xAF, 0x00, 0xAF, 0xDC].as_slice())?;
+    /// assert!(scope.elements(0x00)?.eq(vec![vec![0xDC, 0xAF], vec![0xAF, 0xDC]]));
     /// assert!(scope.elements(0xDC).is_err());  // no separators at the beginning or end
     /// # Ok::<(), InvalidBinaryEncodedScopeError>(())
     /// ```

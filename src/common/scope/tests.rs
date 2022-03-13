@@ -1,7 +1,7 @@
 /// Tests for text encoded scopes.
 mod text {
-    use crate::endpoints::common::TextEncodedScope;
-    use crate::error::{InvalidTextEncodedScopeError, WrongSourceTypeError};
+    use crate::common::scope::TextEncodedScope;
+    use crate::error::{InvalidTextEncodedScopeError};
 
     #[test]
     fn test_scope_element_normal() -> Result<(), InvalidTextEncodedScopeError> {
@@ -113,7 +113,7 @@ mod text {
 
 /// Tests for binary encoded scopes.
 mod binary {
-    use crate::endpoints::common::BinaryEncodedScope;
+    use crate::common::scope::BinaryEncodedScope;
     use crate::error::InvalidBinaryEncodedScopeError;
 
     #[test]
