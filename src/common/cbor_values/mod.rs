@@ -6,32 +6,99 @@ use core::ops::Deref;
 use coset::{CoseEncrypt0, CoseKey};
 use serde::{Deserialize, Serialize};
 
+/// Value of a [`ByteString`], represented as a vector of bytes.
 pub(crate) type ByteStringValue = Vec<u8>;
 
+/// A Key ID, represented as a [`ByteString`].
 pub(crate) type KeyId = ByteString;
 
+/// A string of bytes.
+///
+/// Can be treated like a regular [`Vec<u8>`] due to a corresponding [`Deref`] implementation.
+///
+/// # Example
+/// To create a ByteString from a `Vec<u8>` and turn it back again:
+/// ```
+/// # use dcaf::common::cbor_values::ByteString;
+/// let bs = ByteString::from(vec![0xDC, 0x00, 0xAF]);
+/// assert_eq!(bs.to_vec(), vec![0xDC, 0x00, 0xAF]);
+/// ```
 #[derive(Debug, Deserialize, PartialEq, Eq, Default, Hash, Clone)]
 pub struct ByteString(pub(crate) ByteStringValue);
 
-pub struct CborMapValue<T>(pub T)
+/// Wrapper around a type `T` which can be created from and turned into an [`i32`].
+pub(crate) struct CborMapValue<T>(pub(crate) T)
     where
         i32: Into<T>,
         T: Into<i32> + Copy;
 
+
+/// A type which can either be a [`String`] or a [`ByteString`].
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(untagged)]
-pub enum TextOrByteString {
+enum TextOrByteString {
+    // TODO: Unused for now. Do we really need this in the future?
+
+    /// A text string, represented as a [`String`].
     TextString(String),
+
+    /// A byte string, represented as a [`ByteString`].
     ByteString(ByteString),
 }
 
-/// A proof-of-possession key as specified by RFC 8747, section 3.1.
+/// A proof-of-possession key as specified by
+/// [RFC 8747, section 3.1](https://datatracker.ietf.org/doc/html/rfc8747#section-3.1).
+///
+/// Can either be a COSE key, an encrypted COSE key, or simply a key ID.
+/// As described in [`draft-ietf-ace-oauth-params-16`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-oauth-params-16),
+/// PoP keys are used for the `req_cnf` parameter in [`AccessTokenRequest`],
+/// as well as for the `cnf` and `rs_cnf` parameters in [`AccessTokenResponse`].
+///
+/// # Example
+/// We showcase creation of an [`AccessTokenRequest`] in which we set `req_cnf` to a PoP key
+/// with an ID of 0xDCAF which the access token shall be bound to:
+/// ```
+/// # use dcaf::AccessTokenRequest;
+/// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
+/// # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
+/// let key = ProofOfPossessionKey::KeyId(ByteString::from(vec![0xDC, 0xAF]));
+/// let request: AccessTokenRequest = AccessTokenRequest::builder().client_id("test_client").req_cnf(key).build()?;
+/// assert_eq!(request.req_cnf.unwrap().key_id().to_vec(), vec![0xDC, 0xAF]);
+/// # Ok::<(), AccessTokenRequestBuilderError>(())
+/// ```
 #[derive(Debug, PartialEq, Clone)]
-#[allow(clippy::large_enum_variant)]
+#[allow(clippy::large_enum_variant)]  // size difference of ~300 bytes is acceptable
 pub enum ProofOfPossessionKey {
     PlainCoseKey(CoseKey),
     EncryptedCoseKey(CoseEncrypt0),
     KeyId(KeyId),
+}
+
+impl ProofOfPossessionKey {
+    /// Returns the key ID of this PoP key, cloning it if necessary.
+    /// Note that the returned key ID may be empty if no key ID was present in the key.
+    ///
+    /// # Example
+    /// ```
+    /// use coset::CoseKeyBuilder;
+    /// use dcaf::common::cbor_values::ProofOfPossessionKey;
+    /// let key = CoseKeyBuilder::new_symmetric_key(vec![0; 5]).key_id(vec![0xDC, 0xAF]).build();
+    /// let pop_key = ProofOfPossessionKey::from(key);
+    /// assert_eq!(pop_key.key_id().to_vec(), vec![0xDC, 0xAF]);
+    /// ```
+    pub fn key_id(&self) -> KeyId {
+        match self {
+            ProofOfPossessionKey::PlainCoseKey(k) => KeyId::from(k.key_id.clone()),
+            ProofOfPossessionKey::KeyId(k) => k.clone(),
+            ProofOfPossessionKey::EncryptedCoseKey(k) => {
+                if !k.protected.header.key_id.is_empty() {
+                    KeyId::from(k.protected.header.key_id.clone())
+                } else {
+                    KeyId::from(k.unprotected.key_id.clone())
+                }
+            }
+        }
+    }
 }
 
 impl Deref for ByteString {
@@ -78,6 +145,7 @@ impl<T> Display for CborMapValue<T>
     }
 }
 
+/// Contains various `From`, `TryFrom` and other conversion methods for types of the parent module.
 mod conversion {
     use ciborium::value::Value;
     use coset::{AsCborValue, CoseEncrypt0, CoseKey};
