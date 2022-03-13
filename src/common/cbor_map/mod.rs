@@ -1,9 +1,52 @@
+//! Contains the [`AsCborMap`] trait with which data types from this crate can be (de)serialized.
+//!
+//! # Example
+//! Let's say we want to serialize an [`AccessTokenRequest`]:
+//! ```
+//! # use ciborium_io::Write;
+//! # use ciborium_io::Read;
+//! # use dcaf::{AccessTokenRequest, AsCborMap};
+//! # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
+//! # use crate::dcaf::constants::cbor_abbreviations::token::CLIENT_ID;
+//! # fn first() -> Result<(), AccessTokenRequestBuilderError> {
+//! let request: AccessTokenRequest = AccessTokenRequest::builder().client_id("test").build()?;
+//! # Ok(())
+//! # }
+//! # // We split this off in order not to have to call `unwrap()`, in case the user copy-pastes this.
+//! # fn second() -> Result<(), ciborium::ser::Error<<Vec<u8> as Write>::Error>> {
+//! # let request: AccessTokenRequest = AccessTokenRequest::builder().client_id("test").build().unwrap();
+//! let mut serialized = Vec::new();
+//! request.serialize_into(&mut serialized)?;
+//!
+//! assert_eq!(serialized, vec![
+//! 0xA1, // map(1)
+//! 0x18, 0x18, // unsigned(24), where 24 is the constant identifying the "client_id" label
+//! 0x64, // text(4)
+//! 0x74, 0x65, 0x73, 0x74 // "test"
+//! ]);
+//! # Ok(())
+//! # }
+//! # first().map_err(|x| x.to_string());
+//! # second().map_err(|x| x.to_string());
+//! # Ok::<(), String>(())
+//! ```
+//! If we then want to deserialize it again:
+//! ```
+//! # use ciborium_io::Read;
+//! use serde::de::value::Error;
+//! use dcaf::{AccessTokenRequest, AsCborMap};
+//! let serialized = vec![0xA1, 0x18, 0x18, 0x64, 0x74, 0x65, 0x73, 0x74];
+//! let request = AccessTokenRequest::deserialize_from(serialized.as_slice())?;
+//! assert_eq!(request.client_id, "test");
+//! # Ok::<(), ciborium::de::Error<<&[u8] as Read>::Error>>(())
+//! ```
+
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use ciborium::de::from_reader;
+use ciborium::ser::into_writer;
 use core::fmt::{Debug, Display, Formatter};
 use std::any::type_name;
-use ciborium::de::from_reader;
-use ciborium::ser::{into_writer};
 
 use ciborium::value::{Integer, Value};
 use ciborium_io::{Read, Write};
@@ -51,7 +94,6 @@ macro_rules! cbor_map_vec {
 
 #[rustfmt::skip]
 pub(crate) use cbor_map_vec;
-
 
 /// Provides methods to serialize a type into a CBOR map bytestring and back.
 ///
@@ -105,7 +147,12 @@ pub trait AsCborMap: private::Sealed {
     /// # Errors
     /// - When serialization of this value failed, e.g. due to malformed input.
     /// - When the output couldn't be put inside the given `writer`.
-    fn serialize_into<W>(self, writer: W) -> Result<(), ciborium::ser::Error<W::Error>> where Self: Sized, W: Write, W::Error: Debug {
+    fn serialize_into<W>(self, writer: W) -> Result<(), ciborium::ser::Error<W::Error>>
+        where
+            Self: Sized,
+            W: Write,
+            W::Error: Debug,
+    {
         into_writer(&CborMap(self), writer)
     }
 
@@ -130,7 +177,12 @@ pub trait AsCborMap: private::Sealed {
     /// - When deserialization of the bytestring failed, e.g. when the given `reader` does not
     ///   contain a valid CBOR map or deserializes to a different type than this one.
     /// - When the input couldn't be read from the given `reader`.
-    fn deserialize_from<R>(reader: R) -> Result<Self, ciborium::de::Error<R::Error>> where Self: Sized, R: Read, R::Error: Debug {
+    fn deserialize_from<R>(reader: R) -> Result<Self, ciborium::de::Error<R::Error>>
+        where
+            Self: Sized,
+            R: Read,
+            R::Error: Debug,
+    {
         from_reader(reader).map(|x: CborMap<Self>| x.0)
     }
 
@@ -191,7 +243,9 @@ pub trait AsCborMap: private::Sealed {
     /// # Errors
     /// - When a key from the given CBOR `map` is not an integer.
     #[doc(hidden)]
-    fn cbor_map_from_int(map: Vec<(Value, Value)>) -> Result<Vec<(i128, Value)>, ValueIsNotIntegerError> {
+    fn cbor_map_from_int(
+        map: Vec<(Value, Value)>,
+    ) -> Result<Vec<(i128, Value)>, ValueIsNotIntegerError> {
         // We want to convert (Value, Value) to (i128, Value), assuming that the first
         // Value is always a Value::Integer.
         map.into_iter()
@@ -228,13 +282,17 @@ pub(crate) fn decode_scope<T, S>(scope: T) -> Result<Option<Scope>, TryFromCborM
 ///
 /// # Errors
 /// - If `number` can't be a valid instance of type `T`.
-pub(crate) fn decode_number<T>(number: Integer, name: &str) -> Result<T, TryFromCborMapError> where T: TryFrom<Integer> {
+pub(crate) fn decode_number<T>(number: Integer, name: &str) -> Result<T, TryFromCborMapError>
+    where
+        T: TryFrom<Integer>,
+{
     match T::try_from(number) {
         Ok(i) => Ok(i),
         Err(_) => {
-            return Err(TryFromCborMapError::from_message(
-                format!("{name} must be a valid {}", type_name::<T>()),
-            ));
+            return Err(TryFromCborMapError::from_message(format!(
+                "{name} must be a valid {}",
+                type_name::<T>()
+            )));
         }
     }
 }
@@ -244,12 +302,18 @@ pub(crate) fn decode_number<T>(number: Integer, name: &str) -> Result<T, TryFrom
 ///
 /// # Errors
 /// - If `map` is not a valid CBOR map with integer keys.
-pub(crate) fn decode_int_map<T>(map: Vec<(Value, Value)>, name: &str) -> Result<Vec<(i128, Value)>, TryFromCborMapError> where T: AsCborMap {
-    T::cbor_map_from_int(map).map_err(|_|
+pub(crate) fn decode_int_map<T>(
+    map: Vec<(Value, Value)>,
+    name: &str,
+) -> Result<Vec<(i128, Value)>, TryFromCborMapError>
+    where
+        T: AsCborMap,
+{
+    T::cbor_map_from_int(map).map_err(|_| {
         TryFromCborMapError::from_message(format!(
             "{name} is not a valid CBOR map with integer keys"
         ))
-    )
+    })
 }
 
 /// Convenience struct so we can implement a foreign trait on all structs we intend to
@@ -257,7 +321,9 @@ pub(crate) fn decode_int_map<T>(map: Vec<(Value, Value)>, name: &str) -> Result<
 ///
 /// This should always be invisible to clients of this crate.
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct CborMap<T>(T) where T: AsCborMap;
+struct CborMap<T>(T)
+    where
+        T: AsCborMap;
 
 impl<T> Display for CborMap<T>
     where
@@ -292,8 +358,8 @@ mod private {
 /// into CBOR and back.
 mod conversion {
     use ciborium::value::Value;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use serde::de::{Error, Unexpected};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     use crate::common::cbor_map::{AsCborMap, CborMap};
 
