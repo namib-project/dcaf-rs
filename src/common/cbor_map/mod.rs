@@ -53,7 +53,7 @@ macro_rules! cbor_map_vec {
 pub(crate) use cbor_map_vec;
 
 
-/// Intended for types which can be serialized into CBOR maps that have integers as keys.
+/// Provides methods to serialize a type into a CBOR map bytestring and back.
 ///
 /// This provides methods to [`serialize_into`] and [`deserialize_from`] CBOR, which is the
 /// recommended way to serialize and deserialize any types implementing [`AsCborMap`] in this crate.

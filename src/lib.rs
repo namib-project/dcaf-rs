@@ -1,4 +1,4 @@
-#![deny(rustdoc::broken_intra_doc_links)]
+#![allow(rustdoc::broken_intra_doc_links)]
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
 extern crate core;
@@ -9,6 +9,8 @@ extern crate derive_builder;
 pub use common::constants;
 #[doc(inline)]
 pub use common::scope::Scope;
+#[doc(inline)]
+pub use common::cbor_map::AsCborMap;
 #[doc(inline)]
 pub use endpoints::creation_hint::{AuthServerRequestCreationHint};
 #[doc(inline)]

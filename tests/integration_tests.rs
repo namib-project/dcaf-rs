@@ -11,6 +11,7 @@ use std::fmt::Debug;
 use ciborium::value::Value;
 use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
 use dcaf::error::{AccessTokenError, CoseCipherError};
+use dcaf::token::CoseCipherCommon;
 
 fn example_headers() -> (Header, Header) {
     let unprotected_header = HeaderBuilder::new()
@@ -28,7 +29,7 @@ fn example_aad() -> Vec<u8> {
     vec![0x01, 0x02, 0x03, 0x04, 0x05]
 }
 
-fn example_claims(key: CoseKey) -> Result<ClaimsSet, AccessTokenError> {
+fn example_claims(key: CoseKey) -> Result<ClaimsSet, AccessTokenError<String>> {
     Ok(ClaimsSetBuilder::new()
         .claim(
             CwtClaimName::Cnf,
@@ -42,23 +43,10 @@ fn example_claims(key: CoseKey) -> Result<ClaimsSet, AccessTokenError> {
 #[derive(Copy, Clone)]
 pub(crate) struct FakeCrypto {}
 
-/// Implements basic operations from the [`CoseSign1Cipher`] trait without actually using any
-/// "real" cryptography.
-/// This is purely to be used for testing and obviously offers no security at all.
-impl CoseSign1Cipher for FakeCrypto {
-    fn generate_signature(&mut self, data: &[u8]) -> Vec<u8> {
-        data.to_vec()
-    }
+impl CoseCipherCommon for FakeCrypto {
+    type Error = String;
 
-    fn verify_signature(&mut self, sig: &[u8], data: &[u8]) -> Result<(), CoseCipherError> {
-        if sig != self.generate_signature(data) {
-            Err(CoseCipherError::VerificationFailure)
-        } else {
-            Ok(())
-        }
-    }
-
-    fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError> {
+    fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
         // We have to later verify these headers really are used.
         if let Some(label) = unprotected_header.rest.iter().find(|x| x.0 == Label::Int(47)) {
             return Err(CoseCipherError::existing_header_label(&label.0))
@@ -69,6 +57,23 @@ impl CoseSign1Cipher for FakeCrypto {
         unprotected_header.rest.push((Label::Int(47), Value::Null));
         protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));
         Ok(())
+    }
+}
+
+/// Implements basic operations from the [`CoseSign1Cipher`] trait without actually using any
+/// "real" cryptography.
+/// This is purely to be used for testing and obviously offers no security at all.
+impl CoseSign1Cipher for FakeCrypto {
+    fn generate_signature(&mut self, data: &[u8]) -> Vec<u8> {
+        data.to_vec()
+    }
+
+    fn verify_signature(&mut self, sig: &[u8], data: &[u8]) -> Result<(), CoseCipherError<Self::Error>> {
+        if sig != self.generate_signature(data) {
+            Err(CoseCipherError::VerificationFailure)
+        } else {
+            Ok(())
+        }
     }
 }
 

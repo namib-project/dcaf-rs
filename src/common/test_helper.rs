@@ -6,6 +6,7 @@ use coset::{Header, Label};
 use coset::iana::Algorithm;
 use crate::{CoseEncrypt0Cipher, CoseMac0Cipher, CoseSign1Cipher};
 use crate::error::CoseCipherError;
+use crate::token::CoseCipherCommon;
 
 /// Helper function for tests which ensures that [`value`] serializes to the hexadecimal bytestring
 /// [expected_hex] and deserializes back to [`value`].
@@ -63,8 +64,10 @@ pub(crate) fn expect_ser_de<T>(
 #[derive(Copy, Clone)]
 pub(crate) struct FakeCrypto {}
 
-impl FakeCrypto {
-    fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError> {
+impl CoseCipherCommon for FakeCrypto {
+    type Error = String;
+
+    fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
         // We have to later verify these headers really are used.
         if let Some(label) = unprotected_header.rest.iter().find(|x| x.0 == Label::Int(47)) {
             return Err(CoseCipherError::existing_header_label(&label.0))
@@ -90,7 +93,7 @@ impl CoseEncrypt0Cipher for FakeCrypto {
         result
     }
 
-    fn decrypt(&mut self, data: &[u8], aad: &[u8]) -> Result<Vec<u8>, CoseCipherError> {
+    fn decrypt(&mut self, data: &[u8], aad: &[u8]) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         // Now we just split off the AAD we previously put at the end of the data.
         // We return an error if it does not match.
         if data.len() < aad.len() {
@@ -104,10 +107,6 @@ impl CoseEncrypt0Cipher for FakeCrypto {
             Ok(result)
         }
     }
-
-    fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError> {
-        self.header(unprotected_header, protected_header)
-    }
 }
 
 /// Implements basic operations from the [`CoseSign1Cipher`] trait without actually using any
@@ -118,16 +117,12 @@ impl CoseSign1Cipher for FakeCrypto {
         data.to_vec()
     }
 
-    fn verify_signature(&mut self, sig: &[u8], data: &[u8]) -> Result<(), CoseCipherError> {
+    fn verify_signature(&mut self, sig: &[u8], data: &[u8]) -> Result<(), CoseCipherError<Self::Error>> {
         if sig != self.generate_signature(data) {
             Err(CoseCipherError::VerificationFailure)
         } else {
             Ok(())
         }
-    }
-
-    fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError> {
-        self.header(unprotected_header, protected_header)
     }
 }
 
@@ -139,15 +134,11 @@ impl CoseMac0Cipher for FakeCrypto {
         target.to_vec()
     }
 
-    fn verify_tag(&mut self, tag: &[u8], maced_data: &[u8]) -> Result<(), CoseCipherError> {
+    fn verify_tag(&mut self, tag: &[u8], maced_data: &[u8]) -> Result<(), CoseCipherError<Self::Error>> {
         if tag != self.generate_tag(maced_data) {
             Err(CoseCipherError::VerificationFailure)
         } else {
             Ok(())
         }
-    }
-
-    fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError> {
-        self.header(unprotected_header, protected_header)
     }
 }

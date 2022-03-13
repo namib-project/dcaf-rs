@@ -1,15 +1,7 @@
 /// Tests for CBOR serialization and deserialization of ACE-OAuth data models.
-use ciborium::de::from_reader;
-use ciborium::ser::into_writer;
-use coset::{
-    CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder, iana,
-    ProtectedHeader,
-};
-use coset::iana::Algorithm;
 
 use crate::common::scope::TextEncodedScope;
 use crate::common::test_helper::expect_ser_de;
-use crate::error::InvalidTextEncodedScopeError;
 
 use super::*;
 

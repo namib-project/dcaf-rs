@@ -173,7 +173,7 @@ impl Display for InvalidBinaryEncodedScopeError {
 /// Error type used when a [`CoseEncrypt0Cipher`], [`CoseSign1Cipher`], or [`CoseMac0Cipher`]
 /// fails to perform an operation.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub enum CoseCipherError {
+pub enum CoseCipherError<T> where T: Display {
     /// A header which the cipher is supposed to set has already been set.
     HeaderAlreadySet {
         /// The name of the header which has already been set.
@@ -181,12 +181,12 @@ pub enum CoseCipherError {
     },
     /// The given signature or MAC tag is either invalid or does not match the given data.
     VerificationFailure,
-    /// A different error has occurred. Details are provided in the contained message.
-    Other(String),
+    /// A different error has occurred. Details are provided in the contained error.
+    Other(T),
 }
 
-impl CoseCipherError {
-    pub fn existing_header_label(label: &Label) -> CoseCipherError {
+impl<T> CoseCipherError<T> where T: Display {
+    pub fn existing_header_label(label: &Label) -> CoseCipherError<T> {
         let existing_header_name;
         match label {
             Label::Int(i) => existing_header_name = i.to_string(),
@@ -197,14 +197,18 @@ impl CoseCipherError {
         }
     }
 
-    pub fn existing_header(name: &str) -> CoseCipherError {
+    pub fn existing_header(name: &str) -> CoseCipherError<T> {
         CoseCipherError::HeaderAlreadySet {
             existing_header_name: name.to_string(),
         }
     }
+
+    pub fn other_error(other: T) -> CoseCipherError<T> {
+        CoseCipherError::Other(other)
+    }
 }
 
-impl Display for CoseCipherError {
+impl<T> Display for CoseCipherError<T> where T: Display {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             CoseCipherError::HeaderAlreadySet {
@@ -221,7 +225,7 @@ impl Display for CoseCipherError {
 
 /// Error type used when an operation creating or receiving an access token failed.
 #[derive(Debug)]
-pub enum AccessTokenError {
+pub enum AccessTokenError<T> where T: Display {
     /// A COSE specific error occurred.
     ///
     /// Details are contained in this field using coset's [`CoseError`].
@@ -229,13 +233,13 @@ pub enum AccessTokenError {
     /// A cryptographic CoseCipher operation has failed.
     ///
     /// Details are contained in this field.
-    CoseCipherError(CoseCipherError),
+    CoseCipherError(CoseCipherError<T>),
     /// Headers can't be extracted because the input data is neither a
     /// [`CoseEncrypt0`], [`CoseSign1`], nor [`CoseMac0`].
     UnknownCoseStructure,
 }
 
-impl Display for AccessTokenError {
+impl<T> Display for AccessTokenError<T> where T: Display {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             AccessTokenError::CoseError(e) => write!(f, "{e}"),
@@ -248,19 +252,20 @@ impl Display for AccessTokenError {
     }
 }
 
-impl AccessTokenError {
+impl<T> AccessTokenError<T> where T: Display {
     /// Creates a new COSE error with the given `error`.
-    pub fn from_cose_error(error: CoseError) -> AccessTokenError {
+    pub fn from_cose_error(error: CoseError) -> AccessTokenError<T> {
         AccessTokenError::CoseError(error)
     }
 
-    pub fn from_cose_cipher_error(error: CoseCipherError) -> AccessTokenError {
+    pub fn from_cose_cipher_error(error: CoseCipherError<T>) -> AccessTokenError<T> {
         AccessTokenError::CoseCipherError(error)
     }
 }
 
 #[cfg(feature = "std")]
 mod std_error {
+    use core::fmt::Debug;
     use std::error::Error;
 
     use super::*;
@@ -275,7 +280,7 @@ mod std_error {
 
     impl Error for InvalidBinaryEncodedScopeError {}
 
-    impl Error for CoseCipherError {}
+    impl<T> Error for CoseCipherError<T> where T: Debug + Display {}
 
-    impl Error for AccessTokenError {}
+    impl<T> Error for AccessTokenError<T> where T: Debug + Display {}
 }

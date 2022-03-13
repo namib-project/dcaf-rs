@@ -5,6 +5,7 @@
 //! `CoseEncrypt`) and due to the `CipherProvider` carrying more data which is present in the
 //! parameters of the respective token functions right now, such as (part of) the headers.
 
+use core::fmt::{Debug, Display};
 use crate::common::cbor_values::ByteString;
 use coset::cwt::ClaimsSet;
 use coset::{
@@ -17,6 +18,16 @@ use crate::error::{AccessTokenError, CoseCipherError};
 #[cfg(test)]
 mod tests;
 
+pub trait CoseCipherCommon {
+    type Error: Display + Debug;
+
+    fn header(
+        &self,
+        unprotected_header: &mut Header,
+        protected_header: &mut Header,
+    ) -> Result<(), CoseCipherError<Self::Error>>;
+}
+
 /// Provides basic operations for encrypting, decrypting, signing and verifying COSE structures.
 ///
 /// This will be used by the corresponding token methods in this module to apply the cryptographic
@@ -25,7 +36,7 @@ mod tests;
 /// struct behind this strait for that.
 /// The methods provided in this trait accept `&mut self` in case the structure behind it needs to
 /// modify internal fields during any cryptographic operation.
-pub trait CoseEncrypt0Cipher {
+pub trait CoseEncrypt0Cipher: CoseCipherCommon {
     /// Encrypts the given `plaintext` and `aad`, returning the result.
     fn encrypt(&mut self, plaintext: &[u8], aad: &[u8]) -> Vec<u8>;
 
@@ -33,18 +44,10 @@ pub trait CoseEncrypt0Cipher {
     ///
     /// # Errors
     /// If the `ciphertext` and `aad` are invalid, i.e., can't be decrypted.
-    fn decrypt(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, CoseCipherError>;
-
-    /// TODO: Documentation
-    /// TODO: Actual error type
-    fn header(
-        &self,
-        unprotected_header: &mut Header,
-        protected_header: &mut Header,
-    ) -> Result<(), CoseCipherError>;
+    fn decrypt(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 }
 
-pub trait CoseSign1Cipher {
+pub trait CoseSign1Cipher: CoseCipherCommon {
     /// Cryptographically signs the given `target` value and returns the signature.
     fn generate_signature(&mut self, target: &[u8]) -> Vec<u8>;
 
@@ -56,29 +59,13 @@ pub trait CoseSign1Cipher {
         &mut self,
         signature: &[u8],
         signed_data: &[u8],
-    ) -> Result<(), CoseCipherError>;
-
-    /// TODO: Documentation
-    /// TODO: Actual error type
-    fn header(
-        &self,
-        unprotected_header: &mut Header,
-        protected_header: &mut Header,
-    ) -> Result<(), CoseCipherError>;
+    ) -> Result<(), CoseCipherError<Self::Error>>;
 }
 
-pub trait CoseMac0Cipher {
+pub trait CoseMac0Cipher: CoseCipherCommon {
     fn generate_tag(&mut self, target: &[u8]) -> Vec<u8>;
 
-    fn verify_tag(&mut self, tag: &[u8], maced_data: &[u8]) -> Result<(), CoseCipherError>;
-
-    /// TODO: Documentation
-    /// TODO: Actual error type
-    fn header(
-        &self,
-        unprotected_header: &mut Header,
-        protected_header: &mut Header,
-    ) -> Result<(), CoseCipherError>;
+    fn verify_tag(&mut self, tag: &[u8], maced_data: &[u8]) -> Result<(), CoseCipherError<Self::Error>>;
 }
 
 /// Encrypts the given `claims` with the given headers and `aad` using `cipher` for cryptography,
@@ -96,7 +83,7 @@ pub fn encrypt_access_token<T>(
     mut protected_header: Header,
     cipher: &mut T,
     aad: &[u8],
-) -> Result<ByteString, AccessTokenError>
+) -> Result<ByteString, AccessTokenError<T::Error>>
     where
         T: CoseEncrypt0Cipher,
 {
@@ -133,7 +120,7 @@ pub fn sign_access_token<T>(
     mut protected_header: Header,
     cipher: &mut T,
     aad: &[u8],
-) -> Result<ByteString, AccessTokenError>
+) -> Result<ByteString, AccessTokenError<T::Error>>
     where
         T: CoseSign1Cipher,
 {
@@ -155,19 +142,18 @@ pub fn sign_access_token<T>(
 /// Returns the headers of the given signed ([`CoseSign1`]), MAC tagged ([`CoseMac0`]),
 /// or encrypted ([`CoseEncrypt0`]) access token.
 ///
-/// # Errors
-/// - When the given `token` is neither a [`CoseEncrypt0`], [`CoseSign1`], nor [`CoseMac0`]
-///   structure.
+/// When the given `token` is neither a [`CoseEncrypt0`], [`CoseSign1`], nor a [`CoseMac0`]
+/// structure, `None` is returned.
 pub fn get_token_headers(
     token: &ByteString,
-) -> Result<(Header, ProtectedHeader), AccessTokenError> {
+) -> Option<(Header, ProtectedHeader)> {
     CoseSign1::from_slice(token.as_slice())
         .map(|x| (x.unprotected, x.protected))
         .or_else(|_| {
             CoseEncrypt0::from_slice(token.as_slice()).map(|x| (x.unprotected, x.protected))
         })
         .or_else(|_| CoseMac0::from_slice(token.as_slice()).map(|x| (x.unprotected, x.protected)))
-        .map_err(|_| AccessTokenError::UnknownCoseStructure)
+        .ok()
 }
 
 /// Verifies the given `token` and `aad` using `verifier` for cryptography,
@@ -184,7 +170,7 @@ pub fn verify_access_token<T>(
     token: &ByteString,
     aad: &[u8],
     verifier: &mut T,
-) -> Result<(), AccessTokenError>
+) -> Result<(), AccessTokenError<T::Error>>
     where
         T: CoseSign1Cipher,
 {
@@ -209,7 +195,7 @@ pub fn decrypt_access_token<T>(
     token: &ByteString,
     aad: &[u8],
     cipher: &mut T,
-) -> Result<ClaimsSet, AccessTokenError>
+) -> Result<ClaimsSet, AccessTokenError<T::Error>>
     where
         T: CoseEncrypt0Cipher,
 {
