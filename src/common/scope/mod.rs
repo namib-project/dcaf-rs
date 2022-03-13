@@ -111,18 +111,41 @@ pub struct BinaryEncodedScope(ByteString);
 pub enum Scope {
     /// Scope encoded using Text, as specified in
     /// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3).
+    ///
+    /// # Example
+    /// Creating a scope containing "device_alpha" and "device_beta" (note that spaces in their
+    /// name wouldn't work):
+    /// ```
+    /// # use dcaf::common::scope::TextEncodedScope;
+    /// # use dcaf::error::InvalidTextEncodedScopeError;
+    /// let scope = TextEncodedScope::try_from(vec!["device_alpha", "device_beta"])?;
+    /// assert_eq!(scope, TextEncodedScope::try_from("device_alpha device_beta")?);
+    /// assert_eq!(scope.elements(), vec!["device_alpha", "device_beta"]);
+    /// assert!(TextEncodedScope::try_from(vec!["device alpha", "device beta"]).is_err());
+    /// # Ok::<(), InvalidTextEncodedScopeError>(())
+    /// ```
     TextEncoded(TextEncodedScope),
 
     /// Scope encoded using custom binary encoding.
+    /// # Example
+    /// Creating a scope containing 0xDCAF and 0xAFDC with a separator of 0x00:
+    /// ```
+    /// # use dcaf::common::scope::BinaryEncodedScope;
+    /// # use dcaf::error::InvalidBinaryEncodedScopeError;
+    /// let scope = BinaryEncodedScope::try_from(vec![0xDC, 0xAF, 0x00, 0xAF, 0xDC])?;
+    /// assert_eq!(scope.elements(0x00)?, vec![vec![0xDC, 0xAF], vec![0xAF, 0xDC]]);
+    /// assert!(scope.elements(0xDC).is_err());  // no separators at the beginning or end
+    /// # Ok::<(), InvalidBinaryEncodedScopeError>(())
+    /// ```
     BinaryEncoded(BinaryEncodedScope),
     // TODO: Implement proper AIF support
 }
 
+/// Contains conversion methods for ACE-OAuth data types.
+/// One part of this is converting enum types from and to their CBOR abbreviations in
+/// [`cbor_abbreviations`], another part is implementing the [`AsCborMap`] type for the
+/// models which are represented as CBOR maps.
 mod conversion {
-    //! Contains conversion methods for ACE-OAuth data types.
-    //! One part of this is converting enum types from and to their CBOR abbreviations in
-    //! [`cbor_abbreviations`], another part is implementing the [`AsCborMap`] type for the
-    //! models which are represented as CBOR maps.
 
     use crate::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError, WrongSourceTypeError};
 
