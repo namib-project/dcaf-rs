@@ -18,7 +18,7 @@ pub use endpoints::token_req::{
 };
 #[doc(inline)]
 pub use token::{
-    decrypt_access_token, encrypt_access_token, sign_access_token, validate_access_token,
+    decrypt_access_token, encrypt_access_token, sign_access_token, verify_access_token,
     CoseEncrypt0Cipher, CoseSign1Cipher, CoseMac0Cipher,
 };
 

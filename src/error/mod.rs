@@ -68,7 +68,7 @@ impl TryFromCborMapError {
         }
     }
 
-    /// Creates a new error with a message describing that an unknown field in 
+    /// Creates a new error with a message describing that an unknown field in
     /// the CBOR map with the given `key` was encountered.
     pub fn unknown_field(key: u8) -> TryFromCborMapError {
         TryFromCborMapError {
@@ -177,7 +177,7 @@ pub enum CoseCipherError {
     /// A header which the cipher is supposed to set has already been set.
     HeaderAlreadySet {
         /// The name of the header which has already been set.
-        existing_header_name: String
+        existing_header_name: String,
     },
     /// The given signature or MAC tag is either invalid or does not match the given data.
     VerificationFailure,
@@ -190,16 +190,16 @@ impl CoseCipherError {
         let existing_header_name;
         match label {
             Label::Int(i) => existing_header_name = i.to_string(),
-            Label::Text(s) => existing_header_name = s.to_string()
+            Label::Text(s) => existing_header_name = s.to_string(),
         }
         CoseCipherError::HeaderAlreadySet {
-            existing_header_name
+            existing_header_name,
         }
     }
 
     pub fn existing_header(name: &str) -> CoseCipherError {
         CoseCipherError::HeaderAlreadySet {
-            existing_header_name: name.to_string()
+            existing_header_name: name.to_string(),
         }
     }
 }
@@ -207,9 +207,14 @@ impl CoseCipherError {
 impl Display for CoseCipherError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
-            CoseCipherError::HeaderAlreadySet { existing_header_name } => write!(f, "cipher-defined header '{existing_header_name}' already set"),
+            CoseCipherError::HeaderAlreadySet {
+                existing_header_name,
+            } => write!(
+                f,
+                "cipher-defined header '{existing_header_name}' already set"
+            ),
             CoseCipherError::VerificationFailure => write!(f, "data verification failed"),
-            CoseCipherError::Other(s) => write!(f, "{s}")
+            CoseCipherError::Other(s) => write!(f, "{s}"),
         }
     }
 }
@@ -217,21 +222,28 @@ impl Display for CoseCipherError {
 /// Error type used when an operation creating or receiving an access token failed.
 #[derive(Debug)]
 pub enum AccessTokenError {
-    /// A COSE specific error occurred. 
+    /// A COSE specific error occurred.
     ///
     /// Details are contained in this field using coset's [`CoseError`].
     CoseError(CoseError),
     /// A cryptographic CoseCipher operation has failed.
     ///
     /// Details are contained in this field.
-    CoseCipherError(CoseCipherError)
+    CoseCipherError(CoseCipherError),
+    /// Headers can't be extracted because the input data is neither a
+    /// [`CoseEncrypt0`], [`CoseSign1`], nor [`CoseMac0`].
+    UnknownCoseStructure,
 }
 
 impl Display for AccessTokenError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             AccessTokenError::CoseError(e) => write!(f, "{e}"),
-            AccessTokenError::CoseCipherError(e) => write!(f, "cipher error: {e}")
+            AccessTokenError::CoseCipherError(e) => write!(f, "cipher error: {e}"),
+            AccessTokenError::UnknownCoseStructure => write!(
+                f,
+                "input is either invalid or none of CoseEncrypt0, CoseSign1 nor CoseMac0"
+            ),
         }
     }
 }
