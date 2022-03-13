@@ -12,7 +12,27 @@ use erased_serde::Serialize as ErasedSerialize;
 use crate::common::scope::Scope;
 use crate::error::{TryFromCborMapError, ValueIsNotIntegerError};
 
-// Macro adapted from https://github.com/enarx/ciborium/blob/main/ciborium/tests/macro.rs#L13
+/// Creates a CBOR map from integer keys to values, where the given values must have a `map`
+/// method available (e.g. [`Option`]).
+///
+/// The macro has been adapted from
+/// [a macro in ciborium's tests](https://github.com/enarx/ciborium/blob/main/ciborium/tests/macro.rs#L13)
+///
+/// # Example
+/// The following code:
+/// ```
+/// let map = cbor_map_vec! {
+///     0 => Some("Test"),
+///     1 => Some(42)
+/// };
+/// ```
+/// Would create the following map (written in CBOR diagnostic notation):
+/// ```text
+/// {
+///    0: "Test",
+///    1: 42
+/// }
+/// ```
 macro_rules! cbor_map_vec {
     ($($key:expr => $val:expr),* $(,)*) => {
          vec![$(
@@ -33,22 +53,116 @@ macro_rules! cbor_map_vec {
 pub(crate) use cbor_map_vec;
 
 
+/// Intended for types which can be serialized into CBOR maps that have integers as keys.
+///
+/// This provides methods to [`serialize_into`] and [`deserialize_from`] CBOR, which is the
+/// recommended way to serialize and deserialize any types implementing [`AsCborMap`] in this crate.
+/// *While other methods are provided as well, it's recommended for clients of this library not to
+/// use them, as they are mostly intended for internal use and as such may have an unstable API.*
+///
+/// # Example
+/// The following showcases how to serialize a type implementing `AsCborMap`
+/// using the example of an [`AuthServerRequestCreationHint`]:
+/// ```
+/// # use ciborium_io::Write;
+/// # use dcaf::AuthServerRequestCreationHint;
+/// # use dcaf::common::cbor_map::AsCborMap;
+/// let hint = AuthServerRequestCreationHint::default();
+/// let mut serialized: Vec<u8> = Vec::new();
+/// hint.serialize_into(&mut serialized)?;
+/// # Ok::<(), ciborium::ser::Error<<Vec<u8> as Write>::Error>>(())
+/// ```
+/// From the serialized bytestring, just call [`deserialize_from`] on the struct you want to
+/// deserialize into:
+/// ```
+/// # use ciborium_io::Read;
+/// # use dcaf::AuthServerRequestCreationHint;
+/// # use dcaf::common::cbor_map::AsCborMap;
+/// # let hint = AuthServerRequestCreationHint::default();
+/// # let mut serialized: Vec<u8> = Vec::new();
+/// # hint.clone().serialize_into(&mut serialized).expect("couldn't serialize hint");
+/// let deserialized = AuthServerRequestCreationHint::deserialize_from(serialized.as_slice())?;
+/// assert_eq!(hint, deserialized);
+/// # Ok::<(), ciborium::de::Error<<&[u8] as Read>::Error>>(())
+/// ```
 pub trait AsCborMap: private::Sealed {
+    /// Serializes this type as a CBOR map bytestring into the given `writer`.
+    ///
+    /// # Example
+    /// The following showcases how to serialize a type implementing `AsCborMap`
+    /// using the example of an [`AuthServerRequestCreationHint`]:
+    /// ```
+    /// # use ciborium_io::Write;
+    /// # use dcaf::AuthServerRequestCreationHint;
+    /// # use dcaf::common::cbor_map::AsCborMap;
+    /// let hint = AuthServerRequestCreationHint::default();
+    /// let mut serialized: Vec<u8> = Vec::new();
+    /// hint.serialize_into(&mut serialized)?;
+    /// assert_eq!(serialized, vec![0xA0]);  // 0xA0 == Empty CBOR map.
+    /// # Ok::<(), ciborium::ser::Error<<Vec<u8> as Write>::Error>>(())
+    /// ```
+    ///
+    /// # Errors
+    /// - When serialization of this value failed, e.g. due to malformed input.
+    /// - When the output couldn't be put inside the given `writer`.
     fn serialize_into<W>(self, writer: W) -> Result<(), ciborium::ser::Error<W::Error>> where Self: Sized, W: Write, W::Error: Debug {
         into_writer(&CborMap(self), writer)
     }
 
+    /// Deserializes from the given `reader` --- which is expected to be an instance of this type,
+    /// represented as a CBOR map bytestring --- into an instance of this type.
+    ///
+    /// # Example
+    /// Assuming `serialized` holds an empty CBOR map, we expect it to deserialize to the default
+    /// value of a type (this obviously only holds for types which implement [`Default`].)
+    /// Here, we show this using [`AuthServerRequestCreationHint`] as an example:
+    /// ```
+    /// # use ciborium_io::Read;
+    /// # use dcaf::AuthServerRequestCreationHint;
+    /// # use dcaf::common::cbor_map::AsCborMap;
+    /// let serialized = vec![0xA0];
+    /// let deserialized = AuthServerRequestCreationHint::deserialize_from(serialized.as_slice())?;
+    /// assert_eq!(deserialized, AuthServerRequestCreationHint::default());
+    /// # Ok::<(), ciborium::de::Error<<&[u8] as Read>::Error>>(())
+    /// ```
+    ///
+    /// # Errors
+    /// - When deserialization of the bytestring failed, e.g. when the given `reader` does not
+    ///   contain a valid CBOR map or deserializes to a different type than this one.
+    /// - When the input couldn't be read from the given `reader`.
     fn deserialize_from<R>(reader: R) -> Result<Self, ciborium::de::Error<R::Error>> where Self: Sized, R: Read, R::Error: Debug {
         from_reader(reader).map(|x: CborMap<Self>| x.0)
     }
 
+    /// Converts this type into a CBOR map from integer keys to serializable values
+    /// (which may be empty).
+    ///
+    /// **NOTE: This is not intended for users of this crate!**
+    #[doc(hidden)]
     fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)>;
 
+    /// Tries to create an instance of this type from the given vector, which represents a CBOR map
+    /// from integers to CBOR values.
+    ///
+    /// **NOTE: This is not intended for users of this crate!**
+    ///
+    /// # Errors
+    /// - When the given CBOR map can't be converted to this trait.
+    #[doc(hidden)]
     fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
         where
             Self: Sized + AsCborMap;
 
     // TODO: Document panics
+    /// Converts this type to a CBOR serializable [`Value`] using [`as_cbor_map`].
+    ///
+    /// **NOTE: This is not intended for users of this crate!**
+    ///
+    /// # Panics
+    /// - When the integers in the map from [`as_cbor_map`] are too high to fit into a
+    ///   `Value::Integer`.
+    /// - When a CBOR map value can't be serialized.
+    #[doc(hidden)]
     fn as_ciborium_value(&self) -> Value {
         Value::Map(
             self.as_cbor_map()
@@ -56,7 +170,7 @@ pub trait AsCborMap: private::Sealed {
                 .filter(|x| x.1.is_some())
                 .map(|x| {
                     (
-                        Value::Integer(x.0.try_into().expect("CBOR map value too high")),
+                        Value::Integer(x.0.try_into().expect("CBOR key value too high")),
                         Value::serialized(&x.1).expect("Invalid CBOR map value"),
                     )
                 })
@@ -64,6 +178,19 @@ pub trait AsCborMap: private::Sealed {
         )
     }
 
+    /// Converts the given vector representing
+    /// "a CBOR map from serializable keys to serializable values" (`Vec<(Value, Value)>`)
+    /// into a similar vector which represents
+    /// "a CBOR map from integer keys to serializable values" (`Vec<(i128, Value)>`).
+    ///
+    /// This obviously requires that the given `map` is such a CBOR map with integer keys,
+    /// otherwise an error will be returned.
+    ///
+    /// **NOTE: This is not intended for users of this crate!**
+    ///
+    /// # Errors
+    /// - When a key from the given CBOR `map` is not an integer.
+    #[doc(hidden)]
     fn cbor_map_from_int(map: Vec<(Value, Value)>) -> Result<Vec<(i128, Value)>, ValueIsNotIntegerError> {
         // We want to convert (Value, Value) to (i128, Value), assuming that the first
         // Value is always a Value::Integer.
@@ -77,6 +204,10 @@ pub trait AsCborMap: private::Sealed {
     }
 }
 
+/// Decodes the given specific `scope` of type `T` into the general [`Scope`] type.
+///
+/// # Errors
+/// - If `scope` is not a valid scope.
 pub(crate) fn decode_scope<T, S>(scope: T) -> Result<Option<Scope>, TryFromCborMapError>
     where
         S: TryFrom<T>,
@@ -93,6 +224,10 @@ pub(crate) fn decode_scope<T, S>(scope: T) -> Result<Option<Scope>, TryFromCborM
     }
 }
 
+/// Decodes the given `number` Integer into a more specific integer of type `T`.
+///
+/// # Errors
+/// - If `number` can't be a valid instance of type `T`.
 pub(crate) fn decode_number<T>(number: Integer, name: &str) -> Result<T, TryFromCborMapError> where T: TryFrom<Integer> {
     match T::try_from(number) {
         Ok(i) => Ok(i),
@@ -104,16 +239,23 @@ pub(crate) fn decode_number<T>(number: Integer, name: &str) -> Result<T, TryFrom
     }
 }
 
+/// Decodes the given general CBOR `map` into a CBOR map from integers to values.
+/// See [`AsCborMap::cbor_map_from_int`] for details.
+///
+/// # Errors
+/// - If `map` is not a valid CBOR map with integer keys.
 pub(crate) fn decode_int_map<T>(map: Vec<(Value, Value)>, name: &str) -> Result<Vec<(i128, Value)>, TryFromCborMapError> where T: AsCborMap {
     T::cbor_map_from_int(map).map_err(|_|
         TryFromCborMapError::from_message(format!(
-            "{name} is not a valid CBOR map"
+            "{name} is not a valid CBOR map with integer keys"
         ))
     )
 }
 
 /// Convenience struct so we can implement a foreign trait on all structs we intend to
 /// (de)serialize as CBOR maps.
+///
+/// This should always be invisible to clients of this crate.
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct CborMap<T>(T) where T: AsCborMap;
 
@@ -126,6 +268,7 @@ impl<T> Display for CborMap<T>
     }
 }
 
+/// Contains definitions according to C-SEALED, which turns [`AsCborMap`] into a sealed trait.
 mod private {
     use crate::common::cbor_values::ProofOfPossessionKey;
     use crate::endpoints::creation_hint::AuthServerRequestCreationHint;
@@ -145,6 +288,8 @@ mod private {
     impl Sealed for ProofOfPossessionKey {}
 }
 
+/// Contains methods to convert `CborMap` structs (so actually, types implementing `AsCborMap`)
+/// into CBOR and back.
 mod conversion {
     use ciborium::value::Value;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
