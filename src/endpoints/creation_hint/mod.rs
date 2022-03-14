@@ -18,20 +18,20 @@ build_fn(validate = "Self::validate")
 )]
 pub struct AuthServerRequestCreationHint {
     /// An absolute URI that identifies the appropriate AS for the RS.
-    auth_server: Option<String>,
+    pub auth_server: Option<String>,
 
     /// The key identifier of a key used in an existing security association
     /// between the client and the RS.
-    kid: Option<ByteString>,
+    pub kid: Option<ByteString>,
 
     /// An identifier the client should request at the AS, as suggested by the RS.
-    audience: Option<String>,
+    pub audience: Option<String>,
 
     /// The suggested scope that the client should request towards the AS.
-    scope: Option<Scope>,
+    pub scope: Option<Scope>,
 
     /// A client nonce as described in [section 5.3.1 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3.1).
-    client_nonce: Option<ByteString>,
+    pub client_nonce: Option<ByteString>,
 }
 
 mod builder {
