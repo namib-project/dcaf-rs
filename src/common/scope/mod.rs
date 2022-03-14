@@ -1,3 +1,57 @@
+//! Contains data types and methods for working with OAuth scopes.
+//!
+//! The main use case of this module is creating [Scope] instances for either text- or
+//! binary-encoded scopes, whose elements can then be extracted using the `elements()` method.
+//!
+//! # Example
+//! For example, you could first create a text or binary encoded scope:
+//! ```
+//! # use dcaf::common::scope::{BinaryEncodedScope, TextEncodedScope};
+//! # use dcaf::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError};
+//! # use dcaf::Scope;
+//! # fn text() -> Result<(), InvalidTextEncodedScopeError> {
+//! // Will be encoded with a space-separator.
+//! let text_scope = TextEncodedScope::try_from(vec!["first_client", "second_client"])?;
+//! assert_eq!(text_scope.to_string(), "first_client second_client");
+//! assert!(text_scope.elements().eq(vec!["first_client", "second_client"]));
+//! # Ok(())
+//! # }
+//! // Separator is only specified upon `elements` call.
+//! let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice())?;
+//! assert!(binary_scope.elements(0)?.eq(vec![vec![1, 2], vec![3, 4]]));
+//! # text().map_err(|x| InvalidBinaryEncodedScopeError::EmptyScope);
+//! # Ok::<(), InvalidBinaryEncodedScopeError>(())
+//! ```
+//! And then you could wrap it in the [Scope] type and use it in a field,
+//! e.g. in an [`AuthServerRequestCreationHint`]:
+//! ```
+//! # use dcaf::common::scope::{BinaryEncodedScope, TextEncodedScope};
+//! # use dcaf::{AuthServerRequestCreationHint, Scope};
+//! # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
+//! # let text_scope = TextEncodedScope::try_from(vec!["first_client", "second_client"]).unwrap();
+//! # let original_scope = text_scope.clone();
+//! # let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice()).unwrap();
+//! let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder().scope(Scope::from(text_scope)).build()?;
+//! # assert_eq!(hint.scope, Some(Scope::from(original_scope)));
+//! # Ok::<(), AuthServerRequestCreationHintBuilderError>(())
+//! ```
+//! This works with the binary encoded scope too, of course:
+//! ```
+//! # use dcaf::common::scope::{BinaryEncodedScope, TextEncodedScope};
+//! # use dcaf::{AuthServerRequestCreationHint, Scope};
+//! # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
+//! # let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice()).unwrap();
+//! # let original_scope = binary_scope.clone();
+//! let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder().scope(Scope::from(binary_scope)).build()?;
+//! # assert_eq!(hint.scope, Some(Scope::from(original_scope)));
+//! # Ok::<(), AuthServerRequestCreationHintBuilderError>(())
+//! ```
+//! # Sources
+//! For the original OAuth 2.0 standard, scopes are defined in
+//! [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3),
+//! while for ACE-OAuth, they're specified in
+//! [`draft-ietf-ace-oauth-authz`, section 5.8.1](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1-2.4).
+
 use alloc::string::String;
 use core::fmt::{Display, Formatter};
 

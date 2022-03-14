@@ -1,3 +1,6 @@
+//! Contains a few helper functions intended purely for tests.
+//! Not intended to be used outside of this crate.
+
 use crate::common::cbor_map::AsCborMap;
 use core::fmt::Debug;
 use core::convert::identity;
