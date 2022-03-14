@@ -23,7 +23,7 @@
 //! # Ok::<(), InvalidBinaryEncodedScopeError>(())
 //! ```
 //! And then you could wrap it in the [Scope] type and use it in a field,
-//! e.g. in an [`AuthServerRequestCreationHint`]:
+//! e.g. in an [`AuthServerRequestCreationHint`](crate::AuthServerRequestCreationHint):
 //! ```
 //! # use dcaf::common::scope::{BinaryEncodedScope, TextEncodedScope};
 //! # use dcaf::{AuthServerRequestCreationHint, Scope};
@@ -135,7 +135,8 @@ pub struct BinaryEncodedScope(ByteString);
 /// Scope of an access token as specified in
 /// [`draft-ietf-ace-oauth-authz`, section 5.8.1](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1-2.4).
 ///
-/// May be used both for [AccessTokenRequest]s and [AccessTokenResponse]s.
+/// May be used both for [AccessTokenRequest](crate::AccessTokenRequest)s and
+/// [AccessTokenResponse](crate::AccessTokenResponse)s.
 /// Note that you rarely need to create instances of this type for that purpose,
 /// instead you can just pass in the concrete [TextEncodedScope] or [BinaryEncodedScope] directly
 /// into the builder.
@@ -200,7 +201,8 @@ pub enum Scope {
 
 /// Contains conversion methods for ACE-OAuth data types.
 /// One part of this is converting enum types from and to their CBOR abbreviations in
-/// [`cbor_abbreviations`], another part is implementing the [`AsCborMap`] type for the
+/// [`cbor_abbreviations`](crate::constants::cbor_abbreviations),
+/// another part is implementing the [`AsCborMap`](crate::AsCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
 

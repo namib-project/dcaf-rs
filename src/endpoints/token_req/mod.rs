@@ -209,8 +209,9 @@ impl AccessTokenRequestBuilder {
         Ok(())
     }
 
-    /// Sets the [ace_profile] field to an empty value, which indicates a request for the
-    /// Authorization Server to respond with the ace_profile field in the response.
+    /// Sets the [`ace_profile`](AccessTokenRequest::ace_profile) field to an empty value,
+    /// which indicates a request for the Authorization Server to respond with the
+    /// `ace_profile` field in the response.
     pub fn ace_profile(&mut self) -> &mut Self {
         self.ace_profile = Some(Some(()));
         self

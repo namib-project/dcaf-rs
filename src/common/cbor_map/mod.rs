@@ -40,6 +40,8 @@
 //! assert_eq!(request.client_id, "test");
 //! # Ok::<(), ciborium::de::Error<<&[u8] as Read>::Error>>(())
 //! ```
+//!
+//! [`AccessTokenRequest`]: crate::AccessTokenRequest
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -97,14 +99,15 @@ pub(crate) use cbor_map_vec;
 
 /// Provides methods to serialize a type into a CBOR map bytestring and back.
 ///
-/// This provides methods to [`serialize_into`] and [`deserialize_from`] CBOR, which is the
+/// This provides methods to [`serialize_into`](AsCborMap::serialize_into) and
+/// [`deserialize_from`](AsCborMap::deserialize_from) CBOR, which is the
 /// recommended way to serialize and deserialize any types implementing [`AsCborMap`] in this crate.
 /// *While other methods are provided as well, it's recommended for clients of this library not to
 /// use them, as they are mostly intended for internal use and as such may have an unstable API.*
 ///
 /// # Example
 /// The following showcases how to serialize a type implementing `AsCborMap`
-/// using the example of an [`AuthServerRequestCreationHint`]:
+/// using the example of an [`AuthServerRequestCreationHint`](crate::AuthServerRequestCreationHint):
 /// ```
 /// # use ciborium_io::Write;
 /// # use dcaf::AuthServerRequestCreationHint;
@@ -114,8 +117,8 @@ pub(crate) use cbor_map_vec;
 /// hint.serialize_into(&mut serialized)?;
 /// # Ok::<(), ciborium::ser::Error<<Vec<u8> as Write>::Error>>(())
 /// ```
-/// From the serialized bytestring, just call [`deserialize_from`] on the struct you want to
-/// deserialize into:
+/// From the serialized bytestring, just call [`deserialize_from`](AsCborMap::deserialize_from)
+/// on the struct you want to deserialize into:
 /// ```
 /// # use ciborium_io::Read;
 /// # use dcaf::AuthServerRequestCreationHint;
@@ -132,7 +135,7 @@ pub trait AsCborMap: private::Sealed {
     ///
     /// # Example
     /// The following showcases how to serialize a type implementing `AsCborMap`
-    /// using the example of an [`AuthServerRequestCreationHint`]:
+    /// using the example of an [`AuthServerRequestCreationHint`](crate::AuthServerRequestCreationHint):
     /// ```
     /// # use ciborium_io::Write;
     /// # use dcaf::AuthServerRequestCreationHint;
@@ -162,7 +165,7 @@ pub trait AsCborMap: private::Sealed {
     /// # Example
     /// Assuming `serialized` holds an empty CBOR map, we expect it to deserialize to the default
     /// value of a type (this obviously only holds for types which implement [`Default`].)
-    /// Here, we show this using [`AuthServerRequestCreationHint`] as an example:
+    /// Here, we show this using [`AuthServerRequestCreationHint`](crate::AuthServerRequestCreationHint) as an example:
     /// ```
     /// # use ciborium_io::Read;
     /// # use dcaf::AuthServerRequestCreationHint;

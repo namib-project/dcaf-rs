@@ -71,12 +71,12 @@ pub trait CoseMac0Cipher: CoseCipherCommon {
 /// Encrypts the given `claims` with the given headers and `aad` using `cipher` for cryptography,
 /// returning the token as a serialized bytestring of the [`CoseEncrypt0`] structure.
 ///
-/// If you need to encode additional fields other than `claims`, use the [`CipherProvider`] given in
+/// If you need to encode additional fields other than `claims`, use the [`CoseEncrypt0Cipher`] given in
 /// `cipher` to store and encrypt them.
 ///
 /// # Errors
-/// - When there's a [`CoseError`] while serializing the given `claims` to CBOR.
-/// - When there's a [`CoseError`] while serializing the [`CoseEncrypt0`] structure.
+/// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
+/// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseEncrypt0`] structure.
 pub fn encrypt_access_token<T>(
     claims: ClaimsSet,
     mut unprotected_header: Header,
@@ -108,12 +108,12 @@ pub fn encrypt_access_token<T>(
 /// Signs the given `claims` with the given headers and `aad` using `cipher` for cryptography,
 /// returning the token as a serialized bytestring of the [`CoseSign1`] structure.
 ///
-/// If you need to encode additional fields other than `claims`, use the [`CipherProvider`] given in
-/// `cipher` to store and sign them.
+/// If you need to encode additional fields other than `claims`, use the [`CoseSign1Cipher`] given
+/// in `cipher` to store and sign them.
 ///
 /// # Errors
-/// - When there's a [`CoseError`] while serializing the given `claims` to CBOR.
-/// - When there's a [`CoseError`] while serializing the [`CoseSign1`] structure.
+/// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
+/// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseSign1`] structure.
 pub fn sign_access_token<T>(
     claims: ClaimsSet,
     mut unprotected_header: Header,
@@ -162,7 +162,8 @@ pub fn get_token_headers(
 /// NOTE: Protected headers are not verified as of now.
 ///
 /// # Errors
-/// - When there's a [`CoseError`] while deserializing the given `token` to a [`CoseSign1`] structure
+/// - When there's a [`CoseError`](coset::CoseError) while deserializing the given `token`
+///   to a [`CoseSign1`] structure
 ///   (e.g., if it's not in fact a [`CoseSign1`] structure but rather something else).
 /// - When there's a verification error coming from the `verifier`
 ///   (e.g., if the `token`'s data does not match its signature).
@@ -186,7 +187,8 @@ pub fn verify_access_token<T>(
 /// returning the decrypted `ClaimsSet`.
 ///
 /// # Errors
-/// - When there's a [`CoseError`] while deserializing the given `token` to a [`CoseEncrypt0`] structure
+/// - When there's a [`CoseError`](coset::CoseError) while deserializing
+///   the given `token` to a [`CoseEncrypt0`] structure
 ///   (e.g., if it's not in fact a [`CoseEncrypt0`] structure but rather something else).
 /// - When there's a decryption error coming from the `cipher`.
 /// - When the deserialized and decrypted [`CoseEncrypt0`] structure does not contain a valid

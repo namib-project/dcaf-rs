@@ -56,7 +56,8 @@ mod builder {
 /// Contains conversion methods for ACE-OAuth data types.
 ///
 /// One part of this is converting enum types from and to their CBOR abbreviations in
-/// [`cbor_abbreviations`], another part is implementing the [`AsCborMap`] type for the
+/// [`cbor_abbreviations`](crate::constants::cbor_abbreviations),
+/// another part is implementing the [`AsCborMap`](crate::AsCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
 

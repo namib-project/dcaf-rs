@@ -81,11 +81,11 @@ enum TextOrByteString {
 ///
 /// Can either be a COSE key, an encrypted COSE key, or simply a key ID.
 /// As described in [`draft-ietf-ace-oauth-params-16`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-oauth-params-16),
-/// PoP keys are used for the `req_cnf` parameter in [`AccessTokenRequest`],
-/// as well as for the `cnf` and `rs_cnf` parameters in [`AccessTokenResponse`].
+/// PoP keys are used for the `req_cnf` parameter in [`AccessTokenRequest`](crate::AccessTokenRequest),
+/// as well as for the `cnf` and `rs_cnf` parameters in [`AccessTokenResponse`](crate::AccessTokenResponse).
 ///
 /// # Example
-/// We showcase creation of an [`AccessTokenRequest`] in which we set `req_cnf` to a PoP key
+/// We showcase creation of an [`AccessTokenRequest`](crate::AccessTokenRequest) in which we set `req_cnf` to a PoP key
 /// with an ID of 0xDCAF which the access token shall be bound to:
 /// ```
 /// # use dcaf::AccessTokenRequest;

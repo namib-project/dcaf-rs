@@ -43,7 +43,7 @@ impl<T> WrongSourceTypeError<T> {
 }
 
 /// Error type used when a given CBOR map can't be converted to a specific type which implements
-/// the [`AsCborMap`] trait.
+/// the [`AsCborMap`](crate::AsCborMap) trait.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct TryFromCborMapError {
     /// Error message describing why the conversion failed.
@@ -94,8 +94,8 @@ impl Display for ValueIsNotIntegerError {
     }
 }
 
-/// Error type used when a [`TextEncodedScope`] does not conform to the specification given
-/// in RFC 6749.
+/// Error type used when a [`TextEncodedScope`](crate::common::scope::TextEncodedScope)
+/// does not conform to the specification given in RFC 6749.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum InvalidTextEncodedScopeError {
     /// The scope starts with a separator (i.e. space).
@@ -136,8 +136,8 @@ impl Display for InvalidTextEncodedScopeError {
     }
 }
 
-/// Error type used when a [`BinaryEncodedScope`] does not conform to the specification given
-/// in RFC 6749 and `draft-ietf-ace-oauth-authz`.
+/// Error type used when a [`BinaryEncodedScope`](crate::common::scope::BinaryEncodedScope)
+/// does not conform to the specification given in RFC 6749 and `draft-ietf-ace-oauth-authz`.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum InvalidBinaryEncodedScopeError {
     /// Scope starts with a separator, which is contained in the field here.
@@ -169,7 +169,8 @@ impl Display for InvalidBinaryEncodedScopeError {
 
 // TODO: Replace all instances of validation with verification
 
-/// Error type used when a [`CoseEncrypt0Cipher`], [`CoseSign1Cipher`], or [`CoseMac0Cipher`]
+/// Error type used when a [`CoseEncrypt0Cipher`](crate::CoseEncrypt0Cipher),
+/// [`CoseSign1Cipher`](crate::CoseSign1Cipher), or [`CoseMac0Cipher`](crate::CoseMac0Cipher).
 /// fails to perform an operation.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum CoseCipherError<T> where T: Display {
@@ -234,7 +235,8 @@ pub enum AccessTokenError<T> where T: Display {
     /// Details are contained in this field.
     CoseCipherError(CoseCipherError<T>),
     /// Headers can't be extracted because the input data is neither a
-    /// [`CoseEncrypt0`], [`CoseSign1`], nor [`CoseMac0`].
+    /// [`CoseEncrypt0`](coset::CoseEncrypt0), [`CoseSign1`](coset::CoseSign1),
+    /// nor [`CoseMac0`](coset::CoseMac0).
     UnknownCoseStructure,
 }
 
