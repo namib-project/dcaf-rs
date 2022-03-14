@@ -303,64 +303,63 @@ mod conversion {
     }
 
     impl TryFrom<TextOrByteString> for String {
-        type Error = WrongSourceTypeError;
+        type Error = WrongSourceTypeError<TextOrByteString>;
 
         fn try_from(value: TextOrByteString) -> Result<Self, Self::Error> {
             if let TextOrByteString::TextString(s) = value {
                 Ok(s)
             } else {
-                Err(WrongSourceTypeError::new("TextOrByteString", "ByteString"))
+                Err(WrongSourceTypeError::new("TextString"))
             }
         }
     }
 
     impl TryFrom<TextOrByteString> for ByteString {
-        type Error = WrongSourceTypeError;
+        type Error = WrongSourceTypeError<TextOrByteString>;
 
         fn try_from(value: TextOrByteString) -> Result<Self, Self::Error> {
             if let TextOrByteString::ByteString(s) = value {
                 Ok(s)
             } else {
-                Err(WrongSourceTypeError::new("TextOrByteString", "ByteString"))
+                Err(WrongSourceTypeError::new("ByteString"))
             }
         }
     }
 
     impl TryFrom<ProofOfPossessionKey> for CoseKey {
-        type Error = WrongSourceTypeError;
+        type Error = WrongSourceTypeError<ProofOfPossessionKey>;
 
         fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
             if let ProofOfPossessionKey::PlainCoseKey(key) = value {
                 Ok(key)
             } else {
-                Err(WrongSourceTypeError::new("ProofOfPossessionKey", "CoseKey"))
+                Err(WrongSourceTypeError::new("PlainCoseKey"))
             }
         }
     }
 
     impl TryFrom<ProofOfPossessionKey> for CoseEncrypt0 {
-        type Error = WrongSourceTypeError;
+        type Error = WrongSourceTypeError<ProofOfPossessionKey>;
 
         fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
             if let ProofOfPossessionKey::EncryptedCoseKey(key) = value {
                 Ok(key)
             } else {
                 Err(WrongSourceTypeError::new(
-                    "ProofOfPossessionKey",
-                    "CoseEncrypt0",
+                    "EncryptedCoseKey",
                 ))
             }
         }
     }
 
     impl TryFrom<ProofOfPossessionKey> for KeyId {
-        type Error = WrongSourceTypeError;
+        type Error = WrongSourceTypeError<ProofOfPossessionKey>;
 
         fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
             if let ProofOfPossessionKey::KeyId(kid) = value {
                 Ok(kid)
             } else {
-                Err(WrongSourceTypeError::new("ProofOfPossessionKey", "KeyId"))
+                Err(WrongSourceTypeError::new("KeyId"))
             }
         }
     }

@@ -102,7 +102,7 @@ pub struct BinaryEncodedScope(ByteString);
 /// let binary_scope = Scope::from(BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice())?);
 /// # Ok(())
 /// # }
-/// # binary().map_err(|x| InvalidTextEncodedScopeError::Other(x.to_string()))?;
+/// # binary().map_err(|x| InvalidTextEncodedScopeError::Other("invalid binary encoding"))?;
 /// # Ok(())
 /// # }
 /// ```
@@ -310,25 +310,25 @@ mod conversion {
     }
 
     impl TryFrom<Scope> for BinaryEncodedScope {
-        type Error = WrongSourceTypeError;
+        type Error = WrongSourceTypeError<Scope>;
 
         fn try_from(value: Scope) -> Result<Self, Self::Error> {
             if let Scope::BinaryEncoded(scope) = value {
                 Ok(scope)
             } else {
-                Err(WrongSourceTypeError::new("Scope", "BinaryEncodedScope"))
+                Err(WrongSourceTypeError::new("BinaryEncoded"))
             }
         }
     }
 
     impl TryFrom<Scope> for TextEncodedScope {
-        type Error = WrongSourceTypeError;
+        type Error = WrongSourceTypeError<Scope>;
 
         fn try_from(value: Scope) -> Result<Self, Self::Error> {
             if let Scope::TextEncoded(scope) = value {
                 Ok(scope)
             } else {
-                Err(WrongSourceTypeError::new("Scope", "TextEncodedScope"))
+                Err(WrongSourceTypeError::new("TextEncoded"))
             }
         }
     }

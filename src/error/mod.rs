@@ -1,44 +1,43 @@
 //! Contains common error types used across this crate.
 
 use core::fmt::{Display, Formatter};
+use core::any::type_name;
+use std::marker::PhantomData;
 
 use coset::{CoseError, Label};
 
 // TODO: Check which errors need to be public
 
-/// Error type used when the parameter of the [`given_type`] couldn't be converted into [`expected_type`].
+/// Error type used when the parameter of the type `T` couldn't be converted into `expected_type`.
 ///
+/// `T` is the general type taken in the [`TryFrom`] conversion.
 /// Used for [`TryFrom`] conversions from a general enum type to a specific member type.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub struct WrongSourceTypeError {
-    /// The general type taken in the [`TryFrom`] conversion.
-    given_type: String,
-
-    /// The specific type which [`TryFrom`] tried to convert to.
-    expected_type: String,
+pub struct WrongSourceTypeError<T> {
+    /// The name of the specific type which [`TryFrom`] tried to convert to.
+    expected_type: &'static str,
+    general_type: PhantomData<T>,
 }
 
-impl Display for WrongSourceTypeError {
+impl<T> Display for WrongSourceTypeError<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "the given {} is not a {}",
-            self.given_type, self.expected_type
+            "the given {} is not a {} variant",
+            type_name::<T>(), self.expected_type
         )
     }
 }
 
-impl WrongSourceTypeError {
+impl<T> WrongSourceTypeError<T> {
     /// Creates a new instance of the error, taking the `given_type` as the general type from which
     /// the conversion was tried and the `expected_type` as the target type which it was tried to
     /// convert it into, but failed.
-    pub fn new<T>(given_type: T, expected_type: T) -> WrongSourceTypeError
-        where
-            T: Into<String>,
+    pub fn new(expected_type: &'static str) -> WrongSourceTypeError<T>
     {
         WrongSourceTypeError {
-            given_type: given_type.into(),
-            expected_type: expected_type.into(),
+            expected_type,
+            general_type: PhantomData,
         }
     }
 }
@@ -48,7 +47,7 @@ impl WrongSourceTypeError {
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct TryFromCborMapError {
     /// Error message describing why the conversion failed.
-    message: String,
+    message: String
 }
 
 impl Display for TryFromCborMapError {
@@ -112,7 +111,7 @@ pub enum InvalidTextEncodedScopeError {
     /// The scope contains illegal characters (i.e. a backslash (`\\`) or double-quote (`"`)).
     IllegalCharacters,
     /// The scope is invalid for another reason, which is specified in the message contained here.
-    Other(String),
+    Other(&'static str),
 }
 
 impl Display for InvalidTextEncodedScopeError {
@@ -177,7 +176,7 @@ pub enum CoseCipherError<T> where T: Display {
     /// A header which the cipher is supposed to set has already been set.
     HeaderAlreadySet {
         /// The name of the header which has already been set.
-        existing_header_name: String,
+        existing_header_name: String
     },
     /// The given signature or MAC tag is either invalid or does not match the given data.
     VerificationFailure,
@@ -190,16 +189,16 @@ impl<T> CoseCipherError<T> where T: Display {
         let existing_header_name;
         match label {
             Label::Int(i) => existing_header_name = i.to_string(),
-            Label::Text(s) => existing_header_name = s.to_string(),
+            Label::Text(s) => existing_header_name = s.to_string()
         }
         CoseCipherError::HeaderAlreadySet {
-            existing_header_name,
+            existing_header_name
         }
     }
 
-    pub fn existing_header(name: &str) -> CoseCipherError<T> {
+    pub fn existing_header<S>(name: S) -> CoseCipherError<T> where S: Into<String> {
         CoseCipherError::HeaderAlreadySet {
-            existing_header_name: name.to_string(),
+            existing_header_name: name.into(),
         }
     }
 
@@ -270,7 +269,7 @@ mod std_error {
 
     use super::*;
 
-    impl Error for WrongSourceTypeError {}
+    impl<T> Error for WrongSourceTypeError<T> where T: Debug {}
 
     impl Error for TryFromCborMapError {}
 

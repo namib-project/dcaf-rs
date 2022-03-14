@@ -60,7 +60,7 @@ pub(crate) fn expect_ser_de<T>(
     }
 }
 
-/// Used to implement a basic [`CipherProvider`] for tests.
+/// Used to implement a basic [`CipherProvider`] for tests (obviously not secure in any way).
 #[derive(Copy, Clone)]
 pub(crate) struct FakeCrypto {}
 

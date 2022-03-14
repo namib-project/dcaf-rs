@@ -24,6 +24,7 @@ pub use token::{
     CoseEncrypt0Cipher, CoseSign1Cipher, CoseMac0Cipher,
 };
 
+/// Contains common data types used across the crate.
 pub mod common;
 pub mod endpoints;
 pub mod error;
