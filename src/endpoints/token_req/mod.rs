@@ -120,7 +120,7 @@ pub struct AccessTokenResponse {
 
     /// The refresh token, which can be used to obtain new access tokens using the same
     /// authorization grant as described in section 6 of
-    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html)
+    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
     #[builder(default)]
     pub refresh_token: Option<ByteString>,
 

@@ -1,3 +1,21 @@
+//! Contains various helper values for CBOR structures.
+//!
+//! For example, this contains a struct representing a [`ByteString`] and an enum representing
+//! a [`ProofOfPossessionKey`].
+//!
+//! # Example
+//! One of the main use cases of both the [`ByteString`] and the [`ProofOfPossessionKey`]
+//! is for representing an access token and a key in the `cnf` claim, respectively:
+//! ```
+//! # use dcaf::AccessTokenResponse;
+//! # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
+//! # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
+//! let response: AccessTokenResponse = AccessTokenResponse::builder()
+//!     .access_token(ByteString::from(vec![0xDC, 0xAF, 0xDC, 0xAF]))
+//!     .cnf(ProofOfPossessionKey::KeyId(ByteString::from(vec![0x42]))).build()?;
+//! # Ok::<(), AccessTokenResponseBuilderError>(())
+//! ```
+
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::{Debug, Display, Formatter};
@@ -22,6 +40,18 @@ pub(crate) type KeyId = ByteString;
 /// # use dcaf::common::cbor_values::ByteString;
 /// let bs = ByteString::from(vec![0xDC, 0x00, 0xAF]);
 /// assert_eq!(bs.to_vec(), vec![0xDC, 0x00, 0xAF]);
+/// ```
+/// ByteStrings are used in various places, but one of its main usages in `dcaf-rs` is that it
+/// represents an encoded access token:
+/// ```
+/// # use dcaf::AccessTokenResponse;
+/// # use dcaf::common::cbor_values::ByteString;
+/// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
+/// // This is just an example, the token is obviously not well-formed.
+/// let encoded_token = ByteString::from("example".as_bytes());
+/// let response: AccessTokenResponse = AccessTokenResponse::builder()
+///     .access_token(encoded_token).build()?;
+/// # Ok::<(), AccessTokenResponseBuilderError>(())
 /// ```
 #[derive(Debug, Deserialize, PartialEq, Eq, Default, Hash, Clone)]
 pub struct ByteString(pub(crate) ByteStringValue);
@@ -200,9 +230,9 @@ mod conversion {
         }
     }
 
-    impl From<ByteStringValue> for ByteString {
-        fn from(x: ByteStringValue) -> Self {
-            ByteString(x)
+    impl<T> From<T> for ByteString where T: Into<ByteStringValue> {
+        fn from(x: T) -> Self {
+            ByteString(x.into())
         }
     }
 
