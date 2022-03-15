@@ -11,27 +11,28 @@ use crate::Scope;
 #[cfg(test)]
 mod tests;
 
-/// This message is sent by an RS as a response to an Unauthorized Resource Request Message
+/// This is sent by an RS as a response to an Unauthorized Resource Request Message
 /// to help the sender of the Unauthorized Resource Request Message acquire a valid access token.
 ///
 /// For more information, see [section 5.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3).
-/// Use the [`AuthServerRequestCreationHintBuilder`] to create instances of this class.
+///
+/// Use the [`AuthServerRequestCreationHintBuilder`] (which you can access using the
+/// [`builder()`](AuthServerRequestCreationHint::builder) method) to create an instance of this struct.
 ///
 /// # Example
 /// Figure 3 of [`draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-3)
-/// gives us an example of a Request Creation Hint payload, given in CBOR diagnostic notation:
+/// gives us an example of a Request Creation Hint payload, given in CBOR diagnostic notation[^cbor]:
 /// ```text
 /// {
-//      "AS" : "coaps://as.example.com/token",
-//      "audience" : "coaps://rs.example.com"
-//      "scope" : "rTempC",
-//      "cnonce" : h'e0a156bb3f'
-//  }
+///     "AS" : "coaps://as.example.com/token",
+///     "audience" : "coaps://rs.example.com"
+///     "scope" : "rTempC",
+///     "cnonce" : h'e0a156bb3f'
+/// }
 /// ```
 ///
 /// This could be built and serialized as an [`AuthServerRequestCreationHint`] like so:
 /// ```
-/// # use std::error::Error;
 /// # use ciborium_io::{Read, Write};
 /// # use dcaf::{AsCborMap, AuthServerRequestCreationHint, Scope};
 /// # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
@@ -69,6 +70,9 @@ mod tests;
 /// #
 /// # Ok::<(), String>(())
 /// ```
+///
+/// [^cbor]: Note that abbreviations aren't used here, so keep in mind that the labels are really
+/// integers instead of strings.
 #[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Builder)]
 #[builder(
 no_std,

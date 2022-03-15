@@ -15,8 +15,8 @@ pub use common::cbor_map::AsCborMap;
 pub use endpoints::creation_hint::{AuthServerRequestCreationHint};
 #[doc(inline)]
 pub use endpoints::token_req::{
-    AccessTokenRequest, AccessTokenResponse, AceProfile, ErrorCode, ErrorResponse, GrantType,
-    TokenType,
+    AccessTokenRequest, AccessTokenResponse, ErrorResponse,
+    AceProfile, ErrorCode, GrantType, TokenType,
 };
 #[doc(inline)]
 pub use token::{

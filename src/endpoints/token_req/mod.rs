@@ -1,4 +1,9 @@
-//! Contains the data models for structures related to access token requests and responses.
+//! Contains the data models for structures related to access token requests and responses,
+//! as described in [`draft-ietf-ace-oauth-authz-46`, section 5.8](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8).
+//!
+//! The most important members of this module are [`AccessTokenRequest`], [`AccessTokenResponse`],
+//! and [`ErrorResponse`]. Look at their documentation for usage examples.
+//! Other members are mainly used as part of the aforementioned structures.
 
 use alloc::string::String;
 use crate::common::cbor_values::{ByteString, ProofOfPossessionKey};
@@ -9,16 +14,122 @@ mod tests;
 
 /// Type of the resource owner's authorization used by the client to obtain an access token.
 /// For more information, see [section 1.3 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+///
+/// Grant types are used in the [`AccessTokenRequest`].
+///
+/// # Example
+/// For example, if you wish to indicate in your request that the resource owner's authorization
+/// works via client credentials:
+/// ```
+/// # use dcaf::{AccessTokenRequest, GrantType};
+/// # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
+/// let request = AccessTokenRequest::builder()
+///     .client_id("test_client")
+///     .grant_type(GrantType::ClientCredentials)
+///     .build()?;
+/// # Ok::<(), AccessTokenRequestBuilderError>(())
+/// ```
+/// It's also possible to use your own value for a custom grant type, as defined in
+/// [section 8.5 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.5):
+/// ```
+/// # use dcaf::{AccessTokenRequest, GrantType};
+/// # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
+/// let request = AccessTokenRequest::builder()
+///     .client_id("test_client")
+///     // values below -65536 marked for private use.
+///     .grant_type(GrantType::Other(-99999))
+///     .build()?;
+/// # Ok::<(), AccessTokenRequestBuilderError>(())
+/// ```
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum GrantType {
+    /// Grant type intended for clients capable of obtaining the
+    /// resource owner's credentials.
+    ///
+    /// Note that the authorization server should take special care when
+    /// enabling this grant type and only allow it when other flows are not viable.
+    ///
+    /// See [section 4.3 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-4.3)
+    /// for details.
     Password,
+
+    /// Redirection-based flow optimized for confidential clients.
+    ///
+    /// See [section 4.1 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-4.1)
+    /// for details.
     AuthorizationCode,
+
+    /// Used when the client authenticates with the authorization server in an unspecified way.
+    ///
+    /// Must only be used for confidential clients.
+    ///
+    /// See [section 4.4 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-4.4)
+    /// for details.
     ClientCredentials,
+
+    /// Used for refreshing an existing access token.
+    ///
+    /// When using this, it's necessary that [`refresh_token`](AccessTokenResponse::refresh_token)
+    /// is specified in the [`AccessTokenResponse`].
+    ///
+    /// See [section 6 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-6)
+    /// for details.
     RefreshToken,
+
+    /// Another authorization grant not listed here.
+    ///
+    /// See [section 8.5 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.5)
+    /// for corresponding IANA registries.
     Other(i32),
 }
 
-/// Request for an access token, sent from the client.
+/// Request for an access token, sent from the client, as defined in [section 5.8.1 of
+/// `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1).
+///
+/// Use the [`AccessTokenRequestBuilder`] (which you can access using the
+/// [`AccessTokenRequest::builder()`] method) to create an instance of this struct.
+///
+/// # Example
+/// Figure 5 of [`draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-5)
+/// gives us an example of an access token request, given in CBOR diagnostic notation[^cbor]:
+/// ```text
+/// {
+///     "client_id" : "myclient",
+///     "audience" : "tempSensor4711"
+/// }
+/// ```
+///
+/// This could be built and serialized as an [`AccessTokenRequest`] like so:
+/// ```
+/// # use ciborium_io::{Read, Write};
+/// # use dcaf::{AsCborMap, AccessTokenRequest, Scope};
+/// # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
+/// # use dcaf::error::InvalidTextEncodedScopeError;
+/// # fn request_gen() -> Result<AccessTokenRequest, AccessTokenRequestBuilderError> {
+/// let request: AccessTokenRequest = AccessTokenRequest::builder()
+///    .client_id("myclient")
+///    .audience("tempSensor4711")
+///    .build()?;
+/// # Ok(request)
+/// }
+/// # fn serialize(request: AccessTokenRequest) -> Result<Vec<u8>, ciborium::ser::Error<<Vec<u8> as Write>::Error>> {
+/// let mut serialized = Vec::new();
+/// request.serialize_into(&mut serialized)?;
+/// # Ok(serialized)
+/// # }
+/// # fn deserialize(serialized: &Vec<u8>, request: AccessTokenRequest) -> Result<(), ciborium::de::Error<<&[u8] as Read>::Error>> {
+/// assert_eq!(AccessTokenRequest::deserialize_from(serialized.as_slice())?, request);
+/// # Ok(())
+/// # }
+/// # let request = request_gen().map_err(|x| x.to_string())?;
+/// # let serialized = serialize(request.clone()).map_err(|x| x.to_string())?;
+/// # deserialize(&serialized, request).map_err(|x| x.to_string())?;
+/// #
+/// # Ok::<(), String>(())
+/// ```
+///
+/// [^cbor]: Note that abbreviations aren't used here, so keep in mind that the labels are really
+/// integers instead of strings.
 #[derive(Debug, Default, PartialEq, Clone, Builder)]
 #[builder(
 no_std,
@@ -27,7 +138,11 @@ derive(Debug, PartialEq),
 build_fn(validate = "Self::validate")
 )]
 pub struct AccessTokenRequest {
-    /// Grant type used for this request. Defaults to `client_credentials`.
+    /// Grant type used for this request.
+    ///
+    /// Defaults to [`GrantType::ClientCredentials`].
+    ///
+    /// See also the documentation of [`GrantType`] for details.
     #[builder(default)]
     pub grant_type: Option<GrantType>,
 
@@ -45,6 +160,8 @@ pub struct AccessTokenRequest {
 
     /// Scope of the access request as described by section 3.3 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+    ///
+    /// See also the documentation of [`Scope`] for details.
     #[builder(default)]
     pub scope: Option<Scope>,
 
@@ -55,30 +172,104 @@ pub struct AccessTokenRequest {
 
     /// Contains information about the key the client would like to bind to the
     /// access token for proof-of-possession.
+    ///
+    /// See also the documentation of [`ProofOfPossessionKey`] for details.
     #[builder(default)]
     pub req_cnf: Option<ProofOfPossessionKey>,
 
     /// The client identifier as described in section 2.2 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+    ///
+    /// Must be included.
     pub client_id: String,
 }
 
 /// The type of the token issued as described in section 7.1 of
 /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1).
+///
+/// Token types are used in the [`AccessTokenResponse`].
+///
+/// # Example
+/// For example, if you wish to indicate in your response that the token is of the
+/// proof-of-possession type:
+/// ```
+/// # use dcaf::{AccessTokenResponse, GrantType, TokenType};
+/// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
+/// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
+/// use dcaf::TokenType::ProofOfPossession;
+/// let request = AccessTokenResponse::builder()
+///     .access_token(vec![1,2,3,4])
+///     .token_type(TokenType::ProofOfPossession)
+///     .cnf(ProofOfPossessionKey::KeyId(ByteString::from(vec![0xDC, 0xAF])))
+///     .build()?;
+/// # Ok::<(), AccessTokenResponseBuilderError>(())
+/// ```
+/// It's also possible to use your own value for a custom token type, as defined in
+/// [section 8.7 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.7):
+/// ```
+/// # use dcaf::{AccessTokenResponse, GrantType, TokenType};
+/// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
+/// let request = AccessTokenResponse::builder()
+///     .access_token(vec![1,2,3,4])
+///     // values below -65536 marked for private use.
+///     .token_type(TokenType::Other(-99999))
+///     .build()?;
+/// # Ok::<(), AccessTokenResponseBuilderError>(())
+/// ```
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum TokenType {
     /// Bearer token type as defined in [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750).
     Bearer,
 
     /// Proof-of-possession token type, as specified in
-    /// [`draft-ietf-ace-oauth-params-16`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-params-16.txt).
+    /// [`draft-ietf-ace-oauth-params-16`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-params-16.html).
     ProofOfPossession,
 
     /// An unspecified token type along with its representation in CBOR.
+    ///
+    /// See [section 8.7 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.7)
+    /// for details.
     Other(i32),
 }
 
-/// Profiles for ACE-OAuth as specified in section 5.8.4.3 of `draft-ietf-ace-oauth-authz`.
+/// Profiles for ACE-OAuth as specified in [section 5.8.4.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.4.3).
+///
+/// ACE-OAuth profiles are used in the [`AccessTokenResponse`] if the client previously sent
+/// an [`AccessTokenRequest`] with the `ace_profile` field set.
+///
+/// There are (to my awareness) at the moment two profiles for ACE-OAuth:
+/// - The DTLS profile, specified in [`draft-ietf-ace-dtls-authorize`](https://www.ietf.org/archive/id/draft-ietf-ace-dtls-authorize-18.html).
+/// - The OSCORE profile, defined in [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.html).
+///   - Note that this is an expired Internet-Draft which does not have a specified CBOR
+///     representation yet. Hence, this is not offered as an option in this enum.
+///     If you wish to use it anyway, you need to specify a user-defined CBOR integer for it
+///     using the [`Other`](AceProfile::Other) variant.
+///
+/// # Example
+/// For example, if you wish to indicate in your response that the DTLS profile is used:
+/// ```
+/// # use dcaf::{AccessTokenResponse, AceProfile};
+/// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
+/// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
+/// use dcaf::TokenType::ProofOfPossession;
+/// let request = AccessTokenResponse::builder()
+///     .access_token(vec![1,2,3,4])
+///     .ace_profile(AceProfile::CoapDtls)
+///     .build()?;
+/// # Ok::<(), AccessTokenResponseBuilderError>(())
+/// ```
+/// It's also possible to use your own value for a custom profile, as defined in
+/// [section 8.8 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.8):
+/// ```
+/// # use dcaf::{AccessTokenResponse, AceProfile};
+/// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
+/// let request = AccessTokenResponse::builder()
+///     .access_token(vec![1,2,3,4])
+///     // values below -65536 marked for private use.
+///     .ace_profile(AceProfile::Other(-99999))
+///     .build()?;
+/// # Ok::<(), AccessTokenResponseBuilderError>(())
+/// ```
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum AceProfile {
     /// Profile for ACE-OAuth using Datagram Transport Layer Security, specified in
@@ -87,13 +278,87 @@ pub enum AceProfile {
 
     // The below is commented out because no CBOR value has been specified yet for this profile.
     // /// Profile for ACE-OAuth using OSCORE, specified in
-    // /// [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.txt).
+    // /// [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.html).
     // CoapOscore,
+
     /// An unspecified ACE-OAuth profile along with its representation in CBOR.
+    ///
+    /// See [section 8.8 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.8)
+    /// for details.
     Other(i32),
 }
 
-/// Response to an AccessTokenRequest containing the Access Information.
+/// Response to an [`AccessTokenRequest`] containing the Access Token among additional information,
+/// as defined in [section 5.8.2 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.2).
+///
+/// Use the [`AccessTokenResponseBuilder`] (which you can access using the
+/// [`AccessTokenResponse::builder()`] method) to create an instance of this struct.
+///
+/// # Example
+/// Figure 9 of [`draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-9)
+/// gives us an example of an access token response, given in CBOR diagnostic notation[^cbor]:
+/// ```text
+/// {
+///   "access_token" : b64'SlAV32hkKG ...
+///    (remainder of CWT omitted for brevity;
+///    CWT contains COSE_Key in the "cnf" claim)',
+///   "ace_profile" : "coap_dtls",
+///   "expires_in" : "3600",
+///   "cnf" : {
+///     "COSE_Key" : {
+///       "kty" : "Symmetric",
+///       "kid" : b64'39Gqlw',
+///       "k" : b64'hJtXhkV8FJG+Onbc6mxCcQh'
+///     }
+///   }
+/// }
+/// ```
+///
+/// This could be built and serialized as an [`AccessTokenResponse`] like so:
+/// ```
+/// # use ciborium_io::{Read, Write};
+/// use coset::CoseKeyBuilder;
+/// # use dcaf::{AsCborMap, AccessTokenResponse, AceProfile};
+/// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
+/// # fn response_gen() -> Result<AccessTokenResponse, AccessTokenResponseBuilderError> {
+/// let key = CoseKeyBuilder::new_symmetric_key(
+///    // Omitted for brevity.
+/// #   vec![ 0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c,
+/// #         0x42, 0x71, 0x08]
+/// ).key_id(vec![0xDF, 0xD1, 0xAA, 0x97]).build();
+/// let expires_in: u32 = 3600;  // this needs to be done so Rust doesn't think of it as an i32
+/// let response: AccessTokenResponse = AccessTokenResponse::builder()
+///    .access_token(
+///       // Omitted for brevity, this is a CWT whose `cnf` claim contains
+///       // the COSE_Key used in the `cnf` field from this `AccessTokenResponse`.
+/// # // TODO: Actually have it be that.
+/// # vec![0xDC, 0xAF]
+///    )
+///    .ace_profile(AceProfile::CoapDtls)
+///    .expires_in(expires_in)
+///    .cnf(key)
+///    .build()?;
+/// # Ok(response)
+/// }
+/// # fn serialize(response: AccessTokenResponse) -> Result<Vec<u8>, ciborium::ser::Error<<Vec<u8> as Write>::Error>> {
+/// let mut serialized = Vec::new();
+/// response.serialize_into(&mut serialized)?;
+/// # Ok(serialized)
+/// # }
+/// # fn deserialize(serialized: &Vec<u8>, response: AccessTokenResponse) -> Result<(), ciborium::de::Error<<&[u8] as Read>::Error>> {
+/// assert_eq!(AccessTokenResponse::deserialize_from(serialized.as_slice())?, response);
+/// # Ok(())
+/// # }
+/// # let response = response_gen().map_err(|x| x.to_string())?;
+/// # let serialized = serialize(response.clone()).map_err(|x| x.to_string())?;
+/// # deserialize(&serialized, response).map_err(|x| x.to_string())?;
+/// #
+/// # Ok::<(), String>(())
+/// ```
+///
+/// [^cbor]: Note that abbreviations aren't used here, so keep in mind that the labels are really
+/// integers instead of strings.
+///
 #[derive(Debug, PartialEq, Default, Clone, Builder)]
 #[builder(
 no_std,
@@ -103,6 +368,8 @@ build_fn(validate = "Self::validate")
 )]
 pub struct AccessTokenResponse {
     /// The access token issued by the authorization server.
+    ///
+    /// Must be included.
     pub access_token: ByteString,
 
     /// The lifetime in seconds of the access token.
@@ -111,35 +378,71 @@ pub struct AccessTokenResponse {
 
     /// The scope of the access token as described by
     /// section 3.3 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-3.3).
+    ///
+    /// See the documentation of [`Scope`] for details.
     #[builder(default)]
     pub scope: Option<Scope>,
 
-    /// The type of the token issued as described in section 7.1 of
-    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1) and section 5.8.4.2
-    /// of `draft-ietf-ace-oauth-authz-46`.
+    /// The type of the token issued as described in [section 7.1 of
+    /// RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1) and [section 5.8.4.2
+    /// of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-5.8.4.2).
+    ///
+    /// See the documentation of [`TokenType`] for details.
     #[builder(default)]
     pub token_type: Option<TokenType>,
 
     /// The refresh token, which can be used to obtain new access tokens using the same
-    /// authorization grant as described in section 6 of
-    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+    /// authorization grant as described in [section 6 of
+    /// RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-6).
     #[builder(default)]
     pub refresh_token: Option<ByteString>,
 
     /// This indicates the profile that the client must use towards the RS.
+    ///
+    /// See the documentation of [`AceProfile`] for details.
     #[builder(default)]
     pub ace_profile: Option<AceProfile>,
 
     /// The proof-of-possession key that the AS selected for the token.
+    ///
+    /// See the documentation of [`ProofOfPossessionKey`] for details.
     #[builder(default)]
     pub cnf: Option<ProofOfPossessionKey>,
 
     /// Information about the public key used by the RS to authenticate.
+    ///
+    /// See the documentation of [`ProofOfPossessionKey`] for details.
     #[builder(default)]
     pub rs_cnf: Option<ProofOfPossessionKey>,
 }
 
-/// Error code specifying what went wrong for a token request.
+/// Error code specifying what went wrong for a token request, as specified in
+/// [section 5.2 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-5.2) and
+/// [section 5.8.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.3).
+///
+/// An error code is used in the [`ErrorResponse`].
+///
+/// # Example
+/// For example, if you wish to indicate in your error response that the client is not authorized:
+/// ```
+/// # use dcaf::{ErrorResponse, AceProfile, ErrorCode};
+/// # use dcaf::endpoints::token_req::ErrorResponseBuilderError;
+/// let request = ErrorResponse::builder()
+///     .error(ErrorCode::UnauthorizedClient)
+///     .build()?;
+/// # Ok::<(), ErrorResponseBuilderError>(())
+/// ```
+/// It's also possible to use your own value for a custom error code, as defined in
+/// [section 8.4 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.4):
+/// ```
+/// # use dcaf::{ErrorResponse, AceProfile, ErrorCode};
+/// # use dcaf::endpoints::token_req::ErrorResponseBuilderError;
+/// let request = ErrorResponse::builder()
+///     // Values less than 65536 marked as private use.
+///     .error(ErrorCode::Other(-99999))
+///     .build()?;
+/// # Ok::<(), ErrorResponseBuilderError>(())
+/// ```
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum ErrorCode {
     /// The request is missing a required parameter, includes an unsupported parameter value (other
@@ -172,10 +475,57 @@ pub enum ErrorCode {
     IncompatibleAceProfiles,
 
     /// An unspecified error code along with its representation in CBOR.
+    ///
+    /// See [section 8.4 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.4)
+    /// for details.
     Other(i32),
 }
 
 /// Details about an error which occurred for an access token request.
+///
+/// For more information, see [section 5.8.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.3).
+///
+/// Use the [`ErrorResponseBuilder`] (which you can access using the
+/// [`ErrorResponse::builder()`] method) to create an instance of this struct.
+///
+/// # Example
+/// For example, let us use the example from [section 5.2 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-5.2):
+/// ```text
+/// {
+///       "error":"invalid_request"
+/// }
+///
+/// ```
+/// Creating and serializing a simple error response telling the client their request was invalid
+/// would look like the following:
+/// ```
+/// # use ciborium_io::{Read, Write};
+/// # use dcaf::{AsCborMap, ErrorCode, ErrorResponse};
+/// # use dcaf::endpoints::token_req::ErrorResponseBuilderError;
+/// # fn error_gen() -> Result<ErrorResponse, ErrorResponseBuilderError> {
+/// let error: ErrorResponse = ErrorResponse::builder()
+///     .error(ErrorCode::InvalidRequest)
+///     .build()?;
+/// # Ok(error)
+/// }
+/// # fn serialize(error: ErrorResponse) -> Result<Vec<u8>, ciborium::ser::Error<<Vec<u8> as Write>::Error>> {
+/// let mut serialized = Vec::new();
+/// error.serialize_into(&mut serialized)?;
+/// # Ok(serialized)
+/// # }
+/// # fn deserialize(serialized: &Vec<u8>, error: ErrorResponse) -> Result<(), ciborium::de::Error<<&[u8] as Read>::Error>> {
+/// assert_eq!(ErrorResponse::deserialize_from(serialized.as_slice())?, error);
+/// # Ok(())
+/// # }
+/// # let error = error_gen().map_err(|x| x.to_string())?;
+/// # let serialized = serialize(error.clone()).map_err(|x| x.to_string())?;
+/// # deserialize(&serialized, error).map_err(|x| x.to_string())?;
+/// #
+/// # Ok::<(), String>(())
+/// ```
+///
+/// [^cbor]: Note that abbreviations aren't used here, so keep in mind that the labels are really
+/// integers instead of strings.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Builder)]
 #[builder(
 no_std,
@@ -185,6 +535,10 @@ build_fn(validate = "Self::validate")
 )]
 pub struct ErrorResponse {
     /// Error code for this error.
+    ///
+    /// Must be included.
+    ///
+    /// See the documentation of [`ErrorCode`] for details.
     pub error: ErrorCode,
 
     /// Human-readable ASCII text providing additional information, used to assist the
@@ -199,7 +553,7 @@ pub struct ErrorResponse {
 }
 
 impl AccessTokenRequest {
-    /// Returns a new builder for this struct.
+    /// Initializes and returns a new [`AccessTokenRequestBuilder`].
     pub fn builder() -> AccessTokenRequestBuilder {
         AccessTokenRequestBuilder::default()
     }
@@ -221,6 +575,7 @@ impl AccessTokenRequestBuilder {
 }
 
 impl AccessTokenResponse {
+    /// Initializes and returns a new [`AccessTokenResponseBuilder`].
     pub fn builder() -> AccessTokenResponseBuilder {
         AccessTokenResponseBuilder::default()
     }
@@ -234,6 +589,7 @@ impl AccessTokenResponseBuilder {
 }
 
 impl ErrorResponse {
+    /// Initializes and returns a new [`ErrorResponseBuilder`].
     pub fn builder() -> ErrorResponseBuilder {
         ErrorResponseBuilder::default()
     }
