@@ -110,8 +110,8 @@ impl ProofOfPossessionKey {
     ///
     /// # Example
     /// ```
-    /// use coset::CoseKeyBuilder;
-    /// use dcaf::common::cbor_values::ProofOfPossessionKey;
+    /// # use coset::CoseKeyBuilder;
+    /// # use dcaf::common::cbor_values::ProofOfPossessionKey;
     /// let key = CoseKeyBuilder::new_symmetric_key(vec![0; 5]).key_id(vec![0xDC, 0xAF]).build();
     /// let pop_key = ProofOfPossessionKey::from(key);
     /// assert_eq!(pop_key.key_id().to_vec(), vec![0xDC, 0xAF]);

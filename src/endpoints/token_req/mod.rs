@@ -196,7 +196,7 @@ pub struct AccessTokenRequest {
 /// # use dcaf::{AccessTokenResponse, GrantType, TokenType};
 /// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
 /// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
-/// use dcaf::TokenType::ProofOfPossession;
+/// # use dcaf::TokenType::ProofOfPossession;
 /// let request = AccessTokenResponse::builder()
 ///     .access_token(vec![1,2,3,4])
 ///     .token_type(TokenType::ProofOfPossession)
@@ -251,7 +251,7 @@ pub enum TokenType {
 /// # use dcaf::{AccessTokenResponse, AceProfile};
 /// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
 /// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
-/// use dcaf::TokenType::ProofOfPossession;
+/// # use dcaf::TokenType::ProofOfPossession;
 /// let request = AccessTokenResponse::builder()
 ///     .access_token(vec![1,2,3,4])
 ///     .ace_profile(AceProfile::CoapDtls)
@@ -317,7 +317,7 @@ pub enum AceProfile {
 /// This could be built and serialized as an [`AccessTokenResponse`] like so:
 /// ```
 /// # use ciborium_io::{Read, Write};
-/// use coset::CoseKeyBuilder;
+/// # use coset::CoseKeyBuilder;
 /// # use dcaf::{AsCborMap, AccessTokenResponse, AceProfile};
 /// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
 /// # fn response_gen() -> Result<AccessTokenResponse, AccessTokenResponseBuilderError> {

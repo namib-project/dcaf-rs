@@ -93,6 +93,8 @@ pub struct AuthServerRequestCreationHint {
     pub audience: Option<String>,
 
     /// The suggested scope that the client should request towards the AS.
+    ///
+    /// See the documentation of [`Scope`] for details.
     pub scope: Option<Scope>,
 
     /// A client nonce as described in [section 5.3.1 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3.1).
