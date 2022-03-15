@@ -1,3 +1,5 @@
+//! Contains the data models for structures related to access token requests and responses.
+
 use alloc::string::String;
 use crate::common::cbor_values::{ByteString, ProofOfPossessionKey};
 use crate::Scope;

@@ -291,6 +291,13 @@ mod conversion {
         /// # Ok::<(), InvalidBinaryEncodedScopeError>(())
         /// ```
         ///
+        /// # Errors
+        /// - If the binary encoded scope separated by the given `separator` is invalid in any way.
+        ///   This may be the case if:
+        ///   - The scope starts with a separator
+        ///   - The scope ends with a separator
+        ///   - The scope contains two separators in a row.
+        ///
         /// # Panics
         /// If the pre-condition that the scope isn't empty is violated.
         /// This shouldn't occur, as it's an invariant of [BinaryEncodedScope].
@@ -347,7 +354,7 @@ mod conversion {
         type Error = InvalidTextEncodedScopeError;
 
         fn try_from(value: Vec<&str>) -> Result<Self, InvalidTextEncodedScopeError> {
-            value.try_into()
+            Ok(Scope::from(TextEncodedScope::try_from(value)?))
         }
     }
 
@@ -355,7 +362,7 @@ mod conversion {
         type Error = InvalidBinaryEncodedScopeError;
 
         fn try_from(value: &[u8]) -> Result<Self, InvalidBinaryEncodedScopeError> {
-            value.try_into()
+            Ok(Scope::from(BinaryEncodedScope::try_from(value)?))
         }
     }
 

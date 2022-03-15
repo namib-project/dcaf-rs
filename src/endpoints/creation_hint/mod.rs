@@ -1,3 +1,9 @@
+//! Contains the data model for
+//! [Authorization Server Request Creation Hints](self::AuthServerRequestCreationHint),
+//! as described in [`draft-ietf-ace-oauth-authz-46`, section 5.3](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#name-as-request-creation-hints).
+//!
+//! See the documentation of [`AuthServerRequestCreationHint`] for details and an example.
+
 use alloc::string::String;
 use crate::common::cbor_values::ByteString;
 use crate::Scope;
@@ -7,7 +13,62 @@ mod tests;
 
 /// This message is sent by an RS as a response to an Unauthorized Resource Request Message
 /// to help the sender of the Unauthorized Resource Request Message acquire a valid access token.
+///
 /// For more information, see [section 5.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3).
+/// Use the [`AuthServerRequestCreationHintBuilder`] to create instances of this class.
+///
+/// # Example
+/// Figure 3 of [`draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-3)
+/// gives us an example of a Request Creation Hint payload, given in CBOR diagnostic notation:
+/// ```text
+/// {
+//      "AS" : "coaps://as.example.com/token",
+//      "audience" : "coaps://rs.example.com"
+//      "scope" : "rTempC",
+//      "cnonce" : h'e0a156bb3f'
+//  }
+/// ```
+///
+/// This could be built and serialized as an [`AuthServerRequestCreationHint`] like so:
+/// ```
+/// # use std::error::Error;
+/// # use ciborium_io::{Read, Write};
+/// # use dcaf::{AsCborMap, AuthServerRequestCreationHint, Scope};
+/// # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
+/// # use dcaf::common::cbor_values::ByteString;
+/// # use dcaf::common::scope::TextEncodedScope;
+/// # use dcaf::error::InvalidTextEncodedScopeError;
+/// # fn scope_gen() -> Result<Scope, InvalidTextEncodedScopeError> {
+/// // Scope could be built from TextEncodedScope too,
+/// // which also offers to take a space-separated string.
+/// let scope = Scope::try_from(vec!["rTempC"])?;
+/// # Ok(scope)
+/// # }
+/// # fn hint_gen(scope: Scope) -> Result<AuthServerRequestCreationHint, AuthServerRequestCreationHintBuilderError> {
+/// let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder()
+///     .auth_server("coaps://as.example.com/token")
+///     .audience("coaps://rs.example.com")
+///     .scope(scope)
+///     .client_nonce(ByteString::from(vec![0xe0, 0xa1, 0x56, 0xbb, 0x3f]))
+///     .build()?;
+/// # Ok(hint)
+/// }
+/// # fn serialize(hint: AuthServerRequestCreationHint) -> Result<Vec<u8>, ciborium::ser::Error<<Vec<u8> as Write>::Error>> {
+/// let mut serialized = Vec::new();
+/// hint.serialize_into(&mut serialized)?;
+/// # Ok(serialized)
+/// # }
+/// # fn deserialize(serialized: &Vec<u8>, hint: AuthServerRequestCreationHint) -> Result<(), ciborium::de::Error<<&[u8] as Read>::Error>> {
+/// assert_eq!(AuthServerRequestCreationHint::deserialize_from(serialized.as_slice())?, hint);
+/// # Ok(())
+/// # }
+/// # let scope = scope_gen().map_err(|x| x.to_string())?;
+/// # let hint = hint_gen(scope).map_err(|x| x.to_string())?;
+/// # let serialized = serialize(hint.clone()).map_err(|x| x.to_string())?;
+/// # deserialize(&serialized, hint).map_err(|x| x.to_string())?;
+/// #
+/// # Ok::<(), String>(())
+/// ```
 #[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Builder)]
 #[builder(
 no_std,
