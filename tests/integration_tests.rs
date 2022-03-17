@@ -19,9 +19,7 @@ fn example_headers() -> (Header, Header) {
             0x63, 0x68, 0x98, 0x99, 0x4F, 0xF0, 0xEC, 0x7B, 0xFC, 0xF6, 0xD3, 0xF9, 0x5B,
         ])
         .build();
-    let protected_header = HeaderBuilder::new()
-        .algorithm(Algorithm::AES_CCM_16_64_128)
-        .build();
+    let protected_header = HeaderBuilder::new().build();
     (unprotected_header, protected_header)
 }
 
@@ -51,7 +49,7 @@ impl CoseCipherCommon for FakeCrypto {
         if let Some(label) = unprotected_header.rest.iter().find(|x| x.0 == Label::Int(47)) {
             return Err(CoseCipherError::existing_header_label(&label.0))
         }
-        if protected_header.alg == None {
+        if protected_header.alg != None {
             return Err(CoseCipherError::existing_header("alg"))
         }
         unprotected_header.rest.push((Label::Int(47), Value::Null));

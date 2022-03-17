@@ -181,6 +181,8 @@ pub enum CoseCipherError<T> where T: Display {
     },
     /// The given signature or MAC tag is either invalid or does not match the given data.
     VerificationFailure,
+    /// The given ciphertext could not be decrypted.
+    DecryptionFailure,
     /// A different error has occurred. Details are provided in the contained error.
     Other(T),
 }
@@ -218,6 +220,7 @@ impl<T> Display for CoseCipherError<T> where T: Display {
                 "cipher-defined header '{existing_header_name}' already set"
             ),
             CoseCipherError::VerificationFailure => write!(f, "data verification failed"),
+            CoseCipherError::DecryptionFailure => write!(f, "decryption failed"),
             CoseCipherError::Other(s) => write!(f, "{s}"),
         }
     }
