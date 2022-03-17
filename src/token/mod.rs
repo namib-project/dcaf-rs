@@ -106,7 +106,7 @@ fn prepare_headers<T>(
 pub fn encrypt_access_token<T>(
     claims: ClaimsSet,
     cipher: &mut T,
-    aad: &[u8],
+    aad: Option<&[u8]>,
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
@@ -120,7 +120,7 @@ pub fn encrypt_access_token<T>(
             .protected(protected)
             .create_ciphertext(
                 &claims.to_vec().map_err(AccessTokenError::from_cose_error)?[..],
-                aad,
+                aad.unwrap_or(&[0; 0]),
                 |payload, aad| cipher.encrypt(payload, aad),
             )
             .build()
@@ -141,7 +141,7 @@ pub fn encrypt_access_token<T>(
 pub fn sign_access_token<T>(
     claims: ClaimsSet,
     cipher: &mut T,
-    aad: &[u8],
+    aad: Option<&[u8]>,
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
@@ -154,7 +154,7 @@ pub fn sign_access_token<T>(
             .unprotected(unprotected)
             .protected(protected)
             .payload(claims.to_vec().map_err(AccessTokenError::from_cose_error)?)
-            .create_signature(aad, |x| cipher.generate_signature(x))
+            .create_signature(aad.unwrap_or(&[0; 0]), |x| cipher.generate_signature(x))
             .build()
             .to_vec()
             .map_err(AccessTokenError::from_cose_error)?,
@@ -189,7 +189,7 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
 ///   (e.g., if the `token`'s data does not match its signature).
 pub fn verify_access_token<T>(
     token: &ByteString,
-    aad: &[u8],
+    aad: Option<&[u8]>,
     verifier: &mut T,
 ) -> Result<(), AccessTokenError<T::Error>>
     where
@@ -197,7 +197,7 @@ pub fn verify_access_token<T>(
 {
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
     // TODO: Verify protected headers
-    sign.verify_signature(aad, |signature, signed_data| {
+    sign.verify_signature(aad.unwrap_or(&[0; 0]), |signature, signed_data| {
         verifier.verify_signature(signature, signed_data)
     })
         .map_err(AccessTokenError::from_cose_cipher_error)
@@ -215,7 +215,7 @@ pub fn verify_access_token<T>(
 ///   [`ClaimsSet`].
 pub fn decrypt_access_token<T>(
     token: &ByteString,
-    aad: &[u8],
+    aad: Option<&[u8]>,
     cipher: &mut T,
 ) -> Result<ClaimsSet, AccessTokenError<T::Error>>
     where
@@ -224,7 +224,9 @@ pub fn decrypt_access_token<T>(
     let encrypt =
         CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from_cose_error)?;
     let result = encrypt
-        .decrypt(aad, |ciphertext, aad| cipher.decrypt(ciphertext, aad))
+        .decrypt(aad.unwrap_or(&[0; 0]), |ciphertext, aad| {
+            cipher.decrypt(ciphertext, aad)
+        })
         .map_err(AccessTokenError::from_cose_cipher_error)?;
     ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from_cose_error)
 }
