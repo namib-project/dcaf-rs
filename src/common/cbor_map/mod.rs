@@ -208,16 +208,29 @@ pub trait AsCborMap: private::Sealed {
         where
             Self: Sized + AsCborMap;
 
-    // TODO: Document panics
     /// Converts this type to a CBOR serializable [`Value`] using [`as_cbor_map`].
-    ///
-    /// **NOTE: This is not intended for users of this crate!**
     ///
     /// # Panics
     /// - When the integers in the map from [`as_cbor_map`] are too high to fit into a
-    ///   `Value::Integer`.
+    ///   [`Value::Integer`].
     /// - When a CBOR map value can't be serialized.
-    #[doc(hidden)]
+    ///
+    /// Note that both of these would imply a programming mistake on account of `dcaf-rs`,
+    /// not its users.
+    ///
+    /// # Example
+    /// For example, to serialize a proof-of-possession key into a [`Value`] so we can then
+    /// represent it inside a [`ClaimsSet`](coset::cwt::ClaimsSet) (to use it in an access token):
+    /// ```
+    /// # use coset::cwt::ClaimsSetBuilder;
+    /// # use coset::iana::CwtClaimName;
+    /// # use dcaf::AsCborMap;
+    /// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
+    /// let key = ProofOfPossessionKey::KeyId(ByteString::from(vec![0xDC, 0xAF]));
+    /// let claims = ClaimsSetBuilder::new()
+    ///     .claim(CwtClaimName::Cnf, key.as_ciborium_value())
+    ///     .build();
+    /// ```
     fn as_ciborium_value(&self) -> Value {
         Value::Map(
             self.as_cbor_map()
