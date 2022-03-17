@@ -137,8 +137,8 @@ fn test_scenario() -> Result<(), String> {
             .claim(CwtClaimName::Cnf, PlainCoseKey(key).as_ciborium_value())
             .build(),
         // TODO: Proper headers
-        unprotected_headers, protected_headers,
         &mut crypto, aad.as_slice(),
+        Some(unprotected_headers), Some(protected_headers),
     ).map_err(|x| x.to_string())?;
     let response = AccessTokenResponse::builder()
         .access_token(token)

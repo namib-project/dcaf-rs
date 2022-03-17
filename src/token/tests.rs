@@ -161,10 +161,10 @@ fn test_encrypt_decrypt() -> Result<(), AccessTokenError<<FakeCrypto as CoseCiph
     let aad = example_aad();
     let encrypted = encrypt_access_token(
         claims.clone(),
-        unprotected_header.clone(),
-        protected_header.clone(),
         &mut crypto,
         &aad,
+        Some(unprotected_header.clone()),
+        Some(protected_header.clone()),
     )?;
     let (unprotected, protected) = get_token_headers(&encrypted).unwrap();
     assert_header_is_part_of(&unprotected_header, &unprotected);
@@ -183,10 +183,10 @@ fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError<<FakeCry
     let aad = example_aad();
     let encrypted = encrypt_access_token(
         claims.clone(),
-        unprotected_invalid,
-        protected_header,
         &mut crypto,
         &aad,
+        Some(unprotected_invalid),
+        Some(protected_header),
     );
     assert!(encrypted.is_err());
     assert!(encrypted.err().map_or(false, |x| {
@@ -202,10 +202,10 @@ fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError<<FakeCry
 
     let encrypted = encrypt_access_token(
         claims,
-        unprotected_header,
-        protected_invalid,
         &mut crypto,
         &aad,
+        Some(unprotected_header),
+        Some(protected_invalid),
     );
     assert!(encrypted.is_err());
     assert!(encrypted.err().map_or(false, |x| {
@@ -231,10 +231,10 @@ fn test_sign_verify() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCo
     let aad = example_aad();
     let signed = sign_access_token(
         claims,
-        unprotected_header.clone(),
-        protected_header.clone(),
         &mut signer,
         &aad,
+        Some(unprotected_header.clone()),
+        Some(protected_header.clone()),
     )?;
     let (unprotected, protected) = get_token_headers(&signed).ok_or(AccessTokenError::UnknownCoseStructure)?;
     assert_header_is_part_of(&unprotected_header, &unprotected);
