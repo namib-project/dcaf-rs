@@ -1,12 +1,10 @@
 //! Contains error types used across this crate.
 
-use core::fmt::{Display, Formatter};
 use core::any::type_name;
+use core::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 
 use coset::{CoseError, Label};
-
-// TODO: Check which errors need to be public
 
 /// Error type used when the parameter of the type `T` couldn't be converted into `expected_type`.
 ///
@@ -16,6 +14,7 @@ use coset::{CoseError, Label};
 pub struct WrongSourceTypeError<T> {
     /// The name of the specific type which [`TryFrom`] tried to convert to.
     expected_type: &'static str,
+    /// The general type taken in the [`TryFrom`] conversion.
     general_type: PhantomData<T>,
 }
 
@@ -24,17 +23,17 @@ impl<T> Display for WrongSourceTypeError<T> {
         write!(
             f,
             "the given {} is not a {} variant",
-            type_name::<T>(), self.expected_type
+            type_name::<T>(),
+            self.expected_type
         )
     }
 }
 
 impl<T> WrongSourceTypeError<T> {
-    /// Creates a new instance of the error, taking the `given_type` as the general type from which
+    /// Creates a new instance of the error, taking `T` as the general type from which
     /// the conversion was tried and the `expected_type` as the target type which it was tried to
     /// convert it into, but failed.
-    pub fn new(expected_type: &'static str) -> WrongSourceTypeError<T>
-    {
+    pub fn new(expected_type: &'static str) -> WrongSourceTypeError<T> {
         WrongSourceTypeError {
             expected_type,
             general_type: PhantomData,
@@ -44,10 +43,12 @@ impl<T> WrongSourceTypeError<T> {
 
 /// Error type used when a given CBOR map can't be converted to a specific type which implements
 /// the [`AsCborMap`](crate::AsCborMap) trait.
+///
+/// **Note: This error type is not expected to be used by library clients!**
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct TryFromCborMapError {
     /// Error message describing why the conversion failed.
-    message: String
+    message: String,
 }
 
 impl Display for TryFromCborMapError {
@@ -58,7 +59,7 @@ impl Display for TryFromCborMapError {
 
 impl TryFromCborMapError {
     /// Creates a new error with the given custom `message`.
-    pub fn from_message<T>(message: T) -> TryFromCborMapError
+    pub(crate) fn from_message<T>(message: T) -> TryFromCborMapError
         where
             T: Into<String>,
     {
@@ -69,7 +70,7 @@ impl TryFromCborMapError {
 
     /// Creates a new error with a message describing that an unknown field in
     /// the CBOR map with the given `key` was encountered.
-    pub fn unknown_field(key: u8) -> TryFromCborMapError {
+    pub(crate) fn unknown_field(key: u8) -> TryFromCborMapError {
         TryFromCborMapError {
             message: format!("unknown field with key {key} encountered"),
         }
@@ -77,7 +78,7 @@ impl TryFromCborMapError {
 
     /// Creates a new error with a message describing that a required field for
     /// the target type with the given `name` was missing from the CBOR map.
-    pub fn missing_field(name: &str) -> TryFromCborMapError {
+    pub(crate) fn missing_field(name: &str) -> TryFromCborMapError {
         TryFromCborMapError {
             message: format!("required field {name} is missing"),
         }
@@ -167,17 +168,20 @@ impl Display for InvalidBinaryEncodedScopeError {
     }
 }
 
-// TODO: Replace all instances of validation with verification
-
 /// Error type used when a [`CoseEncrypt0Cipher`](crate::CoseEncrypt0Cipher),
 /// [`CoseSign1Cipher`](crate::CoseSign1Cipher), or [`CoseMac0Cipher`](crate::CoseMac0Cipher).
 /// fails to perform an operation.
+///
+/// `T` is the type of the nested error represented by the [`Other`](CoseCipherError::Other) variant.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub enum CoseCipherError<T> where T: Display {
+pub enum CoseCipherError<T>
+    where
+        T: Display,
+{
     /// A header which the cipher is supposed to set has already been set.
     HeaderAlreadySet {
         /// The name of the header which has already been set.
-        existing_header_name: String
+        existing_header_name: String,
     },
     /// The given signature or MAC tag is either invalid or does not match the given data.
     VerificationFailure,
@@ -187,30 +191,48 @@ pub enum CoseCipherError<T> where T: Display {
     Other(T),
 }
 
-impl<T> CoseCipherError<T> where T: Display {
+impl<T> CoseCipherError<T>
+    where
+        T: Display,
+{
+    /// Creates a new [`CoseCipherError`] of type
+    /// [`HeaderAlreadySet`](CoseCipherError::HeaderAlreadySet) where the header
+    /// that was already set has the name of the given `label`.
     pub fn existing_header_label(label: &Label) -> CoseCipherError<T> {
         let existing_header_name;
         match label {
             Label::Int(i) => existing_header_name = i.to_string(),
-            Label::Text(s) => existing_header_name = s.to_string()
+            Label::Text(s) => existing_header_name = s.to_string(),
         }
         CoseCipherError::HeaderAlreadySet {
-            existing_header_name
+            existing_header_name,
         }
     }
 
-    pub fn existing_header<S>(name: S) -> CoseCipherError<T> where S: Into<String> {
+    /// Creates a new [`CoseCipherError`] of type
+    /// [`HeaderAlreadySet`](CoseCipherError::HeaderAlreadySet) where the header
+    /// that was already set has the given `name`.
+    pub fn existing_header<S>(name: S) -> CoseCipherError<T>
+        where
+            S: Into<String>,
+    {
         CoseCipherError::HeaderAlreadySet {
             existing_header_name: name.into(),
         }
     }
 
+    /// Creates a new [`CoseCipherError`] of type
+    /// [`Other`](CoseCipherError::Other) (i.e., an error type that doesn't fit any other
+    /// [`CoseCipherError`] variant) containing the given nested error `other`.
     pub fn other_error(other: T) -> CoseCipherError<T> {
         CoseCipherError::Other(other)
     }
 }
 
-impl<T> Display for CoseCipherError<T> where T: Display {
+impl<T> Display for CoseCipherError<T>
+    where
+        T: Display,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             CoseCipherError::HeaderAlreadySet {
@@ -227,15 +249,21 @@ impl<T> Display for CoseCipherError<T> where T: Display {
 }
 
 /// Error type used when an operation creating or receiving an access token failed.
+///
+/// `T` is the type of the nested error possibly contained by the
+/// [`CoseCipherError`](AccessTokenError::CoseCipherError) variant.
 #[derive(Debug)]
-pub enum AccessTokenError<T> where T: Display {
+pub enum AccessTokenError<T>
+    where
+        T: Display,
+{
     /// A COSE specific error occurred.
     ///
     /// Details are contained in this field using coset's [`CoseError`].
     CoseError(CoseError),
     /// A cryptographic CoseCipher operation has failed.
     ///
-    /// Details are contained in this field.
+    /// Details are contained in this field, represented by a [`CoseCipherError`].
     CoseCipherError(CoseCipherError<T>),
     /// Headers can't be extracted because the input data is neither a
     /// [`CoseEncrypt0`](coset::CoseEncrypt0), [`CoseSign1`](coset::CoseSign1),
@@ -243,7 +271,10 @@ pub enum AccessTokenError<T> where T: Display {
     UnknownCoseStructure,
 }
 
-impl<T> Display for AccessTokenError<T> where T: Display {
+impl<T> Display for AccessTokenError<T>
+    where
+        T: Display,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             AccessTokenError::CoseError(e) => write!(f, "{e}"),
@@ -256,12 +287,18 @@ impl<T> Display for AccessTokenError<T> where T: Display {
     }
 }
 
-impl<T> AccessTokenError<T> where T: Display {
-    /// Creates a new COSE error with the given `error`.
+impl<T> AccessTokenError<T>
+    where
+        T: Display,
+{
+    /// Creates a new [`AccessTokenError`] of variant [`CoseError`](AccessTokenError::CoseError)
+    /// with the given `error`.
     pub fn from_cose_error(error: CoseError) -> AccessTokenError<T> {
         AccessTokenError::CoseError(error)
     }
 
+    /// Creates a new [`AccessTokenError`] of variant
+    /// [`CoseCipherError`](AccessTokenError::CoseCipherError) with the given `error`.
     pub fn from_cose_cipher_error(error: CoseCipherError<T>) -> AccessTokenError<T> {
         AccessTokenError::CoseCipherError(error)
     }
@@ -276,8 +313,6 @@ mod std_error {
 
     impl<T> Error for WrongSourceTypeError<T> where T: Debug {}
 
-    impl Error for TryFromCborMapError {}
-
     impl Error for ValueIsNotIntegerError {}
 
     impl Error for InvalidTextEncodedScopeError {}
@@ -287,4 +322,6 @@ mod std_error {
     impl<T> Error for CoseCipherError<T> where T: Debug + Display {}
 
     impl<T> Error for AccessTokenError<T> where T: Debug + Display {}
+
+    impl Error for TryFromCborMapError {}
 }
