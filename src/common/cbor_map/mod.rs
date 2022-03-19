@@ -208,10 +208,10 @@ pub trait AsCborMap: private::Sealed {
         where
             Self: Sized + AsCborMap;
 
-    /// Converts this type to a CBOR serializable [`Value`] using [`as_cbor_map`].
+    /// Converts this type to a CBOR serializable [`Value`] using [`as_cbor_map`](AsCborMap::as_cbor_map).
     ///
     /// # Panics
-    /// - When the integers in the map from [`as_cbor_map`] are too high to fit into a
+    /// - When the integers in the map from [`as_cbor_map`](AsCborMap::as_cbor_map) are too high to fit into a
     ///   [`Value::Integer`].
     /// - When a CBOR map value can't be serialized.
     ///

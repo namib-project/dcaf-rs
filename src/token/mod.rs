@@ -151,7 +151,7 @@ pub trait CoseCipherCommon {
 /// This will be used by [`encrypt_access_token`] and [`decrypt_access_token`] to apply the
 /// corresponding cryptographic operations to the constructed token bytestring.
 /// Since [`CoseCipherCommon`] also needs to be implemented, the
-/// [`headers` method](CoseCipherCommon::headers) can be used to set parameters this cipher requires
+/// [`headers` method](CoseCipherCommon::header) can be used to set parameters this cipher requires
 /// to be set. If you need to operate on other fields in the token than just the claims,
 /// you can use the data type behind this trait for that.
 /// The methods provided in this trait accept `&mut self` in case the structure behind it needs to
@@ -228,7 +228,7 @@ pub trait CoseEncrypt0Cipher: CoseCipherCommon {
 /// This will be used by [`sign_access_token`] and [`verify_access_token`] to apply the
 /// corresponding cryptographic operations to the constructed token bytestring.
 /// Since [`CoseCipherCommon`] also needs to be implemented, the
-/// [`headers` method](CoseCipherCommon::headers) can be used to set parameters this cipher requires
+/// [`headers` method](CoseCipherCommon::header) can be used to set parameters this cipher requires
 /// to be set. If you need to operate on other fields in the token than just the claims,
 /// you can use the data type behind this trait for that.
 /// The methods provided in this trait accept `&mut self` in case the structure behind it needs to
@@ -373,8 +373,8 @@ where
 ///
 /// # Example
 /// For example, assuming we have a [`CoseEncrypt0Cipher`] in `cipher`,
-/// have a [`ProofOfPossessionKey`] in `key` and want to associate
-/// this key with the access token we are about to create and encrypt:
+/// have a [`ProofOfPossessionKey`](crate::common::cbor_values::ProofOfPossessionKey)
+/// in `key` and want to associate this key with the access token we are about to create and encrypt:
 /// ```
 /// # use coset::cwt::ClaimsSetBuilder;
 /// # use coset::Header;
@@ -459,8 +459,8 @@ where
 ///
 /// # Example
 /// For example, assuming we have a [`CoseEncrypt0Cipher`] in `cipher`,
-/// have a [`ProofOfPossessionKey`] in `key` and want to associate
-/// this key with the access token we are about to create and sign:
+/// have a [`ProofOfPossessionKey`](crate::common::cbor_values::ProofOfPossessionKey)
+/// in `key` and want to associate this key with the access token we are about to create and sign:
 /// ```
 /// # use coset::cwt::ClaimsSetBuilder;
 /// # use coset::Header;
