@@ -375,9 +375,6 @@ where
 /// Encrypts the given `claims` with the given headers and `aad` using `cipher` for cryptography,
 /// returning the token as a serialized bytestring of the [`CoseEncrypt0`] structure.
 ///
-/// If you need to encode additional fields other than `claims`, use the [`CoseEncrypt0Cipher`] given in
-/// `cipher` to store and encrypt them.
-///
 /// # Errors
 /// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
 /// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseEncrypt0`] structure.
@@ -461,15 +458,12 @@ where
 /// Signs the given `claims` with the given headers and `aad` using `cipher` for cryptography,
 /// returning the token as a serialized bytestring of the [`CoseSign1`] structure.
 ///
-/// If you need to encode additional fields other than `claims`, use the [`CoseSign1Cipher`] given
-/// in `cipher` to store and sign them.
-///
 /// # Errors
 /// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
 /// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseSign1`] structure.
 ///
 /// # Example
-/// For example, assuming we have a [`CoseEncrypt0Cipher`] in `cipher`,
+/// For example, assuming we have a [`CoseSign1Cipher`] in `cipher`,
 /// have a [`ProofOfPossessionKey`](crate::common::cbor_values::ProofOfPossessionKey)
 /// in `key` and want to associate this key with the access token we are about to create and sign:
 /// ```
