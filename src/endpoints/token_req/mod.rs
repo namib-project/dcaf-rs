@@ -149,6 +149,12 @@ derive(Debug, PartialEq),
 build_fn(validate = "Self::validate")
 )]
 pub struct AccessTokenRequest {
+    /// The client identifier as described in section 2.2 of
+    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+    ///
+    /// Must be included.
+    pub client_id: String,
+
     /// Grant type used for this request.
     ///
     /// Defaults to [`GrantType::ClientCredentials`].
@@ -187,12 +193,6 @@ pub struct AccessTokenRequest {
     /// See also the documentation of [`ProofOfPossessionKey`] for details.
     #[builder(default)]
     pub req_cnf: Option<ProofOfPossessionKey>,
-
-    /// The client identifier as described in section 2.2 of
-    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-    ///
-    /// Must be included.
-    pub client_id: String,
 }
 
 /// The type of the token issued as described in section 7.1 of

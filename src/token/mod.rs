@@ -578,7 +578,7 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
 ///   (e.g., if the `token`'s data does not match its signature).
 pub fn verify_access_token<T>(
     token: &ByteString,
-    verifier: &mut T,
+    cipher: &mut T,
     aad: Option<&[u8]>,
 ) -> Result<(), AccessTokenError<T::Error>>
 where
@@ -587,7 +587,7 @@ where
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
     // TODO: Verify protected headers
     sign.verify_signature(aad.unwrap_or(&[0; 0]), |signature, signed_data| {
-        verifier.verify_signature(signature, signed_data)
+        cipher.verify_signature(signature, signed_data)
     })
     .map_err(AccessTokenError::from_cose_cipher_error)
 }

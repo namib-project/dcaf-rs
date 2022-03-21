@@ -14,8 +14,8 @@
 //! # Layout
 //! - [`constants`] contains various constants defined in the standards and drafts related to
 //!   ACE-OAuth.
-//! - [`cbor_map`] contains the [`AsCborMap`] trait with which data types from this crate can be
-//!   (de)serialized.
+//! - [`cbor_map`] contains the [`AsCborMap`](crate::common::cbor_map::AsCborMap) trait with which
+//!   data types from this crate can be (de)serialized.
 //! - [`cbor_values`] contains various helper values for CBOR structures.
 //! - [`scope`] contains data types and methods for working with OAuth scopes.
 //!
