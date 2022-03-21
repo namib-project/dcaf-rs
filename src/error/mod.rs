@@ -319,6 +319,10 @@ impl<T> AccessTokenError<T>
 mod std_error {
     use core::fmt::Debug;
     use std::error::Error;
+    use crate::endpoints::token_req::AccessTokenRequestBuilderError;
+    use crate::endpoints::token_req::AccessTokenResponseBuilderError;
+    use crate::endpoints::token_req::ErrorResponseBuilderError;
+    use crate::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
 
     use super::*;
 
@@ -335,4 +339,12 @@ mod std_error {
     impl<T> Error for AccessTokenError<T> where T: Debug + Display {}
 
     impl Error for TryFromCborMapError {}
+
+    impl Error for AccessTokenRequestBuilderError {}
+
+    impl Error for AccessTokenResponseBuilderError {}
+
+    impl Error for ErrorResponseBuilderError {}
+
+    impl Error for AuthServerRequestCreationHintBuilderError {}
 }
