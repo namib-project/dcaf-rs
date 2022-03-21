@@ -1,10 +1,14 @@
 [package]
 name = "dcaf"
+description = "Implementation of the ACE-OAuth framework"
 version = "0.1.0"
 edition = "2021"
 authors = ["Falko Galperin <falko1@uni-bremen.de>"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+rust-version = "1.58"
+license = "MIT OR Apache-2.0"
+keywords = ["no_std", "framework", "oauth", "ace"]
+categories = ["authentication", "data-structures", "embedded", "encoding", "no-std"]
+repository = "https://github.com/namib-project/dcaf-rs"
 
 [features]
 default = ["std"]
