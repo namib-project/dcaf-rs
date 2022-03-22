@@ -45,7 +45,7 @@ mod tests;
 /// This could be built and serialized as an [`AuthServerRequestCreationHint`] like so:
 /// ```
 /// # use ciborium_io::{Read, Write};
-/// # use dcaf::{AsCborMap, AuthServerRequestCreationHint, Scope};
+/// # use dcaf::{ToCborMap, AuthServerRequestCreationHint, Scope};
 /// # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
 /// # use dcaf::common::cbor_values::ByteString;
 /// # use dcaf::common::scope::TextEncodedScope;
@@ -142,7 +142,7 @@ mod builder {
 mod conversion {
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
-    use crate::common::cbor_map::{AsCborMap, cbor_map_vec, decode_scope};
+    use crate::common::cbor_map::{ToCborMap, cbor_map_vec, decode_scope};
 
     use crate::common::constants::cbor_abbreviations::creation_hint;
     use crate::error::{TryFromCborMapError};
@@ -151,8 +151,8 @@ mod conversion {
 
     use super::*;
 
-    impl AsCborMap for AuthServerRequestCreationHint {
-        fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
+    impl ToCborMap for AuthServerRequestCreationHint {
+        fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             return cbor_map_vec! {
                 creation_hint::AS => self.auth_server.as_ref(),
                 creation_hint::KID => self.kid.as_ref(),
@@ -164,7 +164,7 @@ mod conversion {
 
         fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
             where
-                Self: Sized + AsCborMap,
+                Self: Sized + ToCborMap,
         {
             let mut hint = AuthServerRequestCreationHint::default();
             for entry in map {

@@ -63,7 +63,7 @@
 //! Creating, serializing and then de-serializing such a structure would look like this:
 //! ```
 //! # use std::error::Error;
-//! use dcaf::{AccessTokenRequest, AsCborMap, ByteString, ProofOfPossessionKey, TextEncodedScope};
+//! use dcaf::{AccessTokenRequest, ToCborMap, ByteString, ProofOfPossessionKey, TextEncodedScope};
 //!
 //! let request = AccessTokenRequest::builder()
 //!    .client_id("myclient")
@@ -85,7 +85,7 @@
 //! # use ciborium::value::Value;
 //! # use dcaf::error::{AccessTokenError, CoseCipherError};
 //! # use dcaf::{CoseCipherCommon, CoseSign1Cipher, ProofOfPossessionKey};
-//! use dcaf::{AsCborMap, ByteString, sign_access_token, verify_access_token};
+//! use dcaf::{ToCborMap, ByteString, sign_access_token, verify_access_token};
 //! use coset::cwt::ClaimsSetBuilder;
 //! use coset::Header;
 //! use coset::iana::CwtClaimName;
@@ -114,7 +114,7 @@
 //! # let mut cipher = FakeCipher {};
 //! let claims = ClaimsSetBuilder::new()
 //!    .audience("valve242".to_string())
-//!    .claim(CwtClaimName::Cnf, key.as_ciborium_value())
+//!    .claim(CwtClaimName::Cnf, key.to_ciborium_value())
 //!    .claim(CwtClaimName::Scope, Value::Text("read".to_string()))
 //!    .build();
 //! let token: ByteString = sign_access_token(claims, &mut cipher, None, None, None)?;
@@ -208,7 +208,7 @@ pub use common::constants;
 #[doc(inline)]
 pub use common::scope::{Scope, TextEncodedScope, BinaryEncodedScope};
 #[doc(inline)]
-pub use common::cbor_map::AsCborMap;
+pub use common::cbor_map::ToCborMap;
 #[doc(inline)]
 pub use common::cbor_values::{ByteString, ProofOfPossessionKey};
 #[doc(inline)]

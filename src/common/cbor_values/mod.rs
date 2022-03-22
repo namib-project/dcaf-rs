@@ -194,7 +194,7 @@ mod conversion {
     use erased_serde::Serialize as ErasedSerialize;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use serde::de::Error;
-    use crate::common::cbor_map::AsCborMap;
+    use crate::common::cbor_map::ToCborMap;
 
     use crate::error::{TryFromCborMapError, WrongSourceTypeError};
 
@@ -260,8 +260,8 @@ mod conversion {
         }
     }
 
-    impl AsCborMap for ProofOfPossessionKey {
-        fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
+    impl ToCborMap for ProofOfPossessionKey {
+        fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             // The fact that we have to clone this is a little unfortunate.
             match self {
                 Self::PlainCoseKey(key) => {
@@ -289,7 +289,7 @@ mod conversion {
 
         fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
             where
-                Self: Sized + AsCborMap,
+                Self: Sized + ToCborMap,
         {
             if map.len() != 1 {
                 Err(TryFromCborMapError::from_message(

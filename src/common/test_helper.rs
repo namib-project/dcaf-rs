@@ -12,7 +12,7 @@
 //! Contains a few helper functions intended purely for tests.
 //! Not intended to be used outside of this crate.
 
-use crate::common::cbor_map::AsCborMap;
+use crate::common::cbor_map::ToCborMap;
 use core::fmt::Debug;
 use core::convert::identity;
 use ciborium::value::Value;
@@ -49,7 +49,7 @@ pub(crate) fn expect_ser_de<T>(
     expected_hex: &str,
 ) -> Result<(), String>
     where
-        T: AsCborMap + Clone + Debug + PartialEq
+        T: ToCborMap + Clone + Debug + PartialEq
 {
     let copy = value.clone();
     let mut result = Vec::new();

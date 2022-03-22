@@ -14,7 +14,7 @@ use coset::iana::{Algorithm, CwtClaimName};
 use coset::iana::EllipticCurve::P_256;
 use coset::{CoseKeyBuilder, Header, HeaderBuilder, CoseKey, AsCborValue, Label};
 use dcaf::common::scope::TextEncodedScope;
-use dcaf::common::cbor_map::AsCborMap;
+use dcaf::common::cbor_map::ToCborMap;
 use dcaf::endpoints::creation_hint::AuthServerRequestCreationHint;
 use dcaf::endpoints::token_req::{AccessTokenRequest, AccessTokenResponse, AceProfile, ErrorCode, ErrorResponse, GrantType, TokenType};
 use dcaf::{CoseSign1Cipher, sign_access_token};
@@ -143,7 +143,7 @@ fn test_scenario() -> Result<(), String> {
             .audience(resource_server.to_string())
             .issuer(auth_server.to_string())
             .issued_at(Timestamp::WholeSeconds(47))
-            .claim(CwtClaimName::Cnf, PlainCoseKey(key).as_ciborium_value())
+            .claim(CwtClaimName::Cnf, PlainCoseKey(key).to_ciborium_value())
             .build(),
         // TODO: Proper headers
         &mut crypto, Some(aad.as_slice()),
@@ -172,7 +172,7 @@ fn test_scenario() -> Result<(), String> {
 
 fn pseudo_send_receive<T>(input: T) -> Result<T, String>
     where
-        T: AsCborMap + Debug + PartialEq + Clone,
+        T: ToCborMap + Debug + PartialEq + Clone,
 {
     let mut serialized: Vec<u8> = Vec::new();
     input

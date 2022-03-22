@@ -113,7 +113,7 @@ pub enum GrantType {
 /// This could be built and serialized as an [`AccessTokenRequest`] like so:
 /// ```
 /// # use ciborium_io::{Read, Write};
-/// # use dcaf::{AsCborMap, AccessTokenRequest, Scope};
+/// # use dcaf::{ToCborMap, AccessTokenRequest, Scope};
 /// # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
 /// # use dcaf::error::InvalidTextEncodedScopeError;
 /// # fn request_gen() -> Result<AccessTokenRequest, AccessTokenRequestBuilderError> {
@@ -329,7 +329,7 @@ pub enum AceProfile {
 /// ```
 /// # use ciborium_io::{Read, Write};
 /// # use coset::CoseKeyBuilder;
-/// # use dcaf::{AsCborMap, AccessTokenResponse, AceProfile};
+/// # use dcaf::{ToCborMap, AccessTokenResponse, AceProfile};
 /// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
 /// # fn response_gen() -> Result<AccessTokenResponse, AccessTokenResponseBuilderError> {
 /// let key = CoseKeyBuilder::new_symmetric_key(
@@ -511,7 +511,7 @@ pub enum ErrorCode {
 /// would look like the following:
 /// ```
 /// # use ciborium_io::{Read, Write};
-/// # use dcaf::{AsCborMap, ErrorCode, ErrorResponse};
+/// # use dcaf::{ToCborMap, ErrorCode, ErrorResponse};
 /// # use dcaf::endpoints::token_req::ErrorResponseBuilderError;
 /// # fn error_gen() -> Result<ErrorResponse, ErrorResponseBuilderError> {
 /// let error: ErrorResponse = ErrorResponse::builder()
@@ -624,7 +624,7 @@ mod builder {
 mod conversion {
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
-    use crate::common::cbor_map::{AsCborMap, cbor_map_vec, decode_int_map, decode_number, decode_scope};
+    use crate::common::cbor_map::{ToCborMap, cbor_map_vec, decode_int_map, decode_number, decode_scope};
     use crate::common::cbor_values::{ByteString, CborMapValue, ProofOfPossessionKey};
     use crate::constants::cbor_abbreviations::{ace_profile, error, grant_types, token, token_types};
 
@@ -728,8 +728,8 @@ mod conversion {
         }
     }
 
-    impl AsCborMap for AccessTokenRequest {
-        fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
+    impl ToCborMap for AccessTokenRequest {
+        fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             let grant_type: Option<CborMapValue<GrantType>> = self.grant_type.map(CborMapValue);
             cbor_map_vec! {
                 token::REQ_CNF => self.req_cnf.as_ref().map(AsCborMap::as_ciborium_value),
@@ -745,7 +745,7 @@ mod conversion {
 
         fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
             where
-                Self: Sized + AsCborMap,
+                Self: Sized + ToCborMap,
         {
             let mut request = AccessTokenRequest::default();
             for entry in map {
@@ -777,8 +777,8 @@ mod conversion {
         }
     }
 
-    impl AsCborMap for AccessTokenResponse {
-        fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
+    impl ToCborMap for AccessTokenResponse {
+        fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             let token_type: Option<CborMapValue<TokenType>> = self.token_type.map(CborMapValue);
             let ace_profile: Option<CborMapValue<AceProfile>> = self.ace_profile.map(CborMapValue);
             cbor_map_vec! {
@@ -795,7 +795,7 @@ mod conversion {
 
         fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
             where
-                Self: Sized + AsCborMap,
+                Self: Sized + ToCborMap,
         {
             let mut response = AccessTokenResponse::default();
             for entry in map {
@@ -835,8 +835,8 @@ mod conversion {
         }
     }
 
-    impl AsCborMap for ErrorResponse {
-        fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
+    impl ToCborMap for ErrorResponse {
+        fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             let error = CborMapValue(self.error);
             cbor_map_vec! {
                 token::ERROR => Some(error),
@@ -847,7 +847,7 @@ mod conversion {
 
         fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
             where
-                Self: Sized + AsCborMap,
+                Self: Sized + ToCborMap,
         {
             let mut maybe_error: Option<ErrorCode> = None;
             let mut error_description: Option<String> = None;

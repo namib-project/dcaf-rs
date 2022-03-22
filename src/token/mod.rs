@@ -31,7 +31,7 @@
 //! # use coset::{Header, Label};
 //! use coset::cwt::{ClaimsSetBuilder, Timestamp};
 //! # use coset::iana::{Algorithm, CwtClaimName};
-//! # use dcaf::{AsCborMap, CoseCipherCommon, CoseSign1Cipher, sign_access_token, verify_access_token};
+//! # use dcaf::{ToCborMap, CoseCipherCommon, CoseSign1Cipher, sign_access_token, verify_access_token};
 //! use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
 //! use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
 //! # use dcaf::error::{AccessTokenError, CoseCipherError};
@@ -76,7 +76,7 @@
 //! let claims = ClaimsSetBuilder::new()
 //!      .audience(String::from("coaps://rs.example.com"))
 //!      .issuer(String::from("coaps://as.example.com"))
-//!      .claim(CwtClaimName::Cnf, key.as_ciborium_value())
+//!      .claim(CwtClaimName::Cnf, key.to_ciborium_value())
 //!      .build();
 //! let token = sign_access_token(claims, &mut cipher, None, None, None)?;
 //! assert!(verify_access_token(&token, &mut cipher, None).is_ok());
@@ -386,7 +386,7 @@ fn prepare_headers<T>(
 /// # use coset::cwt::ClaimsSetBuilder;
 /// # use coset::Header;
 /// # use coset::iana::CwtClaimName;
-/// # use dcaf::{AsCborMap, CoseCipherCommon, CoseEncrypt0Cipher, decrypt_access_token, encrypt_access_token, sign_access_token, verify_access_token};
+/// # use dcaf::{ToCborMap, CoseCipherCommon, CoseEncrypt0Cipher, decrypt_access_token, encrypt_access_token, sign_access_token, verify_access_token};
 /// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
 /// # use dcaf::error::{AccessTokenError, CoseCipherError};
 /// # struct FakeCrypto {};
@@ -422,7 +422,7 @@ fn prepare_headers<T>(
 /// let claims = ClaimsSetBuilder::new()
 ///    .audience(String::from("coaps://rs.example.com"))
 ///    .issuer(String::from("coaps://as.example.com"))
-///    .claim(CwtClaimName::Cnf, key.as_ciborium_value())
+///    .claim(CwtClaimName::Cnf, key.to_ciborium_value())
 ///    .build();
 /// let token: ByteString = encrypt_access_token(claims.clone(), &mut cipher, None, None, None)?;
 /// assert_eq!(decrypt_access_token(&token, &mut cipher, None)?, claims);
@@ -469,7 +469,7 @@ pub fn encrypt_access_token<T>(
 /// # use coset::cwt::ClaimsSetBuilder;
 /// # use coset::Header;
 /// # use coset::iana::CwtClaimName;
-/// # use dcaf::{AsCborMap, CoseCipherCommon, CoseSign1Cipher, encrypt_access_token, sign_access_token, verify_access_token};
+/// # use dcaf::{ToCborMap, CoseCipherCommon, CoseSign1Cipher, encrypt_access_token, sign_access_token, verify_access_token};
 /// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
 /// # use dcaf::error::{AccessTokenError, CoseCipherError};
 /// # struct FakeSigner {};
@@ -496,7 +496,7 @@ pub fn encrypt_access_token<T>(
 /// let claims = ClaimsSetBuilder::new()
 ///    .audience(String::from("coaps://rs.example.com"))
 ///    .issuer(String::from("coaps://as.example.com"))
-///    .claim(CwtClaimName::Cnf, key.as_ciborium_value())
+///    .claim(CwtClaimName::Cnf, key.to_ciborium_value())
 ///    .build();
 /// let token: ByteString = sign_access_token(claims, &mut cipher, None, None, None)?;
 /// assert!(verify_access_token(&token, &mut cipher, None).is_ok());
