@@ -140,7 +140,6 @@ mod builder {
 /// another part is implementing the [`AsCborMap`](crate::AsCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
-
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
     use crate::common::cbor_map::{AsCborMap, cbor_map_vec, decode_scope};

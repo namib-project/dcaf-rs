@@ -335,7 +335,6 @@ pub trait CoseSign1Cipher: CoseCipherCommon {
 /// assert!(tagger.verify_tag(&tag, &vec![0xDE, 0xAD]).is_err());
 /// ```
 pub trait CoseMac0Cipher: CoseCipherCommon {
-
     /// Generates a MAC tag for the given `target` and returns it.
     ///
     /// For an example, see the documentation of [`CoseMac0Cipher`].
@@ -361,8 +360,8 @@ fn prepare_headers<T>(
     protected_header: Option<Header>,
     cipher: &T,
 ) -> Result<(Header, Header), AccessTokenError<T::Error>>
-where
-    T: CoseCipherCommon,
+    where
+        T: CoseCipherCommon,
 {
     let mut unprotected = unprotected_header.unwrap_or_else(|| HeaderBuilder::new().build());
     let mut protected = protected_header.unwrap_or_else(|| HeaderBuilder::new().build());
@@ -436,8 +435,8 @@ pub fn encrypt_access_token<T>(
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
-where
-    T: CoseEncrypt0Cipher,
+    where
+        T: CoseEncrypt0Cipher,
 {
     let (unprotected, protected) = prepare_headers(unprotected_header, protected_header, cipher)?;
     Ok(ByteString::from(
@@ -510,8 +509,8 @@ pub fn sign_access_token<T>(
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
-where
-    T: CoseSign1Cipher,
+    where
+        T: CoseSign1Cipher,
 {
     let (unprotected, protected) = prepare_headers(unprotected_header, protected_header, cipher)?;
     Ok(ByteString::from(
@@ -582,15 +581,15 @@ pub fn verify_access_token<T>(
     cipher: &mut T,
     aad: Option<&[u8]>,
 ) -> Result<(), AccessTokenError<T::Error>>
-where
-    T: CoseSign1Cipher,
+    where
+        T: CoseSign1Cipher,
 {
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
     // TODO: Verify protected headers
     sign.verify_signature(aad.unwrap_or(&[0; 0]), |signature, signed_data| {
         cipher.verify_signature(signature, signed_data)
     })
-    .map_err(AccessTokenError::from_cose_cipher_error)
+        .map_err(AccessTokenError::from_cose_cipher_error)
 }
 
 /// Decrypts the given `token` and `aad` using `cipher` for cryptography,
@@ -610,8 +609,8 @@ pub fn decrypt_access_token<T>(
     cipher: &mut T,
     aad: Option<&[u8]>,
 ) -> Result<ClaimsSet, AccessTokenError<T::Error>>
-where
-    T: CoseEncrypt0Cipher,
+    where
+        T: CoseEncrypt0Cipher,
 {
     let encrypt =
         CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from_cose_error)?;

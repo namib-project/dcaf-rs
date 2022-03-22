@@ -84,10 +84,10 @@ impl CoseCipherCommon for FakeCrypto {
     fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
         // We have to later verify these headers really are used.
         if let Some(label) = unprotected_header.rest.iter().find(|x| x.0 == Label::Int(47)) {
-            return Err(CoseCipherError::existing_header_label(&label.0))
+            return Err(CoseCipherError::existing_header_label(&label.0));
         }
         if protected_header.alg != None {
-            return Err(CoseCipherError::existing_header("alg"))
+            return Err(CoseCipherError::existing_header("alg"));
         }
         unprotected_header.rest.push((Label::Int(47), Value::Null));
         protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));

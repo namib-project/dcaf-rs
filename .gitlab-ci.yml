@@ -56,8 +56,8 @@ default:
 fetch-deps:
   stage: .pre
   cache:
-    - key: !reference [.pkg_cache, key]
-      paths: !reference [.pkg_cache, paths]
+    - key: !reference [ .pkg_cache, key ]
+      paths: !reference [ .pkg_cache, paths ]
       policy: pull-push
   script:
     - cargo fetch
@@ -86,10 +86,10 @@ coverage:
     - job: fetch-deps
       artifacts: true
   rules:
-    - !reference [.on_tags]
-    - !reference [.on_default_branch]
-    - !reference [.on_ready_mrs]
-    - !reference [.allow_manual_run]
+    - !reference [ .on_tags ]
+    - !reference [ .on_default_branch ]
+    - !reference [ .on_ready_mrs ]
+    - !reference [ .allow_manual_run ]
   script:
     - cargo tarpaulin --locked --no-fail-fast -p dcaf --out Xml
     - mv cobertura.xml target/coverage.xml
@@ -119,9 +119,9 @@ docs:
     - job: fetch-deps
       artifacts: true
   rules:
-    - !reference [.on_default_branch]
-    - !reference [.on_tags]
-    - !reference [.allow_manual_run]
+    - !reference [ .on_default_branch ]
+    - !reference [ .on_tags ]
+    - !reference [ .allow_manual_run ]
   script:
     - cargo doc --locked --workspace --no-deps
   artifacts:
@@ -133,7 +133,7 @@ pages:
   needs:
     - docs
   rules:
-    - !reference [.on_default_branch]
+    - !reference [ .on_default_branch ]
   script:
     - mv target/doc public
     - echo '<meta http-equiv="refresh" content="0;" url="dcaf/index.html">' > public/index.html
@@ -144,7 +144,7 @@ pages:
 gen-lsif:
   stage: .post
   allow_failure: true
-  cache: []
+  cache: [ ]
   needs:
     - job: fetch-deps # We need the Cargo.lock file in order to run the build script (which can't be disabled)
       artifacts: true

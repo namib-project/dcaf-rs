@@ -216,7 +216,6 @@ pub enum Scope {
 /// another part is implementing the [`AsCborMap`](crate::AsCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
-
     use crate::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError, WrongSourceTypeError};
 
     use super::*;
