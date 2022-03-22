@@ -1,6 +1,6 @@
 [package]
 name = "dcaf"
-description = "Implementation of the ACE-OAuth framework"
+description = "An implementation of the ACE-OAuth framework"
 version = "0.1.0"
 edition = "2021"
 authors = ["Falko Galperin <falko1@uni-bremen.de>"]
@@ -26,3 +26,6 @@ derive_builder = { version = "^0.10.2", default-features = false }
 [dev-dependencies]
 hex = { version = "^0.4.3" }
 base64 = { version = "^0.13.0" }
+
+[badges]
+maintenance = { status = "actively-developed" }

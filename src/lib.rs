@@ -9,7 +9,7 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-//! Implementation of the [ACE-OAuth framework](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html).
+//! An implementation of the [ACE-OAuth framework](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html).
 //!
 //! This crate implements the ACE-OAuth
 //! (Authentication and Authorization for Constrained Environments using the OAuth 2.0 Framework)
@@ -89,6 +89,7 @@
 //! use coset::cwt::ClaimsSetBuilder;
 //! use coset::Header;
 //! use coset::iana::CwtClaimName;
+//!
 //! # struct FakeCipher {};
 //! # impl CoseCipherCommon for FakeCipher {
 //! #     type Error = String;
@@ -101,7 +102,6 @@
 //! #     fn generate_signature(&mut self, target: &[u8]) -> Vec<u8> {
 //! #         target.to_vec()
 //! #     }
-//!
 //! #     fn verify_signature(&mut self, signature: &[u8], signed_data: &[u8]) -> Result<(), CoseCipherError<Self::Error>> {
 //! #         if signature.to_vec() != self.generate_signature(signed_data) {
 //! #             Err(CoseCipherError::VerificationFailure)
