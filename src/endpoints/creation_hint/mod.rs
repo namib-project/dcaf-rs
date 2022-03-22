@@ -112,11 +112,13 @@ pub struct AuthServerRequestCreationHint {
     pub client_nonce: Option<ByteString>,
 }
 
+#[allow(clippy::unused_self, clippy::unnecessary_wraps)]
 mod builder {
     use super::*;
 
     impl AuthServerRequestCreationHint {
         /// Returns a new builder for this struct.
+        #[must_use]
         pub fn builder() -> AuthServerRequestCreationHintBuilder {
             AuthServerRequestCreationHintBuilder::default()
         }
@@ -167,18 +169,18 @@ mod conversion {
         {
             let mut hint = AuthServerRequestCreationHint::default();
             for entry in map {
-                match (entry.0 as u8, entry.1) {
+                match (u8::try_from(entry.0)?, entry.1) {
                     (creation_hint::AS, Value::Text(x)) => hint.auth_server = Some(x),
                     (creation_hint::KID, Value::Bytes(x)) => hint.kid = Some(ByteString::from(x)),
                     (creation_hint::AUDIENCE, Value::Text(x)) => hint.audience = Some(x),
                     (creation_hint::SCOPE, Value::Text(x)) => {
-                        hint.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?
+                        hint.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?;
                     }
                     (creation_hint::SCOPE, Value::Bytes(x)) => {
-                        hint.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?
+                        hint.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?;
                     }
                     (creation_hint::CNONCE, Value::Bytes(x)) => {
-                        hint.client_nonce = Some(ByteString::from(x))
+                        hint.client_nonce = Some(ByteString::from(x));
                     }
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 };

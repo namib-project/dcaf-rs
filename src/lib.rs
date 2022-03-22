@@ -195,6 +195,8 @@
 //! (e.g. the used algorithm).
 
 #![deny(rustdoc::broken_intra_doc_links)]
+#![deny(clippy::pedantic)]
+#![allow(clippy::doc_markdown, clippy::module_name_repetitions, clippy::wildcard_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
 extern crate core;

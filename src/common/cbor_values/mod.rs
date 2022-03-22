@@ -127,15 +127,16 @@ impl ProofOfPossessionKey {
     /// let pop_key = ProofOfPossessionKey::from(key);
     /// assert_eq!(pop_key.key_id().to_vec(), vec![0xDC, 0xAF]);
     /// ```
+    #[must_use]
     pub fn key_id(&self) -> KeyId {
         match self {
             ProofOfPossessionKey::PlainCoseKey(k) => KeyId::from(k.key_id.clone()),
             ProofOfPossessionKey::KeyId(k) => k.clone(),
             ProofOfPossessionKey::EncryptedCoseKey(k) => {
-                if !k.protected.header.key_id.is_empty() {
-                    KeyId::from(k.protected.header.key_id.clone())
-                } else {
+                if k.protected.header.key_id.is_empty() {
                     KeyId::from(k.unprotected.key_id.clone())
+                } else {
+                    KeyId::from(k.protected.header.key_id.clone())
                 }
             }
         }
@@ -311,7 +312,7 @@ mod conversion {
                             ))
                         }),
                     (3, Value::Bytes(x)) => Ok(ProofOfPossessionKey::KeyId(ByteString::from(x))),
-                    (x, _) => Err(TryFromCborMapError::unknown_field(x as u8)),
+                    (x, _) => Err(TryFromCborMapError::unknown_field(u8::try_from(x)?)),
                 }
             } else {
                 unreachable!("we have previously verified that map.len() == 1, so map.into_iter().next() must return a next element")

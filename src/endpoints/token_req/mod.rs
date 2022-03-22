@@ -565,51 +565,59 @@ pub struct ErrorResponse {
 
 impl AccessTokenRequest {
     /// Initializes and returns a new [`AccessTokenRequestBuilder`].
+    #[must_use]
     pub fn builder() -> AccessTokenRequestBuilder {
         AccessTokenRequestBuilder::default()
     }
 }
 
-impl AccessTokenRequestBuilder {
-    pub(crate) fn validate(&self) -> Result<(), AccessTokenRequestBuilderError> {
-        // TODO: Check whether there are invariants to validate
-        Ok(())
+#[allow(clippy::unused_self, clippy::unnecessary_wraps)]
+mod builder {
+    use super::*;
+
+    impl AccessTokenRequestBuilder {
+        pub(crate) fn validate(&self) -> Result<(), AccessTokenRequestBuilderError> {
+            // TODO: Check whether there are invariants to validate
+            Ok(())
+        }
+
+        /// Sets the [`ace_profile`](AccessTokenRequest::ace_profile) field to an empty value,
+        /// which indicates a request for the Authorization Server to respond with the
+        /// `ace_profile` field in the response.
+        pub fn ace_profile(&mut self) -> &mut Self {
+            self.ace_profile = Some(Some(()));
+            self
+        }
     }
 
-    /// Sets the [`ace_profile`](AccessTokenRequest::ace_profile) field to an empty value,
-    /// which indicates a request for the Authorization Server to respond with the
-    /// `ace_profile` field in the response.
-    pub fn ace_profile(&mut self) -> &mut Self {
-        self.ace_profile = Some(Some(()));
-        self
+    impl AccessTokenResponse {
+        /// Initializes and returns a new [`AccessTokenResponseBuilder`].
+        #[must_use]
+        pub fn builder() -> AccessTokenResponseBuilder {
+            AccessTokenResponseBuilder::default()
+        }
     }
-}
 
-impl AccessTokenResponse {
-    /// Initializes and returns a new [`AccessTokenResponseBuilder`].
-    pub fn builder() -> AccessTokenResponseBuilder {
-        AccessTokenResponseBuilder::default()
+    impl AccessTokenResponseBuilder {
+        pub(crate) fn validate(&self) -> Result<(), AccessTokenResponseBuilderError> {
+            // TODO: Check whether there are invariants to validate
+            Ok(())
+        }
     }
-}
 
-impl AccessTokenResponseBuilder {
-    pub(crate) fn validate(&self) -> Result<(), AccessTokenResponseBuilderError> {
-        // TODO: Check whether there are invariants to validate
-        Ok(())
+    impl ErrorResponse {
+        /// Initializes and returns a new [`ErrorResponseBuilder`].
+        #[must_use]
+        pub fn builder() -> ErrorResponseBuilder {
+            ErrorResponseBuilder::default()
+        }
     }
-}
 
-impl ErrorResponse {
-    /// Initializes and returns a new [`ErrorResponseBuilder`].
-    pub fn builder() -> ErrorResponseBuilder {
-        ErrorResponseBuilder::default()
-    }
-}
-
-impl ErrorResponseBuilder {
-    pub(crate) fn validate(&self) -> Result<(), ErrorResponseBuilderError> {
-        // TODO: Check whether there are invariants to validate
-        Ok(())
+    impl ErrorResponseBuilder {
+        pub(crate) fn validate(&self) -> Result<(), ErrorResponseBuilderError> {
+            // TODO: Check whether there are invariants to validate
+            Ok(())
+        }
     }
 }
 
@@ -724,7 +732,7 @@ mod conversion {
         fn as_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             let grant_type: Option<CborMapValue<GrantType>> = self.grant_type.map(CborMapValue);
             cbor_map_vec! {
-                token::REQ_CNF => self.req_cnf.as_ref().map(|x| x.as_ciborium_value()),
+                token::REQ_CNF => self.req_cnf.as_ref().map(AsCborMap::as_ciborium_value),
                 token::AUDIENCE => self.audience.as_ref(),
                 token::SCOPE => self.scope.as_ref(),
                 token::CLIENT_ID => Some(&self.client_id),
@@ -741,16 +749,16 @@ mod conversion {
         {
             let mut request = AccessTokenRequest::default();
             for entry in map {
-                match (entry.0 as u8, entry.1) {
+                match (u8::try_from(entry.0)?, entry.1) {
                     (token::REQ_CNF, Value::Map(x)) => {
-                        request.req_cnf = Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<Self>(x, "req_cnf")?)?)
+                        request.req_cnf = Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<Self>(x, "req_cnf")?)?);
                     }
                     (token::AUDIENCE, Value::Text(x)) => request.audience = Some(x),
                     (token::SCOPE, Value::Text(x)) => {
-                        request.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?
+                        request.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?;
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
-                        request.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?
+                        request.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?;
                         // TODO: Handle AIF
                     }
                     (token::CLIENT_ID, Value::Text(x)) => request.client_id = x,
@@ -760,7 +768,7 @@ mod conversion {
                     }
                     (token::ACE_PROFILE, Value::Null) => request.ace_profile = Some(()),
                     (token::CNONCE, Value::Bytes(x)) => {
-                        request.client_nonce = Some(ByteString::from(x))
+                        request.client_nonce = Some(ByteString::from(x));
                     }
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 };
@@ -776,12 +784,12 @@ mod conversion {
             cbor_map_vec! {
                 token::ACCESS_TOKEN => Some(&self.access_token),
                 token::EXPIRES_IN => self.expires_in,
-                token::CNF => self.cnf.as_ref().map(|x| x.as_ciborium_value()),
+                token::CNF => self.cnf.as_ref().map(AsCborMap::as_ciborium_value),
                 token::SCOPE => self.scope.as_ref(),
                 token::TOKEN_TYPE => token_type,
                 token::REFRESH_TOKEN => self.refresh_token.as_ref(),
                 token::ACE_PROFILE => ace_profile,
-                token::RS_CNF => self.rs_cnf.as_ref().map(|x| x.as_ciborium_value())
+                token::RS_CNF => self.rs_cnf.as_ref().map(AsCborMap::as_ciborium_value)
             }
         }
 
@@ -791,9 +799,9 @@ mod conversion {
         {
             let mut response = AccessTokenResponse::default();
             for entry in map {
-                match (entry.0 as u8, entry.1) {
+                match (u8::try_from(entry.0)?, entry.1) {
                     (token::ACCESS_TOKEN, Value::Bytes(x)) => {
-                        response.access_token = ByteString::from(x)
+                        response.access_token = ByteString::from(x);
                     }
                     (token::EXPIRES_IN, Value::Integer(x)) => {
                         response.expires_in = Some(decode_number::<u32>(x, "expires_in")?);
@@ -802,17 +810,17 @@ mod conversion {
                         response.cnf = Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<Self>(x, "cnf")?)?);
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
-                        response.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?
+                        response.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?;
                         // TODO: Handle AIF
                     }
                     (token::SCOPE, Value::Text(x)) => {
-                        response.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?
+                        response.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?;
                     }
                     (token::TOKEN_TYPE, Value::Integer(x)) => {
                         response.token_type = Some(TokenType::from(decode_number::<i32>(x, "token_type")?));
                     }
                     (token::REFRESH_TOKEN, Value::Bytes(x)) => {
-                        response.refresh_token = Some(ByteString::from(x))
+                        response.refresh_token = Some(ByteString::from(x));
                     }
                     (token::ACE_PROFILE, Value::Integer(x)) => {
                         response.ace_profile = Some(AceProfile::from(decode_number::<i32>(x, "ace_profile")?));
@@ -845,7 +853,7 @@ mod conversion {
             let mut error_description: Option<String> = None;
             let mut error_uri: Option<String> = None;
             for entry in map {
-                match (entry.0 as u8, entry.1) {
+                match (u8::try_from(entry.0)?, entry.1) {
                     (token::ERROR, Value::Integer(x)) => {
                         maybe_error = Some(ErrorCode::from(decode_number::<i32>(x, "error")?));
                     }
@@ -856,8 +864,8 @@ mod conversion {
             }
             maybe_error.map(|error| ErrorResponse {
                 error,
-                error_uri,
                 error_description,
+                error_uri,
             }).ok_or_else(|| TryFromCborMapError::missing_field("error"))
         }
     }

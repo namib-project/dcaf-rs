@@ -14,6 +14,7 @@
 use core::any::type_name;
 use core::fmt::{Display, Formatter};
 use std::marker::PhantomData;
+use std::num::TryFromIntError;
 
 use coset::{CoseError, Label};
 
@@ -44,6 +45,7 @@ impl<T> WrongSourceTypeError<T> {
     /// Creates a new instance of the error, taking `T` as the general type from which
     /// the conversion was tried and the `expected_type` as the target type which it was tried to
     /// convert it into, but failed.
+    #[must_use]
     pub fn new(expected_type: &'static str) -> WrongSourceTypeError<T> {
         WrongSourceTypeError {
             expected_type,
@@ -70,6 +72,7 @@ impl Display for TryFromCborMapError {
 
 impl TryFromCborMapError {
     /// Creates a new error with the given custom `message`.
+    #[must_use]
     pub(crate) fn from_message<T>(message: T) -> TryFromCborMapError
         where
             T: Into<String>,
@@ -81,6 +84,7 @@ impl TryFromCborMapError {
 
     /// Creates a new error with a message describing that an unknown field in
     /// the CBOR map with the given `key` was encountered.
+    #[must_use]
     pub(crate) fn unknown_field(key: u8) -> TryFromCborMapError {
         TryFromCborMapError {
             message: format!("unknown field with key {key} encountered"),
@@ -89,10 +93,17 @@ impl TryFromCborMapError {
 
     /// Creates a new error with a message describing that a required field for
     /// the target type with the given `name` was missing from the CBOR map.
+    #[must_use]
     pub(crate) fn missing_field(name: &str) -> TryFromCborMapError {
         TryFromCborMapError {
             message: format!("required field {name} is missing"),
         }
+    }
+}
+
+impl From<TryFromIntError> for TryFromCborMapError {
+    fn from(e: TryFromIntError) -> Self {
+        TryFromCborMapError::from_message(e.to_string())
     }
 }
 
@@ -209,6 +220,7 @@ impl<T> CoseCipherError<T>
     /// Creates a new [`CoseCipherError`] of type
     /// [`HeaderAlreadySet`](CoseCipherError::HeaderAlreadySet) where the header
     /// that was already set has the name of the given `label`.
+    #[must_use]
     pub fn existing_header_label(label: &Label) -> CoseCipherError<T> {
         let existing_header_name;
         match label {
@@ -223,6 +235,7 @@ impl<T> CoseCipherError<T>
     /// Creates a new [`CoseCipherError`] of type
     /// [`HeaderAlreadySet`](CoseCipherError::HeaderAlreadySet) where the header
     /// that was already set has the given `name`.
+    #[must_use]
     pub fn existing_header<S>(name: S) -> CoseCipherError<T>
         where
             S: Into<String>,
@@ -235,6 +248,7 @@ impl<T> CoseCipherError<T>
     /// Creates a new [`CoseCipherError`] of type
     /// [`Other`](CoseCipherError::Other) (i.e., an error type that doesn't fit any other
     /// [`CoseCipherError`] variant) containing the given nested error `other`.
+    #[must_use]
     pub fn other_error(other: T) -> CoseCipherError<T> {
         CoseCipherError::Other(other)
     }
@@ -304,12 +318,14 @@ impl<T> AccessTokenError<T>
 {
     /// Creates a new [`AccessTokenError`] of variant [`CoseError`](AccessTokenError::CoseError)
     /// with the given `error`.
+    #[must_use]
     pub fn from_cose_error(error: CoseError) -> AccessTokenError<T> {
         AccessTokenError::CoseError(error)
     }
 
     /// Creates a new [`AccessTokenError`] of variant
     /// [`CoseCipherError`](AccessTokenError::CoseCipherError) with the given `error`.
+    #[must_use]
     pub fn from_cose_cipher_error(error: CoseCipherError<T>) -> AccessTokenError<T> {
         AccessTokenError::CoseCipherError(error)
     }

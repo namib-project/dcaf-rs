@@ -553,6 +553,7 @@ where
 ///   unreachable!("Example token should be valid.")
 /// }
 /// ```
+#[must_use]
 pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)> {
     CoseSign1::from_slice(token.as_slice())
         .map(|x| (x.unprotected, x.protected))
