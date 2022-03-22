@@ -17,45 +17,44 @@
 //! # Example
 //! For example, you could first create a text or binary encoded scope:
 //! ```
+//! # use std::error::Error;
 //! # use dcaf::common::scope::{BinaryEncodedScope, TextEncodedScope};
 //! # use dcaf::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError};
 //! # use dcaf::Scope;
-//! # fn text() -> Result<(), InvalidTextEncodedScopeError> {
 //! // Will be encoded with a space-separator.
 //! let text_scope = TextEncodedScope::try_from(vec!["first_client", "second_client"])?;
 //! assert_eq!(text_scope.to_string(), "first_client second_client");
 //! assert!(text_scope.elements().eq(vec!["first_client", "second_client"]));
-//! # Ok(())
-//! # }
 //! // Separator is only specified upon `elements` call.
 //! let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice())?;
 //! assert!(binary_scope.elements(0)?.eq(vec![vec![1, 2], vec![3, 4]]));
-//! # text().map_err(|x| InvalidBinaryEncodedScopeError::EmptyScope);
-//! # Ok::<(), InvalidBinaryEncodedScopeError>(())
+//! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //! And then you could wrap it in the [Scope] type and use it in a field,
 //! e.g. in an [`AuthServerRequestCreationHint`](crate::AuthServerRequestCreationHint):
 //! ```
+//! # use std::error::Error;
 //! # use dcaf::common::scope::{BinaryEncodedScope, TextEncodedScope};
 //! # use dcaf::{AuthServerRequestCreationHint, Scope};
 //! # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
-//! # let text_scope = TextEncodedScope::try_from(vec!["first_client", "second_client"]).unwrap();
+//! # let text_scope = TextEncodedScope::try_from(vec!["first_client", "second_client"])?;
 //! # let original_scope = text_scope.clone();
-//! # let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice()).unwrap();
+//! # let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice())?;
 //! let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder().scope(Scope::from(text_scope)).build()?;
 //! # assert_eq!(hint.scope, Some(Scope::from(original_scope)));
-//! # Ok::<(), AuthServerRequestCreationHintBuilderError>(())
+//! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //! This works with the binary encoded scope too, of course:
 //! ```
+//! # use std::error::Error;
 //! # use dcaf::common::scope::{BinaryEncodedScope, TextEncodedScope};
 //! # use dcaf::{AuthServerRequestCreationHint, Scope};
 //! # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
-//! # let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice()).unwrap();
+//! # let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice())?;
 //! # let original_scope = binary_scope.clone();
 //! let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder().scope(Scope::from(binary_scope)).build()?;
 //! # assert_eq!(hint.scope, Some(Scope::from(original_scope)));
-//! # Ok::<(), AuthServerRequestCreationHintBuilderError>(())
+//! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //! # Sources
 //! For the original OAuth 2.0 standard, scopes are defined in
@@ -96,7 +95,6 @@ mod tests;
 /// # use dcaf::common::scope::TextEncodedScope;
 /// # use dcaf::error::InvalidTextEncodedScopeError;
 /// let scope = TextEncodedScope::try_from(vec!["first", "second", "third"])?;
-/// dbg!(&scope);
 /// assert!(scope.elements().eq(["first", "second", "third"]));
 /// assert!(TextEncodedScope::try_from(vec!["not allowed"]).is_err());
 /// # Ok::<(), InvalidTextEncodedScopeError>(())
@@ -159,18 +157,12 @@ pub struct BinaryEncodedScope(ByteString);
 ///
 /// You can create binary or text encoded scopes:
 /// ```
+/// # use std::error::Error;
 /// # use dcaf::common::scope::{BinaryEncodedScope, Scope, TextEncodedScope};
 /// # use dcaf::error::{InvalidTextEncodedScopeError, InvalidBinaryEncodedScopeError};
-/// # // We need to trick around a little due to the different error types.
-/// # fn main() -> Result<(), InvalidTextEncodedScopeError> {
 /// let text_scope = Scope::from(TextEncodedScope::try_from("dcaf rs")?);
-/// # fn binary() -> Result<(), InvalidBinaryEncodedScopeError> {
 /// let binary_scope = Scope::from(BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice())?);
-/// # Ok(())
-/// # }
-/// # binary().map_err(|x| InvalidTextEncodedScopeError::Other("invalid binary encoding"))?;
-/// # Ok(())
-/// # }
+/// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///
 /// For information on how to initialize [BinaryEncodedScope] and [TextEncodedScope],
@@ -213,7 +205,7 @@ pub enum Scope {
 /// Contains conversion methods for ACE-OAuth data types.
 /// One part of this is converting enum types from and to their CBOR abbreviations in
 /// [`cbor_abbreviations`](crate::constants::cbor_abbreviations),
-/// another part is implementing the [`AsCborMap`](crate::AsCborMap) type for the
+/// another part is implementing the [`ToCborMap`](crate::ToCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
     use crate::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError, WrongSourceTypeError};

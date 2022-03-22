@@ -18,16 +18,17 @@ use std::num::TryFromIntError;
 
 use coset::{CoseError, Label};
 
-/// Error type used when the parameter of the type `T` couldn't be converted into `expected_type`.
+/// Error type used when the parameter of the type `T` couldn't be
+/// converted into [`expected_type`](WrongSourceTypeError::expected_type).
 ///
 /// `T` is the general type taken in the [`TryFrom`] conversion.
 /// Used for [`TryFrom`] conversions from a general enum type to a specific member type.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct WrongSourceTypeError<T> {
     /// The name of the specific type which [`TryFrom`] tried to convert to.
-    expected_type: &'static str,
+    pub expected_type: &'static str,
     /// The general type taken in the [`TryFrom`] conversion.
-    general_type: PhantomData<T>,
+    pub general_type: PhantomData<T>,
 }
 
 impl<T> Display for WrongSourceTypeError<T> {
@@ -55,7 +56,7 @@ impl<T> WrongSourceTypeError<T> {
 }
 
 /// Error type used when a given CBOR map can't be converted to a specific type which implements
-/// the [`AsCborMap`](crate::AsCborMap) trait.
+/// the [`ToCborMap`](crate::ToCborMap) trait.
 ///
 /// **Note: This error type is not expected to be used by library clients!**
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]

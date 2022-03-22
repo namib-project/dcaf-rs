@@ -112,31 +112,19 @@ pub enum GrantType {
 ///
 /// This could be built and serialized as an [`AccessTokenRequest`] like so:
 /// ```
+/// # use std::error::Error;
 /// # use ciborium_io::{Read, Write};
 /// # use dcaf::{ToCborMap, AccessTokenRequest, Scope};
 /// # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
 /// # use dcaf::error::InvalidTextEncodedScopeError;
-/// # fn request_gen() -> Result<AccessTokenRequest, AccessTokenRequestBuilderError> {
 /// let request: AccessTokenRequest = AccessTokenRequest::builder()
 ///    .client_id("myclient")
 ///    .audience("tempSensor4711")
 ///    .build()?;
-/// # Ok(request)
-/// }
-/// # fn serialize(request: AccessTokenRequest) -> Result<Vec<u8>, ciborium::ser::Error<<Vec<u8> as Write>::Error>> {
 /// let mut serialized = Vec::new();
-/// request.serialize_into(&mut serialized)?;
-/// # Ok(serialized)
-/// # }
-/// # fn deserialize(serialized: &Vec<u8>, request: AccessTokenRequest) -> Result<(), ciborium::de::Error<<&[u8] as Read>::Error>> {
+/// request.clone().serialize_into(&mut serialized)?;
 /// assert_eq!(AccessTokenRequest::deserialize_from(serialized.as_slice())?, request);
-/// # Ok(())
-/// # }
-/// # let request = request_gen().map_err(|x| x.to_string())?;
-/// # let serialized = serialize(request.clone()).map_err(|x| x.to_string())?;
-/// # deserialize(&serialized, request).map_err(|x| x.to_string())?;
-/// #
-/// # Ok::<(), String>(())
+/// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///
 /// [^cbor]: Note that abbreviations aren't used here, so keep in mind that the labels are really
@@ -327,11 +315,11 @@ pub enum AceProfile {
 ///
 /// This could be built and serialized as an [`AccessTokenResponse`] like so:
 /// ```
+/// # use std::error::Error;
 /// # use ciborium_io::{Read, Write};
 /// # use coset::CoseKeyBuilder;
 /// # use dcaf::{ToCborMap, AccessTokenResponse, AceProfile};
 /// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
-/// # fn response_gen() -> Result<AccessTokenResponse, AccessTokenResponseBuilderError> {
 /// let key = CoseKeyBuilder::new_symmetric_key(
 ///    // Omitted for brevity.
 /// #   vec![ 0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c,
@@ -349,22 +337,10 @@ pub enum AceProfile {
 ///    .expires_in(expires_in)
 ///    .cnf(key)
 ///    .build()?;
-/// # Ok(response)
-/// }
-/// # fn serialize(response: AccessTokenResponse) -> Result<Vec<u8>, ciborium::ser::Error<<Vec<u8> as Write>::Error>> {
 /// let mut serialized = Vec::new();
-/// response.serialize_into(&mut serialized)?;
-/// # Ok(serialized)
-/// # }
-/// # fn deserialize(serialized: &Vec<u8>, response: AccessTokenResponse) -> Result<(), ciborium::de::Error<<&[u8] as Read>::Error>> {
+/// response.clone().serialize_into(&mut serialized)?;
 /// assert_eq!(AccessTokenResponse::deserialize_from(serialized.as_slice())?, response);
-/// # Ok(())
-/// # }
-/// # let response = response_gen().map_err(|x| x.to_string())?;
-/// # let serialized = serialize(response.clone()).map_err(|x| x.to_string())?;
-/// # deserialize(&serialized, response).map_err(|x| x.to_string())?;
-/// #
-/// # Ok::<(), String>(())
+/// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///
 /// [^cbor]: Note that abbreviations aren't used here, so keep in mind that the labels are really
@@ -510,29 +486,17 @@ pub enum ErrorCode {
 /// Creating and serializing a simple error response telling the client their request was invalid
 /// would look like the following:
 /// ```
+/// # use std::error::Error;
 /// # use ciborium_io::{Read, Write};
 /// # use dcaf::{ToCborMap, ErrorCode, ErrorResponse};
 /// # use dcaf::endpoints::token_req::ErrorResponseBuilderError;
-/// # fn error_gen() -> Result<ErrorResponse, ErrorResponseBuilderError> {
 /// let error: ErrorResponse = ErrorResponse::builder()
 ///     .error(ErrorCode::InvalidRequest)
 ///     .build()?;
-/// # Ok(error)
-/// }
-/// # fn serialize(error: ErrorResponse) -> Result<Vec<u8>, ciborium::ser::Error<<Vec<u8> as Write>::Error>> {
 /// let mut serialized = Vec::new();
-/// error.serialize_into(&mut serialized)?;
-/// # Ok(serialized)
-/// # }
-/// # fn deserialize(serialized: &Vec<u8>, error: ErrorResponse) -> Result<(), ciborium::de::Error<<&[u8] as Read>::Error>> {
+/// error.clone().serialize_into(&mut serialized)?;
 /// assert_eq!(ErrorResponse::deserialize_from(serialized.as_slice())?, error);
-/// # Ok(())
-/// # }
-/// # let error = error_gen().map_err(|x| x.to_string())?;
-/// # let serialized = serialize(error.clone()).map_err(|x| x.to_string())?;
-/// # deserialize(&serialized, error).map_err(|x| x.to_string())?;
-/// #
-/// # Ok::<(), String>(())
+/// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///
 /// [^cbor]: Note that abbreviations aren't used here, so keep in mind that the labels are really
@@ -732,7 +696,7 @@ mod conversion {
         fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             let grant_type: Option<CborMapValue<GrantType>> = self.grant_type.map(CborMapValue);
             cbor_map_vec! {
-                token::REQ_CNF => self.req_cnf.as_ref().map(AsCborMap::as_ciborium_value),
+                token::REQ_CNF => self.req_cnf.as_ref().map(ToCborMap::to_ciborium_value),
                 token::AUDIENCE => self.audience.as_ref(),
                 token::SCOPE => self.scope.as_ref(),
                 token::CLIENT_ID => Some(&self.client_id),
@@ -784,12 +748,12 @@ mod conversion {
             cbor_map_vec! {
                 token::ACCESS_TOKEN => Some(&self.access_token),
                 token::EXPIRES_IN => self.expires_in,
-                token::CNF => self.cnf.as_ref().map(AsCborMap::as_ciborium_value),
+                token::CNF => self.cnf.as_ref().map(ToCborMap::to_ciborium_value),
                 token::SCOPE => self.scope.as_ref(),
                 token::TOKEN_TYPE => token_type,
                 token::REFRESH_TOKEN => self.refresh_token.as_ref(),
                 token::ACE_PROFILE => ace_profile,
-                token::RS_CNF => self.rs_cnf.as_ref().map(AsCborMap::as_ciborium_value)
+                token::RS_CNF => self.rs_cnf.as_ref().map(ToCborMap::to_ciborium_value)
             }
         }
 

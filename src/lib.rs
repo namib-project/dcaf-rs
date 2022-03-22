@@ -194,8 +194,9 @@
 //! [`CoseCipherCommon`] trait, which can be used to set headers specific to your COSE cipher
 //! (e.g. the used algorithm).
 
-#![deny(rustdoc::broken_intra_doc_links)]
-#![deny(clippy::pedantic)]
+#![deny(rustdoc::broken_intra_doc_links, clippy::pedantic)]
+#![warn(missing_docs, rustdoc::missing_crate_level_docs)]
+// These ones are a little too eager
 #![allow(clippy::doc_markdown, clippy::module_name_repetitions, clippy::wildcard_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;

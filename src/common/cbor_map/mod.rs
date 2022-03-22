@@ -9,23 +9,18 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-//! Contains the [`AsCborMap`] trait with which data types from this crate can be (de)serialized.
+//! Contains the [`ToCborMap`] trait with which data types from this crate can be (de)serialized.
 //!
 //! # Example
 //! Let's say we want to serialize an [`AccessTokenRequest`]:
 //! ```
+//! # use std::error::Error;
 //! # use ciborium_io::Write;
 //! # use ciborium_io::Read;
 //! # use dcaf::{AccessTokenRequest, ToCborMap};
 //! # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
 //! # use crate::dcaf::constants::cbor_abbreviations::token::CLIENT_ID;
-//! # fn first() -> Result<(), AccessTokenRequestBuilderError> {
 //! let request: AccessTokenRequest = AccessTokenRequest::builder().client_id("test").build()?;
-//! # Ok(())
-//! # }
-//! # // We split this off in order not to have to call `unwrap()`, in case the user copy-pastes this.
-//! # fn second() -> Result<(), ciborium::ser::Error<<Vec<u8> as Write>::Error>> {
-//! # let request: AccessTokenRequest = AccessTokenRequest::builder().client_id("test").build().unwrap();
 //! let mut serialized = Vec::new();
 //! request.serialize_into(&mut serialized)?;
 //!
@@ -35,11 +30,7 @@
 //! 0x64, // text(4)
 //! 0x74, 0x65, 0x73, 0x74 // "test"
 //! ]);
-//! # Ok(())
-//! # }
-//! # first().map_err(|x| x.to_string());
-//! # second().map_err(|x| x.to_string());
-//! # Ok::<(), String>(())
+//! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //! If we then want to deserialize it again:
 //! ```
@@ -110,14 +101,14 @@ pub(crate) use cbor_map_vec;
 
 /// Provides methods to serialize a type into a CBOR map bytestring and back.
 ///
-/// This provides methods to [`serialize_into`](AsCborMap::serialize_into) and
-/// [`deserialize_from`](AsCborMap::deserialize_from) CBOR, which is the
-/// recommended way to serialize and deserialize any types implementing [`AsCborMap`] in this crate.
+/// This provides methods to [`serialize_into`](ToCborMap::serialize_into) and
+/// [`deserialize_from`](ToCborMap::deserialize_from) CBOR, which is the
+/// recommended way to serialize and deserialize any types implementing [`ToCborMap`] in this crate.
 /// *While other methods are provided as well, it's recommended for clients of this library not to
 /// use them, as they are mostly intended for internal use and as such may have an unstable API.*
 ///
 /// # Example
-/// The following showcases how to serialize a type implementing `AsCborMap`
+/// The following showcases how to serialize a type implementing `ToCborMap`
 /// using the example of an [`AuthServerRequestCreationHint`](crate::AuthServerRequestCreationHint):
 /// ```
 /// # use ciborium_io::Write;
@@ -128,7 +119,7 @@ pub(crate) use cbor_map_vec;
 /// hint.serialize_into(&mut serialized)?;
 /// # Ok::<(), ciborium::ser::Error<<Vec<u8> as Write>::Error>>(())
 /// ```
-/// From the serialized bytestring, just call [`deserialize_from`](AsCborMap::deserialize_from)
+/// From the serialized bytestring, just call [`deserialize_from`](ToCborMap::deserialize_from)
 /// on the struct you want to deserialize into:
 /// ```
 /// # use ciborium_io::Read;
@@ -145,7 +136,7 @@ pub trait ToCborMap: private::Sealed {
     /// Serializes this type as a CBOR map bytestring into the given `writer`.
     ///
     /// # Example
-    /// The following showcases how to serialize a type implementing `AsCborMap`
+    /// The following showcases how to serialize a type implementing `ToCborMap`
     /// using the example of an [`AuthServerRequestCreationHint`](crate::AuthServerRequestCreationHint):
     /// ```
     /// # use ciborium_io::Write;
@@ -188,7 +179,7 @@ pub trait ToCborMap: private::Sealed {
     /// ```
     ///
     /// # Errors
-    /// - When deserialization of the [`ByteString`] failed, e.g. when the given `reader` does not
+    /// - When deserialization of the bytestring failed, e.g. when the given `reader` does not
     ///   contain a valid CBOR map or deserializes to a different type than this one.
     /// - When the input couldn't be read from the given `reader`.
     fn deserialize_from<R>(reader: R) -> Result<Self, ciborium::de::Error<R::Error>>
@@ -219,10 +210,10 @@ pub trait ToCborMap: private::Sealed {
         where
             Self: Sized + ToCborMap;
 
-    /// Converts this type to a CBOR serializable [`Value`] using [`as_cbor_map`](AsCborMap::as_cbor_map).
+    /// Converts this type to a CBOR serializable [`Value`] using [`to_cbor_map`](ToCborMap::to_cbor_map).
     ///
     /// # Panics
-    /// - When the integers in the map from [`as_cbor_map`](AsCborMap::as_cbor_map) are too high to fit into a
+    /// - When the integers in the map from [`to_cbor_map`](ToCborMap::to_cbor_map) are too high to fit into a
     ///   [`Value::Integer`].
     /// - When a CBOR map value can't be serialized.
     ///
@@ -325,7 +316,7 @@ pub(crate) fn decode_number<T>(number: Integer, name: &str) -> Result<T, TryFrom
 }
 
 /// Decodes the given general CBOR `map` into a CBOR map from integers to values.
-/// See [`AsCborMap::cbor_map_from_int`] for details.
+/// See [`ToCborMap::cbor_map_from_int`] for details.
 ///
 /// # Errors
 /// - If `map` is not a valid CBOR map with integer keys.
@@ -361,7 +352,7 @@ impl<T> Display for CborMap<T>
     }
 }
 
-/// Contains definitions according to C-SEALED, which turns [`AsCborMap`] into a sealed trait.
+/// Contains definitions according to C-SEALED, which turns [`ToCborMap`] into a sealed trait.
 mod private {
     use crate::common::cbor_values::ProofOfPossessionKey;
     use crate::endpoints::creation_hint::AuthServerRequestCreationHint;
@@ -381,7 +372,7 @@ mod private {
     impl Sealed for ProofOfPossessionKey {}
 }
 
-/// Contains methods to convert `CborMap` structs (so actually, types implementing `AsCborMap`)
+/// Contains methods to convert `CborMap` structs (so actually, types implementing `ToCborMap`)
 /// into CBOR and back.
 mod conversion {
     use ciborium::value::Value;

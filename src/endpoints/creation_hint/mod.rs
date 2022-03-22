@@ -44,42 +44,26 @@ mod tests;
 ///
 /// This could be built and serialized as an [`AuthServerRequestCreationHint`] like so:
 /// ```
+/// # use std::error::Error;
 /// # use ciborium_io::{Read, Write};
 /// # use dcaf::{ToCborMap, AuthServerRequestCreationHint, Scope};
 /// # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
 /// # use dcaf::common::cbor_values::ByteString;
 /// # use dcaf::common::scope::TextEncodedScope;
 /// # use dcaf::error::InvalidTextEncodedScopeError;
-/// # fn scope_gen() -> Result<Scope, InvalidTextEncodedScopeError> {
 /// // Scope could be built from TextEncodedScope too,
 /// // which also offers to take a space-separated string.
 /// let scope = Scope::try_from(vec!["rTempC"])?;
-/// # Ok(scope)
-/// # }
-/// # fn hint_gen(scope: Scope) -> Result<AuthServerRequestCreationHint, AuthServerRequestCreationHintBuilderError> {
 /// let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder()
 ///     .auth_server("coaps://as.example.com/token")
 ///     .audience("coaps://rs.example.com")
 ///     .scope(scope)
 ///     .client_nonce(ByteString::from(vec![0xe0, 0xa1, 0x56, 0xbb, 0x3f]))
 ///     .build()?;
-/// # Ok(hint)
-/// }
-/// # fn serialize(hint: AuthServerRequestCreationHint) -> Result<Vec<u8>, ciborium::ser::Error<<Vec<u8> as Write>::Error>> {
 /// let mut serialized = Vec::new();
-/// hint.serialize_into(&mut serialized)?;
-/// # Ok(serialized)
-/// # }
-/// # fn deserialize(serialized: &Vec<u8>, hint: AuthServerRequestCreationHint) -> Result<(), ciborium::de::Error<<&[u8] as Read>::Error>> {
+/// hint.clone().serialize_into(&mut serialized)?;
 /// assert_eq!(AuthServerRequestCreationHint::deserialize_from(serialized.as_slice())?, hint);
-/// # Ok(())
-/// # }
-/// # let scope = scope_gen().map_err(|x| x.to_string())?;
-/// # let hint = hint_gen(scope).map_err(|x| x.to_string())?;
-/// # let serialized = serialize(hint.clone()).map_err(|x| x.to_string())?;
-/// # deserialize(&serialized, hint).map_err(|x| x.to_string())?;
-/// #
-/// # Ok::<(), String>(())
+/// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///
 /// [^cbor]: Note that abbreviations aren't used here, so keep in mind that the labels are really
@@ -137,7 +121,7 @@ mod builder {
 ///
 /// One part of this is converting enum types from and to their CBOR abbreviations in
 /// [`cbor_abbreviations`](crate::constants::cbor_abbreviations),
-/// another part is implementing the [`AsCborMap`](crate::AsCborMap) type for the
+/// another part is implementing the [`ToCborMap`](crate::ToCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
     use ciborium::value::Value;
@@ -189,4 +173,3 @@ mod conversion {
     }
 }
 
-// TODO: Introspection data structures
