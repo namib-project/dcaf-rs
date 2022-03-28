@@ -204,6 +204,7 @@ impl Display for InvalidBinaryEncodedScopeError {
 ///
 /// `T` is the type of the nested error represented by the [`Other`](CoseCipherError::Other) variant.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[non_exhaustive]
 pub enum CoseCipherError<T>
     where
         T: Display,
@@ -362,6 +363,7 @@ impl Display for ScopeFromValueError {
 /// `T` is the type of the nested error possibly contained by the
 /// [`CoseCipherError`](AccessTokenError::CoseCipherError) variant.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum AccessTokenError<T>
     where
         T: Display,
