@@ -241,6 +241,12 @@ mod conversion {
         }
     }
 
+    impl AsRef<ByteStringValue> for ByteString {
+        fn as_ref(&self) -> &ByteStringValue {
+            &self.0
+        }
+    }
+
     impl ToCborMap for ProofOfPossessionKey {
         fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             // The fact that we have to clone this is a little unfortunate.
