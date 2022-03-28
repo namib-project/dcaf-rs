@@ -11,11 +11,11 @@
 
 //! Contains error types used across this crate.
 
+use ciborium::value::Value;
 use core::any::type_name;
 use core::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::num::TryFromIntError;
-use ciborium::value::Value;
 use strum_macros::IntoStaticStr;
 
 use coset::{CoseError, Label};
@@ -314,7 +314,7 @@ fn to_variant_name(value: &Value) -> &'static str {
         Value::Tag(_, _) => "Tag",
         Value::Array(_) => "Array",
         Value::Map(_) => "Map",
-        _ => "Unknown"
+        _ => "Unknown",
     }
 }
 
@@ -325,7 +325,10 @@ impl ScopeFromValueError {
     /// Should be used when a given [`Value`] is not a text or byte string.
     #[must_use]
     pub fn invalid_type(actual: &Value) -> ScopeFromValueError {
-        ScopeFromValueError::from(WrongSourceTypeError::new("Text or Bytes", to_variant_name(actual)))
+        ScopeFromValueError::from(WrongSourceTypeError::new(
+            "Text or Bytes",
+            to_variant_name(actual),
+        ))
     }
 }
 
@@ -350,13 +353,16 @@ impl From<WrongSourceTypeError<Value>> for ScopeFromValueError {
 impl Display for ScopeFromValueError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
-            ScopeFromValueError::InvalidBinaryEncodedScope(s) => write!(f, "invalid binary-encoded scope: {s}"),
-            ScopeFromValueError::InvalidTextEncodedScope(s) => write!(f, "invalid text-encoded scope: {s}"),
-            ScopeFromValueError::InvalidType(t) => write!(f, "invalid type: {t}")
+            ScopeFromValueError::InvalidBinaryEncodedScope(s) => {
+                write!(f, "invalid binary-encoded scope: {s}")
+            }
+            ScopeFromValueError::InvalidTextEncodedScope(s) => {
+                write!(f, "invalid text-encoded scope: {s}")
+            }
+            ScopeFromValueError::InvalidType(t) => write!(f, "invalid type: {t}"),
         }
     }
 }
-
 
 /// Error type used when an operation creating or receiving an access token failed.
 ///
@@ -419,12 +425,12 @@ impl<T> AccessTokenError<T>
 
 #[cfg(feature = "std")]
 mod std_error {
-    use core::fmt::Debug;
-    use std::error::Error;
+    use crate::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
     use crate::endpoints::token_req::AccessTokenRequestBuilderError;
     use crate::endpoints::token_req::AccessTokenResponseBuilderError;
     use crate::endpoints::token_req::ErrorResponseBuilderError;
-    use crate::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
+    use core::fmt::Debug;
+    use std::error::Error;
 
     use super::*;
 

@@ -26,9 +26,9 @@
 //! [`cbor_values`]: crate::common::cbor_values
 //! [`scope`]: crate::common::scope
 
-pub mod constants;
 pub mod cbor_map;
 pub mod cbor_values;
+pub mod constants;
 pub mod scope;
 
 #[cfg(test)]

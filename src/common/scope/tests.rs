@@ -11,10 +11,10 @@
 
 /// Tests for text encoded scopes.
 mod text {
-    use ciborium::value::Value;
     use crate::common::scope::TextEncodedScope;
     use crate::error::{InvalidTextEncodedScopeError, ScopeFromValueError};
     use crate::Scope;
+    use ciborium::value::Value;
 
     #[test]
     fn test_scope_element_normal() -> Result<(), InvalidTextEncodedScopeError> {
@@ -136,10 +136,10 @@ mod text {
 
 /// Tests for binary encoded scopes.
 mod binary {
-    use ciborium::value::Value;
     use crate::common::scope::BinaryEncodedScope;
     use crate::error::{InvalidBinaryEncodedScopeError, ScopeFromValueError};
     use crate::Scope;
+    use ciborium::value::Value;
 
     #[test]
     fn test_scope_elements_normal() -> Result<(), InvalidBinaryEncodedScopeError> {
@@ -154,10 +154,20 @@ mod binary {
         assert!(simple2.elements(0x20)?.eq(vec![vec![0xDC], vec![0xAF]]));
         assert!(simple2.elements(0)?.eq(vec![vec![0xDC, 0x20, 0xAF]]));
 
-        let simple3 = BinaryEncodedScope::try_from(vec![0xDE, 0xAD, 0xBE, 0xEF, 0, 0xDC, 0xAF, 0, 1].as_slice())?;
-        assert!(simple3.elements(0)?.eq(vec![vec![0xDE, 0xAD, 0xBE, 0xEF], vec![0xDC, 0xAF], vec![1]]));
-        assert!(simple3.elements(0xEF)?.eq(vec![vec![0xDE, 0xAD, 0xBE], vec![0, 0xDC, 0xAF, 0, 1]]));
-        assert!(simple3.elements(2)?.eq(vec![vec![0xDE, 0xAD, 0xBE, 0xEF, 0, 0xDC, 0xAF, 0, 1]]));
+        let simple3 = BinaryEncodedScope::try_from(
+            vec![0xDE, 0xAD, 0xBE, 0xEF, 0, 0xDC, 0xAF, 0, 1].as_slice(),
+        )?;
+        assert!(simple3.elements(0)?.eq(vec![
+            vec![0xDE, 0xAD, 0xBE, 0xEF],
+            vec![0xDC, 0xAF],
+            vec![1],
+        ]));
+        assert!(simple3
+            .elements(0xEF)?
+            .eq(vec![vec![0xDE, 0xAD, 0xBE], vec![0, 0xDC, 0xAF, 0, 1]]));
+        assert!(simple3
+            .elements(2)?
+            .eq(vec![vec![0xDE, 0xAD, 0xBE, 0xEF, 0, 0xDC, 0xAF, 0, 1]]));
         Ok(())
     }
 
@@ -165,14 +175,16 @@ mod binary {
     fn test_scope_elements_empty() -> Result<(), InvalidBinaryEncodedScopeError> {
         assert!(BinaryEncodedScope::try_from(vec![].as_slice()).is_err());
         // Assuming 0 is separator
-        let empty_vecs = vec![
-            vec![0], vec![0, 0], vec![0, 0, 0],
-        ];
+        let empty_vecs = vec![vec![0], vec![0, 0], vec![0, 0, 0]];
         for vec in empty_vecs {
-            assert!(BinaryEncodedScope::try_from(vec.as_slice())?.elements(0).is_err());
+            assert!(BinaryEncodedScope::try_from(vec.as_slice())?
+                .elements(0)
+                .is_err());
             // If the separator is something else, the result should just contain the vec
             // as a single element.
-            assert!(BinaryEncodedScope::try_from(vec.as_slice())?.elements(1)?.eq(vec![vec]));
+            assert!(BinaryEncodedScope::try_from(vec.as_slice())?
+                .elements(1)?
+                .eq(vec![vec]));
         }
         Ok(())
     }
@@ -196,10 +208,14 @@ mod binary {
             vec![0, 0, 0xDC, 0, 0, 0xAF, 0, 0],
         ];
         for vec in invalid {
-            assert!(BinaryEncodedScope::try_from(vec.as_slice())?.elements(0).is_err());
+            assert!(BinaryEncodedScope::try_from(vec.as_slice())?
+                .elements(0)
+                .is_err());
             // If the separator is something else, the result should just contain the vec
             // as a single element.
-            assert!(BinaryEncodedScope::try_from(vec.as_slice())?.elements(1)?.eq(vec![vec]));
+            assert!(BinaryEncodedScope::try_from(vec.as_slice())?
+                .elements(1)?
+                .eq(vec![vec]));
         }
         Ok(())
     }
@@ -209,7 +225,10 @@ mod binary {
         let scope = Scope::try_from(vec![0xDC, 0xAF].as_slice())?;
         let value = Value::from(scope.clone());
         assert!(value.is_bytes());
-        assert_eq!(value.as_bytes().expect("not bytes"), vec![0xDC, 0xAF].as_slice());
+        assert_eq!(
+            value.as_bytes().expect("not bytes"),
+            vec![0xDC, 0xAF].as_slice()
+        );
         assert_eq!(Scope::try_from(value)?, scope);
         Ok(())
     }

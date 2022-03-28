@@ -379,7 +379,7 @@ mod conversion {
     use serde::de::{Error, Unexpected};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    use crate::common::cbor_map::{ToCborMap, CborMap};
+    use crate::common::cbor_map::{CborMap, ToCborMap};
 
     impl<T> From<T> for CborMap<T>
         where

@@ -49,7 +49,9 @@ fn example_aad() -> Vec<u8> {
     vec![0x01, 0x02, 0x03, 0x04, 0x05]
 }
 
-fn example_claims(key: CoseKey) -> Result<ClaimsSet, AccessTokenError<<FakeCrypto as CoseCipherCommon>::Error>> {
+fn example_claims(
+    key: CoseKey,
+) -> Result<ClaimsSet, AccessTokenError<<FakeCrypto as CoseCipherCommon>::Error>> {
     Ok(ClaimsSetBuilder::new()
         .claim(
             CwtClaimName::Cnf,
@@ -108,13 +110,16 @@ fn test_get_headers_enc() -> Result<(), AccessTokenError<<FakeCrypto as CoseCiph
     );
     assert_eq!(
         (unprotected_header, protected_header),
-        get_token_headers(&enc_test).map(|(u, p)| (u, p.header)).unwrap()
+        get_token_headers(&enc_test)
+            .map(|(u, p)| (u, p.header))
+            .unwrap()
     );
     Ok(())
 }
 
 #[test]
-fn test_get_headers_sign() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCommon>::Error>> {
+fn test_get_headers_sign() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCommon>::Error>>
+{
     let (unprotected_header, protected_header) = example_headers();
     let sign_test = ByteString::from(
         CoseSign1Builder::new()
@@ -126,7 +131,9 @@ fn test_get_headers_sign() -> Result<(), AccessTokenError<<FakeCrypto as CoseCip
     );
     assert_eq!(
         (unprotected_header, protected_header),
-        get_token_headers(&sign_test).map(|(u, p)| (u, p.header)).unwrap()
+        get_token_headers(&sign_test)
+            .map(|(u, p)| (u, p.header))
+            .unwrap()
     );
     Ok(())
 }
@@ -144,7 +151,9 @@ fn test_get_headers_mac() -> Result<(), AccessTokenError<<FakeCrypto as CoseCiph
     );
     assert_eq!(
         (unprotected_header, protected_header),
-        get_token_headers(&mac_test).map(|(u, p)| (u, p.header)).unwrap()
+        get_token_headers(&mac_test)
+            .map(|(u, p)| (u, p.header))
+            .unwrap()
     );
     Ok(())
 }
@@ -180,7 +189,10 @@ fn test_encrypt_decrypt() -> Result<(), AccessTokenError<<FakeCrypto as CoseCiph
     let (unprotected, protected) = get_token_headers(&encrypted).unwrap();
     assert_header_is_part_of(&unprotected_header, &unprotected);
     assert_header_is_part_of(&protected_header, &protected.header);
-    assert_eq!(decrypt_access_token(&encrypted, &mut crypto, Some(&aad))?, claims);
+    assert_eq!(
+        decrypt_access_token(&encrypted, &mut crypto, Some(&aad))?,
+        claims
+    );
     Ok(())
 }
 
@@ -248,7 +260,8 @@ fn test_sign_verify() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCo
         Some(protected_header.clone()),
     )?;
     println!("{:x?}", &signed);
-    let (unprotected, protected) = get_token_headers(&signed).ok_or(AccessTokenError::UnknownCoseStructure)?;
+    let (unprotected, protected) =
+        get_token_headers(&signed).ok_or(AccessTokenError::UnknownCoseStructure)?;
     assert_header_is_part_of(&unprotected_header, &unprotected);
     assert_header_is_part_of(&protected_header, &protected.header);
     verify_access_token(&signed, &mut signer, Some(&aad))?;

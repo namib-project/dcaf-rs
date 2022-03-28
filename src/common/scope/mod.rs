@@ -66,8 +66,8 @@ use alloc::string::String;
 use core::fmt::{Display, Formatter};
 use strum_macros::IntoStaticStr;
 
-use serde::{Deserialize, Serialize};
 use crate::common::cbor_values::ByteString;
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod tests;
@@ -209,10 +209,13 @@ pub enum Scope {
 /// another part is implementing the [`ToCborMap`](crate::ToCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
+    use crate::error::{
+        InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError, ScopeFromValueError,
+        WrongSourceTypeError,
+    };
     use ciborium::value::Value;
-    use serde::{Deserializer};
     use serde::de::Error;
-    use crate::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError, ScopeFromValueError, WrongSourceTypeError};
+    use serde::Deserializer;
 
     use super::*;
 
@@ -406,7 +409,7 @@ mod conversion {
         fn from(scope: Scope) -> Self {
             match scope {
                 Scope::TextEncoded(text) => Value::from(text.0),
-                Scope::BinaryEncoded(binary) => Value::from(binary.0.0)
+                Scope::BinaryEncoded(binary) => Value::from(binary.0.0),
             }
         }
     }
@@ -416,17 +419,22 @@ mod conversion {
 
         fn try_from(value: Value) -> Result<Self, Self::Error> {
             match value {
-                Value::Bytes(b) => Ok(Scope::BinaryEncoded(BinaryEncodedScope::try_from(b.as_slice())?)),
+                Value::Bytes(b) => Ok(Scope::BinaryEncoded(BinaryEncodedScope::try_from(
+                    b.as_slice(),
+                )?)),
                 Value::Text(t) => Ok(Scope::TextEncoded(TextEncodedScope::try_from(t.as_str())?)),
-                v => Err(ScopeFromValueError::invalid_type(&v))
+                v => Err(ScopeFromValueError::invalid_type(&v)),
             }
         }
     }
 
     impl<'de> Deserialize<'de> for Scope {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-            Scope::try_from(Value::deserialize(deserializer)?).map_err(|x| D::Error::custom(x.to_string()))
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+        {
+            Scope::try_from(Value::deserialize(deserializer)?)
+                .map_err(|x| D::Error::custom(x.to_string()))
         }
     }
 }
-

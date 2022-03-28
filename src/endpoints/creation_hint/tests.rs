@@ -10,7 +10,6 @@
  */
 
 /// Tests for CBOR serialization and deserialization of ACE-OAuth data models.
-
 use crate::common::scope::TextEncodedScope;
 use crate::common::test_helper::expect_ser_de;
 
@@ -28,4 +27,3 @@ fn test_creation_hint() -> Result<(), String> {
         .map_err(|x| x.to_string())?;
     expect_ser_de(hint, None, "a401781c636f6170733a2f2f61732e6578616d706c652e636f6d2f746f6b656e0576636f6170733a2f2f72732e6578616d706c652e636f6d09667254656d7043182745e0a156bb3f")
 }
-

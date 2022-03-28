@@ -9,20 +9,23 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-use coset::cwt::{ClaimsSet, ClaimsSetBuilder, Timestamp};
-use coset::iana::{Algorithm, CwtClaimName};
-use coset::iana::EllipticCurve::P_256;
-use coset::{CoseKeyBuilder, Header, HeaderBuilder, CoseKey, AsCborValue, Label};
-use dcaf::common::scope::TextEncodedScope;
-use dcaf::common::cbor_map::ToCborMap;
-use dcaf::endpoints::creation_hint::AuthServerRequestCreationHint;
-use dcaf::endpoints::token_req::{AccessTokenRequest, AccessTokenResponse, AceProfile, ErrorCode, ErrorResponse, GrantType, TokenType};
-use dcaf::{CoseSign1Cipher, sign_access_token};
-use std::fmt::Debug;
 use ciborium::value::Value;
+use coset::cwt::{ClaimsSet, ClaimsSetBuilder, Timestamp};
+use coset::iana::EllipticCurve::P_256;
+use coset::iana::{Algorithm, CwtClaimName};
+use coset::{AsCborValue, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, Label};
+use dcaf::common::cbor_map::ToCborMap;
 use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
+use dcaf::common::scope::TextEncodedScope;
+use dcaf::endpoints::creation_hint::AuthServerRequestCreationHint;
+use dcaf::endpoints::token_req::{
+    AccessTokenRequest, AccessTokenResponse, AceProfile, ErrorCode, ErrorResponse, GrantType,
+    TokenType,
+};
 use dcaf::error::{AccessTokenError, CoseCipherError};
 use dcaf::token::CoseCipherCommon;
+use dcaf::{sign_access_token, CoseSign1Cipher};
+use std::fmt::Debug;
 
 fn example_headers() -> (Header, Header) {
     let unprotected_header = HeaderBuilder::new()
@@ -48,16 +51,23 @@ fn example_claims(key: CoseKey) -> Result<ClaimsSet, AccessTokenError<String>> {
         .build())
 }
 
-
 #[derive(Copy, Clone)]
 pub(crate) struct FakeCrypto {}
 
 impl CoseCipherCommon for FakeCrypto {
     type Error = String;
 
-    fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
+    fn header(
+        &self,
+        unprotected_header: &mut Header,
+        protected_header: &mut Header,
+    ) -> Result<(), CoseCipherError<Self::Error>> {
         // We have to later verify these headers really are used.
-        if let Some(label) = unprotected_header.rest.iter().find(|x| x.0 == Label::Int(47)) {
+        if let Some(label) = unprotected_header
+            .rest
+            .iter()
+            .find(|x| x.0 == Label::Int(47))
+        {
             return Err(CoseCipherError::existing_header_label(&label.0));
         }
         if protected_header.alg != None {
@@ -77,7 +87,11 @@ impl CoseSign1Cipher for FakeCrypto {
         data.to_vec()
     }
 
-    fn verify_signature(&mut self, sig: &[u8], data: &[u8]) -> Result<(), CoseCipherError<Self::Error>> {
+    fn verify_signature(
+        &mut self,
+        sig: &[u8],
+        data: &[u8],
+    ) -> Result<(), CoseCipherError<Self::Error>> {
         if sig != self.generate_signature(data) {
             Err(CoseCipherError::VerificationFailure)
         } else {
@@ -85,7 +99,6 @@ impl CoseSign1Cipher for FakeCrypto {
         }
     }
 }
-
 
 /// We assume the following scenario here:
 /// 1. The client tries to access a protected resource. Since it's still unauthorized,
@@ -108,9 +121,12 @@ fn test_scenario() -> Result<(), String> {
     // Taken from RFC 8747, section 3.2.
     let key = CoseKeyBuilder::new_ec2_pub_key(
         P_256,
-        hex::decode("d7cc072de2205bdc1537a543d53c60a6acb62eccd890c7fa27c9e354089bbe13").map_err(|x| x.to_string())?,
-        hex::decode("f95e1d4b851a2cc80fff87d8e23f22afb725d535e515d020731e79a3b4e47120").map_err(|x| x.to_string())?,
-    ).build();
+        hex::decode("d7cc072de2205bdc1537a543d53c60a6acb62eccd890c7fa27c9e354089bbe13")
+            .map_err(|x| x.to_string())?,
+        hex::decode("f95e1d4b851a2cc80fff87d8e23f22afb725d535e515d020731e79a3b4e47120")
+            .map_err(|x| x.to_string())?,
+    )
+        .build();
     let (unprotected_headers, protected_headers) = example_headers();
     let mut crypto = FakeCrypto {};
     let aad = example_aad();
@@ -146,9 +162,12 @@ fn test_scenario() -> Result<(), String> {
             .claim(CwtClaimName::Cnf, PlainCoseKey(key).to_ciborium_value())
             .build(),
         // TODO: Proper headers
-        &mut crypto, Some(aad.as_slice()),
-        Some(unprotected_headers), Some(protected_headers),
-    ).map_err(|x| x.to_string())?;
+        &mut crypto,
+        Some(aad.as_slice()),
+        Some(unprotected_headers),
+        Some(protected_headers),
+    )
+        .map_err(|x| x.to_string())?;
     let response = AccessTokenResponse::builder()
         .access_token(token)
         .ace_profile(AceProfile::CoapDtls)
@@ -164,7 +183,8 @@ fn test_scenario() -> Result<(), String> {
         .error(ErrorCode::InvalidRequest)
         .error_description("You sent an invalid request.")
         .error_uri("https://example.org/400")
-        .build().map_err(|x| x.to_string())?;
+        .build()
+        .map_err(|x| x.to_string())?;
     let result = pseudo_send_receive(error.clone())?;
     assert_eq!(error, result);
     Ok(())

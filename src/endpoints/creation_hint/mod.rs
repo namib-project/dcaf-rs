@@ -15,9 +15,9 @@
 //!
 //! See the documentation of [`AuthServerRequestCreationHint`] for details and an example.
 
-use alloc::string::String;
 use crate::common::cbor_values::ByteString;
 use crate::Scope;
+use alloc::string::String;
 
 #[cfg(test)]
 mod tests;
@@ -124,14 +124,14 @@ mod builder {
 /// another part is implementing the [`ToCborMap`](crate::ToCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
+    use crate::common::cbor_map::{cbor_map_vec, decode_scope, ToCborMap};
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
-    use crate::common::cbor_map::{ToCborMap, cbor_map_vec, decode_scope};
 
-    use crate::common::constants::cbor_abbreviations::creation_hint;
-    use crate::error::{TryFromCborMapError};
-    use crate::common::scope::{BinaryEncodedScope, TextEncodedScope};
     use crate::common::cbor_values::ByteString;
+    use crate::common::constants::cbor_abbreviations::creation_hint;
+    use crate::common::scope::{BinaryEncodedScope, TextEncodedScope};
+    use crate::error::TryFromCborMapError;
 
     use super::*;
 
@@ -172,4 +172,3 @@ mod conversion {
         }
     }
 }
-

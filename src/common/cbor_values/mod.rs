@@ -27,13 +27,13 @@
 //! # Ok::<(), AccessTokenResponseBuilderError>(())
 //! ```
 
-use strum_macros::IntoStaticStr;
 use alloc::vec::Vec;
 use core::fmt::{Debug, Display, Formatter};
 use core::ops::Deref;
+use strum_macros::IntoStaticStr;
 
 use coset::{CoseEncrypt0, CoseKey};
-use serde::{Deserialize};
+use serde::Deserialize;
 
 /// Value of a [`ByteString`], represented as a vector of bytes.
 pub(crate) type ByteStringValue = Vec<u8>;
@@ -73,7 +73,6 @@ pub(crate) struct CborMapValue<T>(pub(crate) T)
         i32: Into<T>,
         T: Into<i32> + Copy;
 
-
 /// A proof-of-possession key as specified by
 /// [RFC 8747, section 3.1](https://datatracker.ietf.org/doc/html/rfc8747#section-3.1).
 ///
@@ -95,7 +94,7 @@ pub(crate) struct CborMapValue<T>(pub(crate) T)
 /// # Ok::<(), AccessTokenRequestBuilderError>(())
 /// ```
 #[derive(Debug, PartialEq, Clone, IntoStaticStr)]
-#[allow(clippy::large_enum_variant)]  // size difference of ~300 bytes is acceptable
+#[allow(clippy::large_enum_variant)] // size difference of ~300 bytes is acceptable
 pub enum ProofOfPossessionKey {
     /// An unencrypted [`CoseKey`](coset::CoseKey) used to represent an asymmetric public key or
     /// (if the CWT it's contained in is encrypted) a symmetric key.
@@ -182,12 +181,12 @@ impl<T> Display for CborMapValue<T>
 
 /// Contains various `From`, `TryFrom` and other conversion methods for types of the parent module.
 mod conversion {
+    use crate::common::cbor_map::ToCborMap;
     use ciborium::value::Value;
     use coset::{AsCborValue, CoseEncrypt0, CoseKey};
     use erased_serde::Serialize as ErasedSerialize;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use serde::de::Error;
-    use crate::common::cbor_map::ToCborMap;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     use crate::error::{TryFromCborMapError, WrongSourceTypeError};
 
@@ -235,7 +234,10 @@ mod conversion {
         }
     }
 
-    impl<T> From<T> for ByteString where T: Into<ByteStringValue> {
+    impl<T> From<T> for ByteString
+        where
+            T: Into<ByteStringValue>,
+    {
         fn from(x: T) -> Self {
             ByteString(x.into())
         }

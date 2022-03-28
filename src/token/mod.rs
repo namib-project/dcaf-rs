@@ -360,8 +360,8 @@ fn prepare_headers<T>(
     protected_header: Option<Header>,
     cipher: &T,
 ) -> Result<(Header, Header), AccessTokenError<T::Error>>
-    where
-        T: CoseCipherCommon,
+where
+    T: CoseCipherCommon,
 {
     let mut unprotected = unprotected_header.unwrap_or_else(|| HeaderBuilder::new().build());
     let mut protected = protected_header.unwrap_or_else(|| HeaderBuilder::new().build());

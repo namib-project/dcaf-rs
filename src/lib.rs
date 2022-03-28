@@ -197,7 +197,11 @@
 #![deny(rustdoc::broken_intra_doc_links, clippy::pedantic)]
 #![warn(missing_docs, rustdoc::missing_crate_level_docs)]
 // These ones are a little too eager
-#![allow(clippy::doc_markdown, clippy::module_name_repetitions, clippy::wildcard_imports)]
+#![allow(
+clippy::doc_markdown,
+clippy::module_name_repetitions,
+clippy::wildcard_imports
+)]
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
 extern crate core;
@@ -205,24 +209,24 @@ extern crate core;
 extern crate derive_builder;
 
 #[doc(inline)]
-pub use common::constants;
-#[doc(inline)]
-pub use common::scope::{Scope, TextEncodedScope, BinaryEncodedScope};
-#[doc(inline)]
 pub use common::cbor_map::ToCborMap;
 #[doc(inline)]
 pub use common::cbor_values::{ByteString, ProofOfPossessionKey};
 #[doc(inline)]
-pub use endpoints::creation_hint::{AuthServerRequestCreationHint};
+pub use common::constants;
+#[doc(inline)]
+pub use common::scope::{BinaryEncodedScope, Scope, TextEncodedScope};
+#[doc(inline)]
+pub use endpoints::creation_hint::AuthServerRequestCreationHint;
 #[doc(inline)]
 pub use endpoints::token_req::{
-    AccessTokenRequest, AccessTokenResponse, ErrorResponse,
-    AceProfile, ErrorCode, GrantType, TokenType,
+    AccessTokenRequest, AccessTokenResponse, AceProfile, ErrorCode, ErrorResponse, GrantType,
+    TokenType,
 };
 #[doc(inline)]
 pub use token::{
-    decrypt_access_token, encrypt_access_token, sign_access_token, verify_access_token,
-    get_token_headers, CoseEncrypt0Cipher, CoseSign1Cipher, CoseMac0Cipher, CoseCipherCommon,
+    decrypt_access_token, encrypt_access_token, get_token_headers, sign_access_token,
+    verify_access_token, CoseCipherCommon, CoseEncrypt0Cipher, CoseMac0Cipher, CoseSign1Cipher,
 };
 
 pub mod common;

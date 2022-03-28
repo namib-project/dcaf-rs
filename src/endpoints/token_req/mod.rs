@@ -16,9 +16,9 @@
 //! and [`ErrorResponse`]. Look at their documentation for usage examples.
 //! Other members are mainly used as part of the aforementioned structures.
 
-use alloc::string::String;
 use crate::common::cbor_values::{ByteString, ProofOfPossessionKey};
 use crate::Scope;
+use alloc::string::String;
 
 #[cfg(test)]
 mod tests;
@@ -282,7 +282,6 @@ pub enum AceProfile {
     // /// Profile for ACE-OAuth using OSCORE, specified in
     // /// [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.html).
     // CoapOscore,
-
     /// An unspecified ACE-OAuth profile along with its representation in CBOR.
     ///
     /// See [section 8.8 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.8)
@@ -590,15 +589,19 @@ mod builder {
 }
 
 mod conversion {
+    use crate::common::cbor_map::{
+        cbor_map_vec, decode_int_map, decode_number, decode_scope, ToCborMap,
+    };
+    use crate::common::cbor_values::{ByteString, CborMapValue, ProofOfPossessionKey};
+    use crate::constants::cbor_abbreviations::{
+        ace_profile, error, grant_types, token, token_types,
+    };
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
-    use crate::common::cbor_map::{ToCborMap, cbor_map_vec, decode_int_map, decode_number, decode_scope};
-    use crate::common::cbor_values::{ByteString, CborMapValue, ProofOfPossessionKey};
-    use crate::constants::cbor_abbreviations::{ace_profile, error, grant_types, token, token_types};
 
+    use crate::common::scope::{BinaryEncodedScope, TextEncodedScope};
     use crate::endpoints::token_req::AceProfile::CoapDtls;
     use crate::error::TryFromCborMapError;
-    use crate::common::scope::{BinaryEncodedScope, TextEncodedScope};
 
     use super::*;
 
@@ -719,7 +722,12 @@ mod conversion {
             for entry in map {
                 match (u8::try_from(entry.0)?, entry.1) {
                     (token::REQ_CNF, Value::Map(x)) => {
-                        request.req_cnf = Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<Self>(x, "req_cnf")?)?);
+                        request.req_cnf =
+                            Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
+                                Self,
+                            >(
+                                x, "req_cnf",
+                            )?)?);
                     }
                     (token::AUDIENCE, Value::Text(x)) => request.audience = Some(x),
                     (token::SCOPE, Value::Text(x)) => {
@@ -732,7 +740,8 @@ mod conversion {
                     (token::CLIENT_ID, Value::Text(x)) => request.client_id = x,
                     (token::REDIRECT_URI, Value::Text(x)) => request.redirect_uri = Some(x),
                     (token::GRANT_TYPE, Value::Integer(x)) => {
-                        request.grant_type = Some(GrantType::from(decode_number::<i32>(x, "grant_type")?));
+                        request.grant_type =
+                            Some(GrantType::from(decode_number::<i32>(x, "grant_type")?));
                     }
                     (token::ACE_PROFILE, Value::Null) => request.ace_profile = Some(()),
                     (token::CNONCE, Value::Bytes(x)) => {
@@ -775,7 +784,12 @@ mod conversion {
                         response.expires_in = Some(decode_number::<u32>(x, "expires_in")?);
                     }
                     (token::CNF, Value::Map(x)) => {
-                        response.cnf = Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<Self>(x, "cnf")?)?);
+                        response.cnf =
+                            Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
+                                Self,
+                            >(
+                                x, "cnf",
+                            )?)?);
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
                         response.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?;
@@ -785,16 +799,23 @@ mod conversion {
                         response.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?;
                     }
                     (token::TOKEN_TYPE, Value::Integer(x)) => {
-                        response.token_type = Some(TokenType::from(decode_number::<i32>(x, "token_type")?));
+                        response.token_type =
+                            Some(TokenType::from(decode_number::<i32>(x, "token_type")?));
                     }
                     (token::REFRESH_TOKEN, Value::Bytes(x)) => {
                         response.refresh_token = Some(ByteString::from(x));
                     }
                     (token::ACE_PROFILE, Value::Integer(x)) => {
-                        response.ace_profile = Some(AceProfile::from(decode_number::<i32>(x, "ace_profile")?));
+                        response.ace_profile =
+                            Some(AceProfile::from(decode_number::<i32>(x, "ace_profile")?));
                     }
                     (token::RS_CNF, Value::Map(x)) => {
-                        response.rs_cnf = Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<Self>(x, "rs_cnf")?)?);
+                        response.rs_cnf =
+                            Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
+                                Self,
+                            >(
+                                x, "rs_cnf",
+                            )?)?);
                     }
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 }
@@ -830,11 +851,13 @@ mod conversion {
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 }
             }
-            maybe_error.map(|error| ErrorResponse {
-                error,
-                error_description,
-                error_uri,
-            }).ok_or_else(|| TryFromCborMapError::missing_field("error"))
+            maybe_error
+                .map(|error| ErrorResponse {
+                    error,
+                    error_description,
+                    error_uri,
+                })
+                .ok_or_else(|| TryFromCborMapError::missing_field("error"))
         }
     }
 }
