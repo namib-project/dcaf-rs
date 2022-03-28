@@ -15,11 +15,14 @@ use core::any::type_name;
 use core::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::num::TryFromIntError;
+use ciborium::value::Value;
+use strum_macros::IntoStaticStr;
 
 use coset::{CoseError, Label};
 
 /// Error type used when the parameter of the type `T` couldn't be
-/// converted into [`expected_type`](WrongSourceTypeError::expected_type).
+/// converted into [`expected_type`](WrongSourceTypeError::expected_type) because the received
+/// type was [`actual_type`](WrongSourceTypeError::actual_type) instead.
 ///
 /// `T` is the general type taken in the [`TryFrom`] conversion.
 /// Used for [`TryFrom`] conversions from a general enum type to a specific member type.
@@ -27,6 +30,8 @@ use coset::{CoseError, Label};
 pub struct WrongSourceTypeError<T> {
     /// The name of the specific type which [`TryFrom`] tried to convert to.
     pub expected_type: &'static str,
+    /// The name of the actual type which [`TryFrom`] received.
+    pub actual_type: &'static str,
     /// The general type taken in the [`TryFrom`] conversion.
     pub general_type: PhantomData<T>,
 }
@@ -35,8 +40,9 @@ impl<T> Display for WrongSourceTypeError<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "the given {} is not a {} variant",
+            "the given {} is a {} variant (expected {} variant)",
             type_name::<T>(),
+            self.actual_type,
             self.expected_type
         )
     }
@@ -45,11 +51,12 @@ impl<T> Display for WrongSourceTypeError<T> {
 impl<T> WrongSourceTypeError<T> {
     /// Creates a new instance of the error, taking `T` as the general type from which
     /// the conversion was tried and the `expected_type` as the target type which it was tried to
-    /// convert it into, but failed.
+    /// convert it into, but failed because it was actually of the type named by `actual_type`.
     #[must_use]
-    pub fn new(expected_type: &'static str) -> WrongSourceTypeError<T> {
+    pub fn new(expected_type: &'static str, actual_type: &'static str) -> WrongSourceTypeError<T> {
         WrongSourceTypeError {
             expected_type,
+            actual_type,
             general_type: PhantomData,
         }
     }
@@ -120,7 +127,7 @@ impl Display for ValueIsNotIntegerError {
 
 /// Error type used when a [`TextEncodedScope`](crate::common::scope::TextEncodedScope)
 /// does not conform to the specification given in RFC 6749.
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, IntoStaticStr)]
 pub enum InvalidTextEncodedScopeError {
     /// The scope starts with a separator (i.e. space).
     StartsWithSeparator,
@@ -274,6 +281,82 @@ impl<T> Display for CoseCipherError<T>
     }
 }
 
+/// Error type when a [`Value`] can't be converted to a Scope.
+///
+/// This can be because it isn't a scope, or because the scope is invalid.
+#[derive(Debug, PartialEq, Clone)]
+pub enum ScopeFromValueError {
+    /// The binary scope contained in the [`Value`] is invalid.
+    ///
+    /// Details are provided in the given [`InvalidBinaryEncodedScopeError`].
+    InvalidBinaryEncodedScope(InvalidBinaryEncodedScopeError),
+
+    /// The textual scope contained in the [`Value`] is invalid.
+    ///
+    /// Details are provided in the given [`InvalidTextEncodedScopeError`].
+    InvalidTextEncodedScope(InvalidTextEncodedScopeError),
+
+    /// The [`Value`] isn't a scope, but something else.
+    ///
+    /// Details are provided in the given [`WrongSourceTypeError`].
+    InvalidType(WrongSourceTypeError<Value>),
+}
+
+fn to_variant_name(value: &Value) -> &'static str {
+    match value {
+        Value::Integer(_) => "Integer",
+        Value::Bytes(_) => "Bytes",
+        Value::Float(_) => "Float",
+        Value::Text(_) => "Text",
+        Value::Bool(_) => "Bool",
+        Value::Null => "Null",
+        Value::Tag(_, _) => "Tag",
+        Value::Array(_) => "Array",
+        Value::Map(_) => "Map",
+        _ => "Unknown"
+    }
+}
+
+impl ScopeFromValueError {
+    /// Creates a new [`InvalidType`](ScopeFromValueError::InvalidType) error from the given
+    /// `actual` [`Value`].
+    ///
+    /// Should be used when a given [`Value`] is not a text or byte string.
+    #[must_use]
+    pub fn invalid_type(actual: &Value) -> ScopeFromValueError {
+        ScopeFromValueError::from(WrongSourceTypeError::new("Text or Bytes", to_variant_name(actual)))
+    }
+}
+
+impl From<InvalidTextEncodedScopeError> for ScopeFromValueError {
+    fn from(err: InvalidTextEncodedScopeError) -> Self {
+        ScopeFromValueError::InvalidTextEncodedScope(err)
+    }
+}
+
+impl From<InvalidBinaryEncodedScopeError> for ScopeFromValueError {
+    fn from(err: InvalidBinaryEncodedScopeError) -> Self {
+        ScopeFromValueError::InvalidBinaryEncodedScope(err)
+    }
+}
+
+impl From<WrongSourceTypeError<Value>> for ScopeFromValueError {
+    fn from(err: WrongSourceTypeError<Value>) -> Self {
+        ScopeFromValueError::InvalidType(err)
+    }
+}
+
+impl Display for ScopeFromValueError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ScopeFromValueError::InvalidBinaryEncodedScope(s) => write!(f, "invalid binary-encoded scope: {s}"),
+            ScopeFromValueError::InvalidTextEncodedScope(s) => write!(f, "invalid text-encoded scope: {s}"),
+            ScopeFromValueError::InvalidType(t) => write!(f, "invalid type: {t}")
+        }
+    }
+}
+
+
 /// Error type used when an operation creating or receiving an access token failed.
 ///
 /// `T` is the type of the nested error possibly contained by the
@@ -345,17 +428,19 @@ mod std_error {
 
     impl<T> Error for WrongSourceTypeError<T> where T: Debug {}
 
+    impl Error for TryFromCborMapError {}
+
     impl Error for ValueIsNotIntegerError {}
 
     impl Error for InvalidTextEncodedScopeError {}
 
     impl Error for InvalidBinaryEncodedScopeError {}
 
+    impl Error for ScopeFromValueError {}
+
     impl<T> Error for CoseCipherError<T> where T: Debug + Display {}
 
     impl<T> Error for AccessTokenError<T> where T: Debug + Display {}
-
-    impl Error for TryFromCborMapError {}
 
     impl Error for AccessTokenRequestBuilderError {}
 

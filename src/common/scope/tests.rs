@@ -11,8 +11,10 @@
 
 /// Tests for text encoded scopes.
 mod text {
+    use ciborium::value::Value;
     use crate::common::scope::TextEncodedScope;
-    use crate::error::{InvalidTextEncodedScopeError};
+    use crate::error::{InvalidTextEncodedScopeError, ScopeFromValueError};
+    use crate::Scope;
 
     #[test]
     fn test_scope_element_normal() -> Result<(), InvalidTextEncodedScopeError> {
@@ -120,12 +122,24 @@ mod text {
             assert!(TextEncodedScope::try_from(input).is_err())
         }
     }
+
+    #[test]
+    fn test_scope_value() -> Result<(), ScopeFromValueError> {
+        let scope = Scope::try_from(vec!["one", "two", "three"])?;
+        let value = Value::from(scope.clone());
+        assert!(value.is_text());
+        assert_eq!(value.as_text().expect("not a text"), "one two three");
+        assert_eq!(Scope::try_from(value)?, scope);
+        Ok(())
+    }
 }
 
 /// Tests for binary encoded scopes.
 mod binary {
+    use ciborium::value::Value;
     use crate::common::scope::BinaryEncodedScope;
-    use crate::error::InvalidBinaryEncodedScopeError;
+    use crate::error::{InvalidBinaryEncodedScopeError, ScopeFromValueError};
+    use crate::Scope;
 
     #[test]
     fn test_scope_elements_normal() -> Result<(), InvalidBinaryEncodedScopeError> {
@@ -187,6 +201,16 @@ mod binary {
             // as a single element.
             assert!(BinaryEncodedScope::try_from(vec.as_slice())?.elements(1)?.eq(vec![vec]));
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_value() -> Result<(), ScopeFromValueError> {
+        let scope = Scope::try_from(vec![0xDC, 0xAF].as_slice())?;
+        let value = Value::from(scope.clone());
+        assert!(value.is_bytes());
+        assert_eq!(value.as_bytes().expect("not bytes"), vec![0xDC, 0xAF].as_slice());
+        assert_eq!(Scope::try_from(value)?, scope);
         Ok(())
     }
 }

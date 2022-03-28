@@ -27,13 +27,13 @@
 //! # Ok::<(), AccessTokenResponseBuilderError>(())
 //! ```
 
-use alloc::string::String;
+use strum_macros::IntoStaticStr;
 use alloc::vec::Vec;
 use core::fmt::{Debug, Display, Formatter};
 use core::ops::Deref;
 
 use coset::{CoseEncrypt0, CoseKey};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 
 /// Value of a [`ByteString`], represented as a vector of bytes.
 pub(crate) type ByteStringValue = Vec<u8>;
@@ -94,7 +94,7 @@ pub(crate) struct CborMapValue<T>(pub(crate) T)
 /// assert_eq!(request.req_cnf.unwrap().key_id().to_vec(), vec![0xDC, 0xAF]);
 /// # Ok::<(), AccessTokenRequestBuilderError>(())
 /// ```
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, IntoStaticStr)]
 #[allow(clippy::large_enum_variant)]  // size difference of ~300 bytes is acceptable
 pub enum ProofOfPossessionKey {
     /// An unencrypted [`CoseKey`](coset::CoseKey) used to represent an asymmetric public key or
@@ -338,7 +338,7 @@ mod conversion {
             if let ProofOfPossessionKey::PlainCoseKey(key) = value {
                 Ok(key)
             } else {
-                Err(WrongSourceTypeError::new("PlainCoseKey"))
+                Err(WrongSourceTypeError::new("PlainCoseKey", value.into()))
             }
         }
     }
@@ -350,9 +350,7 @@ mod conversion {
             if let ProofOfPossessionKey::EncryptedCoseKey(key) = value {
                 Ok(key)
             } else {
-                Err(WrongSourceTypeError::new(
-                    "EncryptedCoseKey",
-                ))
+                Err(WrongSourceTypeError::new("EncryptedCoseKey", value.into()))
             }
         }
     }
@@ -364,7 +362,7 @@ mod conversion {
             if let ProofOfPossessionKey::KeyId(kid) = value {
                 Ok(kid)
             } else {
-                Err(WrongSourceTypeError::new("KeyId"))
+                Err(WrongSourceTypeError::new("KeyId", value.into()))
             }
         }
     }
