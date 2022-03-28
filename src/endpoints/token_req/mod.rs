@@ -53,6 +53,7 @@ mod tests;
 /// # Ok::<(), AccessTokenRequestBuilderError>(())
 /// ```
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+#[non_exhaustive]
 pub enum GrantType {
     /// Grant type intended for clients capable of obtaining the
     /// resource owner's credentials.
@@ -216,6 +217,7 @@ pub struct AccessTokenRequest {
 /// # Ok::<(), AccessTokenResponseBuilderError>(())
 /// ```
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+#[non_exhaustive]
 pub enum TokenType {
     /// Bearer token type as defined in [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750).
     Bearer,
@@ -270,6 +272,7 @@ pub enum TokenType {
 /// # Ok::<(), AccessTokenResponseBuilderError>(())
 /// ```
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+#[non_exhaustive]
 pub enum AceProfile {
     /// Profile for ACE-OAuth using Datagram Transport Layer Security, specified in
     /// [`draft-ietf-ace-dtls-authorize`](https://www.ietf.org/archive/id/draft-ietf-ace-dtls-authorize-18.html).
@@ -431,6 +434,7 @@ pub struct AccessTokenResponse {
 /// # Ok::<(), ErrorResponseBuilderError>(())
 /// ```
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+#[non_exhaustive]
 pub enum ErrorCode {
     /// The request is missing a required parameter, includes an unsupported parameter value (other
     /// than grant type), repeats a parameter, includes multiple credentials, utilizes
