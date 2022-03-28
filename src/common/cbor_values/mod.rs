@@ -74,19 +74,6 @@ pub(crate) struct CborMapValue<T>(pub(crate) T)
         T: Into<i32> + Copy;
 
 
-/// A type which can either be a [`String`] or a [`ByteString`].
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
-#[serde(untagged)]
-enum TextOrByteString {
-    // TODO: Unused for now. Do we really need this in the future?
-
-    /// A text string, represented as a [`String`].
-    TextString(String),
-
-    /// A byte string, represented as a [`ByteString`].
-    ByteString(ByteString),
-}
-
 /// A proof-of-possession key as specified by
 /// [RFC 8747, section 3.1](https://datatracker.ietf.org/doc/html/rfc8747#section-3.1).
 ///
@@ -177,15 +164,6 @@ impl<T> Deref for CborMapValue<T>
     }
 }
 
-impl Display for TextOrByteString {
-    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        match self {
-            TextOrByteString::TextString(s) => write!(f, "{}", s),
-            TextOrByteString::ByteString(s) => write!(f, "{}", s),
-        }
-    }
-}
-
 impl Display for ByteString {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "{:02X?}", self.0)
@@ -260,18 +238,6 @@ mod conversion {
     impl<T> From<T> for ByteString where T: Into<ByteStringValue> {
         fn from(x: T) -> Self {
             ByteString(x.into())
-        }
-    }
-
-    impl From<String> for TextOrByteString {
-        fn from(s: String) -> Self {
-            TextOrByteString::TextString(s)
-        }
-    }
-
-    impl From<ByteStringValue> for TextOrByteString {
-        fn from(s: ByteStringValue) -> Self {
-            TextOrByteString::ByteString(ByteString(s))
         }
     }
 
@@ -356,30 +322,6 @@ mod conversion {
     impl From<&ByteString> for Value {
         fn from(bytestring: &ByteString) -> Self {
             Value::Bytes(bytestring.to_vec())
-        }
-    }
-
-    impl TryFrom<TextOrByteString> for String {
-        type Error = WrongSourceTypeError<TextOrByteString>;
-
-        fn try_from(value: TextOrByteString) -> Result<Self, Self::Error> {
-            if let TextOrByteString::TextString(s) = value {
-                Ok(s)
-            } else {
-                Err(WrongSourceTypeError::new("TextString"))
-            }
-        }
-    }
-
-    impl TryFrom<TextOrByteString> for ByteString {
-        type Error = WrongSourceTypeError<TextOrByteString>;
-
-        fn try_from(value: TextOrByteString) -> Result<Self, Self::Error> {
-            if let TextOrByteString::ByteString(s) = value {
-                Ok(s)
-            } else {
-                Err(WrongSourceTypeError::new("ByteString"))
-            }
         }
     }
 
