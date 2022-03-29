@@ -11,19 +11,18 @@
 
 //! Contains various helper values for CBOR structures.
 //!
-//! For example, this contains a struct representing a [`ByteString`] and an enum representing
-//! a [`ProofOfPossessionKey`].
+//! For example, this contains an enum representing a [`ProofOfPossessionKey`].
 //!
 //! # Example
-//! One of the main use cases of both the [`ByteString`] and the [`ProofOfPossessionKey`]
-//! is for representing an access token and a key in the `cnf` claim, respectively:
+//! One of the main use cases of the [`ProofOfPossessionKey`]
+//! is for representing a key in the `cnf` claim:
 //! ```
 //! # use dcaf::AccessTokenResponse;
 //! # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
 //! # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
 //! let response: AccessTokenResponse = AccessTokenResponse::builder()
-//!     .access_token(ByteString::from(vec![0xDC, 0xAF, 0xDC, 0xAF]))
-//!     .cnf(ProofOfPossessionKey::KeyId(ByteString::from(vec![0x42]))).build()?;
+//!     .access_token(vec![0xDC, 0xAF, 0xDC, 0xAF])
+//!     .cnf(ProofOfPossessionKey::KeyId(vec![0x42])).build()?;
 //! # Ok::<(), AccessTokenResponseBuilderError>(())
 //! ```
 
@@ -33,45 +32,18 @@ use core::ops::Deref;
 use strum_macros::IntoStaticStr;
 
 use coset::{CoseEncrypt0, CoseKey};
-use serde::Deserialize;
 
-/// Value of a [`ByteString`], represented as a vector of bytes.
-pub(crate) type ByteStringValue = Vec<u8>;
+/// A type intended to be used as a CBOR bytestring, represented as a vector of bytes.
+pub type ByteString = Vec<u8>;
 
 /// A Key ID, represented as a [`ByteString`].
 pub(crate) type KeyId = ByteString;
 
-/// A string of bytes.
-///
-/// Can be treated like a regular [`Vec<u8>`] due to a corresponding [`Deref`] implementation.
-///
-/// # Example
-/// To create a ByteString from a `Vec<u8>` and turn it back again:
-/// ```
-/// # use dcaf::common::cbor_values::ByteString;
-/// let bs = ByteString::from(vec![0xDC, 0x00, 0xAF]);
-/// assert_eq!(bs.to_vec(), vec![0xDC, 0x00, 0xAF]);
-/// ```
-/// ByteStrings are used in various places, but one of its main usages in `dcaf-rs` is that it
-/// represents an encoded access token:
-/// ```
-/// # use dcaf::AccessTokenResponse;
-/// # use dcaf::common::cbor_values::ByteString;
-/// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
-/// // This is just an example, the token is obviously not well-formed.
-/// let encoded_token = ByteString::from("example".as_bytes());
-/// let response: AccessTokenResponse = AccessTokenResponse::builder()
-///     .access_token(encoded_token).build()?;
-/// # Ok::<(), AccessTokenResponseBuilderError>(())
-/// ```
-#[derive(Debug, Deserialize, PartialEq, Eq, Default, Hash, Clone)]
-pub struct ByteString(pub(crate) ByteStringValue);
-
 /// Wrapper around a type `T` which can be created from and turned into an [`i32`].
 pub(crate) struct CborMapValue<T>(pub(crate) T)
-    where
-        i32: Into<T>,
-        T: Into<i32> + Copy;
+where
+    i32: Into<T>,
+    T: Into<i32> + Copy;
 
 /// A proof-of-possession key as specified by
 /// [RFC 8747, section 3.1](https://datatracker.ietf.org/doc/html/rfc8747#section-3.1).
@@ -88,7 +60,7 @@ pub(crate) struct CborMapValue<T>(pub(crate) T)
 /// # use dcaf::AccessTokenRequest;
 /// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
 /// # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
-/// let key = ProofOfPossessionKey::KeyId(ByteString::from(vec![0xDC, 0xAF]));
+/// let key = ProofOfPossessionKey::KeyId(vec![0xDC, 0xAF]);
 /// let request: AccessTokenRequest = AccessTokenRequest::builder().client_id("test_client").req_cnf(key).build()?;
 /// assert_eq!(request.req_cnf.unwrap().key_id().to_vec(), vec![0xDC, 0xAF]);
 /// # Ok::<(), AccessTokenRequestBuilderError>(())
@@ -129,32 +101,24 @@ impl ProofOfPossessionKey {
     /// assert_eq!(pop_key.key_id().to_vec(), vec![0xDC, 0xAF]);
     /// ```
     #[must_use]
-    pub fn key_id(&self) -> KeyId {
+    pub fn key_id(&self) -> &KeyId {
         match self {
-            ProofOfPossessionKey::PlainCoseKey(k) => KeyId::from(k.key_id.clone()),
-            ProofOfPossessionKey::KeyId(k) => k.clone(),
+            ProofOfPossessionKey::PlainCoseKey(k) => &k.key_id,
+            ProofOfPossessionKey::KeyId(k) => k,
             ProofOfPossessionKey::EncryptedCoseKey(k) => {
                 if k.protected.header.key_id.is_empty() {
-                    KeyId::from(k.unprotected.key_id.clone())
+                    &k.unprotected.key_id
                 } else {
-                    KeyId::from(k.protected.header.key_id.clone())
+                    &k.protected.header.key_id
                 }
             }
         }
     }
 }
 
-impl Deref for ByteString {
-    type Target = ByteStringValue;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl<T> Deref for CborMapValue<T>
-    where
-        T: From<i32> + Into<i32> + Copy,
+where
+    T: From<i32> + Into<i32> + Copy,
 {
     type Target = T;
 
@@ -163,16 +127,10 @@ impl<T> Deref for CborMapValue<T>
     }
 }
 
-impl Display for ByteString {
-    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        write!(f, "{:02X?}", self.0)
-    }
-}
-
 impl<T> Display for CborMapValue<T>
-    where
-        i32: Into<T>,
-        T: Into<i32> + Copy + Display,
+where
+    i32: Into<T>,
+    T: Into<i32> + Copy + Display,
 {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "{}", self.0)
@@ -193,12 +151,12 @@ mod conversion {
     use super::*;
 
     impl<T> Serialize for CborMapValue<T>
-        where
-            T: From<i32> + Into<i32> + Copy,
+    where
+        T: From<i32> + Into<i32> + Copy,
     {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer,
+        where
+            S: Serializer,
         {
             let cbor_value: i32 = self.0.into();
             Value::from(cbor_value).serialize(serializer)
@@ -206,12 +164,12 @@ mod conversion {
     }
 
     impl<'de, T> Deserialize<'de> for CborMapValue<T>
-        where
-            T: From<i32> + Into<i32> + Copy,
+    where
+        T: From<i32> + Into<i32> + Copy,
     {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
         {
             if let Ok(Value::Integer(i)) = Value::deserialize(deserializer) {
                 Ok(CborMapValue(
@@ -222,30 +180,6 @@ mod conversion {
             } else {
                 Err(D::Error::custom("CBOR map value must be an Integer"))
             }
-        }
-    }
-
-    impl Serialize for ByteString {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer,
-        {
-            Value::serialize(&self.into(), serializer)
-        }
-    }
-
-    impl<T> From<T> for ByteString
-        where
-            T: Into<ByteStringValue>,
-    {
-        fn from(x: T) -> Self {
-            ByteString(x.into())
-        }
-    }
-
-    impl AsRef<ByteStringValue> for ByteString {
-        fn as_ref(&self) -> &ByteStringValue {
-            &self.0
         }
     }
 
@@ -271,14 +205,14 @@ mod conversion {
                 }
                 Self::KeyId(kid) => {
                     let x: i128 = 3;
-                    vec![(x, Some(Box::new(kid)))]
+                    vec![(x, Some(Box::new(Value::Bytes(kid.clone()))))]
                 }
             }
         }
 
         fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
-            where
-                Self: Sized + ToCborMap,
+        where
+            Self: Sized + ToCborMap,
         {
             if map.len() != 1 {
                 Err(TryFromCborMapError::from_message(
@@ -300,7 +234,7 @@ mod conversion {
                                 "couldn't create CoseEncrypt0 from CBOR value: {x}"
                             ))
                         }),
-                    (3, Value::Bytes(x)) => Ok(ProofOfPossessionKey::KeyId(ByteString::from(x))),
+                    (3, Value::Bytes(x)) => Ok(ProofOfPossessionKey::KeyId(x)),
                     (x, _) => Err(TryFromCborMapError::unknown_field(u8::try_from(x)?)),
                 }
             } else {
@@ -324,12 +258,6 @@ mod conversion {
     impl From<CoseEncrypt0> for ProofOfPossessionKey {
         fn from(enc: CoseEncrypt0) -> Self {
             ProofOfPossessionKey::EncryptedCoseKey(enc)
-        }
-    }
-
-    impl From<&ByteString> for Value {
-        fn from(bytestring: &ByteString) -> Self {
-            Value::Bytes(bytestring.to_vec())
         }
     }
 

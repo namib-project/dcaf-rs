@@ -58,7 +58,7 @@ mod tests;
 ///     .auth_server("coaps://as.example.com/token")
 ///     .audience("coaps://rs.example.com")
 ///     .scope(scope)
-///     .client_nonce(ByteString::from(vec![0xe0, 0xa1, 0x56, 0xbb, 0x3f]))
+///     .client_nonce(vec![0xe0, 0xa1, 0x56, 0xbb, 0x3f])
 ///     .build()?;
 /// let mut serialized = Vec::new();
 /// hint.clone().serialize_into(&mut serialized)?;
@@ -70,11 +70,11 @@ mod tests;
 /// integers instead of strings.
 #[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Builder)]
 #[builder(
-no_std,
-setter(into, strip_option),
-default,
-derive(Debug, PartialEq, Eq),
-build_fn(validate = "Self::validate")
+    no_std,
+    setter(into, strip_option),
+    default,
+    derive(Debug, PartialEq, Eq),
+    build_fn(validate = "Self::validate")
 )]
 pub struct AuthServerRequestCreationHint {
     /// An absolute URI that identifies the appropriate AS for the RS.
@@ -93,7 +93,7 @@ pub struct AuthServerRequestCreationHint {
     pub scope: Option<Scope>,
 
     /// A client nonce as described in [section 5.3.1 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3.1).
-    pub client_nonce: Option<ByteString>,
+    pub client_nonce: Option<Vec<u8>>,
 }
 
 #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
@@ -128,7 +128,6 @@ mod conversion {
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
 
-    use crate::common::cbor_values::ByteString;
     use crate::common::constants::cbor_abbreviations::creation_hint;
     use crate::common::scope::{BinaryEncodedScope, TextEncodedScope};
     use crate::error::TryFromCborMapError;
@@ -142,19 +141,19 @@ mod conversion {
                 creation_hint::KID => self.kid.as_ref(),
                 creation_hint::AUDIENCE => self.audience.as_ref(),
                 creation_hint::SCOPE => self.scope.as_ref(),
-                creation_hint::CNONCE => self.client_nonce.as_ref()
+                creation_hint::CNONCE => self.client_nonce.as_ref().map(|v| Value::Bytes(v.clone()))
             };
         }
 
         fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
-            where
-                Self: Sized + ToCborMap,
+        where
+            Self: Sized + ToCborMap,
         {
             let mut hint = AuthServerRequestCreationHint::default();
             for entry in map {
                 match (u8::try_from(entry.0)?, entry.1) {
                     (creation_hint::AS, Value::Text(x)) => hint.auth_server = Some(x),
-                    (creation_hint::KID, Value::Bytes(x)) => hint.kid = Some(ByteString::from(x)),
+                    (creation_hint::KID, Value::Bytes(x)) => hint.kid = Some(x),
                     (creation_hint::AUDIENCE, Value::Text(x)) => hint.audience = Some(x),
                     (creation_hint::SCOPE, Value::Text(x)) => {
                         hint.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?;
@@ -163,7 +162,7 @@ mod conversion {
                         hint.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?;
                     }
                     (creation_hint::CNONCE, Value::Bytes(x)) => {
-                        hint.client_nonce = Some(ByteString::from(x));
+                        hint.client_nonce = Some(x);
                     }
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 };

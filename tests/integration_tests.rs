@@ -126,7 +126,7 @@ fn test_scenario() -> Result<(), String> {
         hex::decode("f95e1d4b851a2cc80fff87d8e23f22afb725d535e515d020731e79a3b4e47120")
             .map_err(|x| x.to_string())?,
     )
-        .build();
+    .build();
     let (unprotected_headers, protected_headers) = example_headers();
     let mut crypto = FakeCrypto {};
     let aad = example_aad();
@@ -167,7 +167,7 @@ fn test_scenario() -> Result<(), String> {
         Some(unprotected_headers),
         Some(protected_headers),
     )
-        .map_err(|x| x.to_string())?;
+    .map_err(|x| x.to_string())?;
     let response = AccessTokenResponse::builder()
         .access_token(token)
         .ace_profile(AceProfile::CoapDtls)
@@ -191,8 +191,8 @@ fn test_scenario() -> Result<(), String> {
 }
 
 fn pseudo_send_receive<T>(input: T) -> Result<T, String>
-    where
-        T: ToCborMap + Debug + PartialEq + Clone,
+where
+    T: ToCborMap + Debug + PartialEq + Clone,
 {
     let mut serialized: Vec<u8> = Vec::new();
     input

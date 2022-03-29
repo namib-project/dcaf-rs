@@ -29,11 +29,11 @@
 //! ```
 //! # use ciborium::value::Value;
 //! # use coset::{Header, Label};
-//! use coset::cwt::{ClaimsSetBuilder, Timestamp};
+//! # use coset::cwt::{ClaimsSetBuilder, Timestamp};
 //! # use coset::iana::{Algorithm, CwtClaimName};
 //! # use dcaf::{ToCborMap, CoseCipherCommon, CoseSign1Cipher, sign_access_token, verify_access_token};
-//! use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
-//! use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
+//! # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
+//! # use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
 //! # use dcaf::error::{AccessTokenError, CoseCipherError};
 //! # struct FakeCrypto {}
 //! #
@@ -72,7 +72,7 @@
 //! # }
 //!
 //! # let mut cipher = FakeCrypto {};
-//! let key = ProofOfPossessionKey::KeyId(ByteString::from(vec![0xDC, 0xAF]));
+//! let key = ProofOfPossessionKey::KeyId(vec![0xDC, 0xAF]);
 //! let claims = ClaimsSetBuilder::new()
 //!      .audience(String::from("coaps://rs.example.com"))
 //!      .issuer(String::from("coaps://as.example.com"))
@@ -418,7 +418,7 @@ where
 /// #     }
 /// # }
 /// # let mut cipher = FakeCrypto{};
-/// # let key = ProofOfPossessionKey::KeyId(ByteString::from(vec![0xDC, 0xAF]));
+/// # let key = ProofOfPossessionKey::KeyId(vec![0xDC, 0xAF]);
 /// let claims = ClaimsSetBuilder::new()
 ///    .audience(String::from("coaps://rs.example.com"))
 ///    .issuer(String::from("coaps://as.example.com"))
@@ -435,23 +435,21 @@ pub fn encrypt_access_token<T>(
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
-    where
-        T: CoseEncrypt0Cipher,
+where
+    T: CoseEncrypt0Cipher,
 {
     let (unprotected, protected) = prepare_headers(unprotected_header, protected_header, cipher)?;
-    Ok(ByteString::from(
-        CoseEncrypt0Builder::new()
-            .unprotected(unprotected)
-            .protected(protected)
-            .create_ciphertext(
-                &claims.to_vec().map_err(AccessTokenError::from_cose_error)?[..],
-                aad.unwrap_or(&[0; 0]),
-                |payload, aad| cipher.encrypt(payload, aad),
-            )
-            .build()
-            .to_vec()
-            .map_err(AccessTokenError::from_cose_error)?,
-    ))
+    CoseEncrypt0Builder::new()
+        .unprotected(unprotected)
+        .protected(protected)
+        .create_ciphertext(
+            &claims.to_vec().map_err(AccessTokenError::from_cose_error)?[..],
+            aad.unwrap_or(&[0; 0]),
+            |payload, aad| cipher.encrypt(payload, aad),
+        )
+        .build()
+        .to_vec()
+        .map_err(AccessTokenError::from_cose_error)
 }
 
 /// Signs the given `claims` with the given headers and `aad` using `cipher` for cryptography,
@@ -492,7 +490,7 @@ pub fn encrypt_access_token<T>(
 /// #    }
 /// # }
 /// # let mut cipher = FakeSigner {};
-/// # let key = ProofOfPossessionKey::KeyId(ByteString::from(vec![0xDC, 0xAF]));
+/// # let key = ProofOfPossessionKey::KeyId(vec![0xDC, 0xAF]);
 /// let claims = ClaimsSetBuilder::new()
 ///    .audience(String::from("coaps://rs.example.com"))
 ///    .issuer(String::from("coaps://as.example.com"))
@@ -509,20 +507,18 @@ pub fn sign_access_token<T>(
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
-    where
-        T: CoseSign1Cipher,
+where
+    T: CoseSign1Cipher,
 {
     let (unprotected, protected) = prepare_headers(unprotected_header, protected_header, cipher)?;
-    Ok(ByteString::from(
-        CoseSign1Builder::new()
-            .unprotected(unprotected)
-            .protected(protected)
-            .payload(claims.to_vec().map_err(AccessTokenError::from_cose_error)?)
-            .create_signature(aad.unwrap_or(&[0; 0]), |x| cipher.generate_signature(x))
-            .build()
-            .to_vec()
-            .map_err(AccessTokenError::from_cose_error)?,
-    ))
+    CoseSign1Builder::new()
+        .unprotected(unprotected)
+        .protected(protected)
+        .payload(claims.to_vec().map_err(AccessTokenError::from_cose_error)?)
+        .create_signature(aad.unwrap_or(&[0; 0]), |x| cipher.generate_signature(x))
+        .build()
+        .to_vec()
+        .map_err(AccessTokenError::from_cose_error)
 }
 
 /// Returns the headers of the given signed ([`CoseSign1`]), MAC tagged ([`CoseMac0`]),
@@ -536,7 +532,7 @@ pub fn sign_access_token<T>(
 /// ```
 /// # use dcaf::common::cbor_values::ByteString;
 /// # use dcaf::token::get_token_headers;
-/// # let token = ByteString::from(vec![
+/// # let token = vec![
 /// # 0x84, 0x4b, 0xa2, 0x1, 0x25, 0x4, 0x46, 0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0xa2, 0x5, 0x4d,
 /// # 0x63, 0x68, 0x98, 0x99, 0x4f, 0xf0, 0xec, 0x7b, 0xfc, 0xf6, 0xd3, 0xf9, 0x5b, 0x18, 0x2f, 0xf6,
 /// # 0x58, 0x20, 0xa1, 0x8, 0xa3, 0x1, 0x4, 0x2, 0x46, 0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x20,
@@ -545,7 +541,7 @@ pub fn sign_access_token<T>(
 /// # 0x4b, 0xa2, 0x1, 0x25, 0x4, 0x46, 0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x45, 0x1, 0x2, 0x3, 0x4,
 /// # 0x5, 0x58, 0x20, 0xa1, 0x8, 0xa3, 0x1, 0x4, 0x2, 0x46, 0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x20,
 /// # 0x51, 0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c, 0x42,
-/// # 0x71, 0x8]);
+/// # 0x71, 0x8];
 /// if let Some((unprotected_header, protected_header)) = get_token_headers(&token) {
 ///   assert_eq!(protected_header.header.key_id, vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
 /// } else {
@@ -581,15 +577,15 @@ pub fn verify_access_token<T>(
     cipher: &mut T,
     aad: Option<&[u8]>,
 ) -> Result<(), AccessTokenError<T::Error>>
-    where
-        T: CoseSign1Cipher,
+where
+    T: CoseSign1Cipher,
 {
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
     // TODO: Verify protected headers
     sign.verify_signature(aad.unwrap_or(&[0; 0]), |signature, signed_data| {
         cipher.verify_signature(signature, signed_data)
     })
-        .map_err(AccessTokenError::from_cose_cipher_error)
+    .map_err(AccessTokenError::from_cose_cipher_error)
 }
 
 /// Decrypts the given `token` and `aad` using `cipher` for cryptography,
@@ -609,8 +605,8 @@ pub fn decrypt_access_token<T>(
     cipher: &mut T,
     aad: Option<&[u8]>,
 ) -> Result<ClaimsSet, AccessTokenError<T::Error>>
-    where
-        T: CoseEncrypt0Cipher,
+where
+    T: CoseEncrypt0Cipher,
 {
     let encrypt =
         CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from_cose_error)?;

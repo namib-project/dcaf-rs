@@ -40,7 +40,7 @@ mod text {
         let empty_inputs: Vec<&str> = vec!["    ", " ", ""];
 
         for input in empty_inputs {
-            assert!(TextEncodedScope::try_from(input).is_err())
+            assert!(TextEncodedScope::try_from(input).is_err());
         }
 
         let empty_arrays: Vec<Vec<&str>> = vec![
@@ -60,7 +60,7 @@ mod text {
         ];
 
         for input in empty_arrays {
-            assert!(TextEncodedScope::try_from(input).is_err())
+            assert!(TextEncodedScope::try_from(input).is_err());
         }
     }
 
@@ -77,7 +77,7 @@ mod text {
             "   spaces   wherever  you    look   ",
         ];
         for input in invalid_inputs {
-            assert!(TextEncodedScope::try_from(input).is_err())
+            assert!(TextEncodedScope::try_from(input).is_err());
         }
     }
 
@@ -94,7 +94,7 @@ mod text {
             "within\\word",
         ];
         for input in invalid_inputs {
-            assert!(TextEncodedScope::try_from(input).is_err())
+            assert!(TextEncodedScope::try_from(input).is_err());
         }
 
         let invalid_arrays = vec![
@@ -119,7 +119,7 @@ mod text {
             vec!["normal", "in\\word"],
         ];
         for input in invalid_arrays {
-            assert!(TextEncodedScope::try_from(input).is_err())
+            assert!(TextEncodedScope::try_from(input).is_err());
         }
     }
 

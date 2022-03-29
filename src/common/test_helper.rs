@@ -48,8 +48,8 @@ pub(crate) fn expect_ser_de<T>(
     transform_value: Option<fn(T) -> T>,
     expected_hex: &str,
 ) -> Result<(), String>
-    where
-        T: ToCborMap + Clone + Debug + PartialEq,
+where
+    T: ToCborMap + Clone + Debug + PartialEq,
 {
     let copy = value.clone();
     let mut result = Vec::new();
@@ -129,10 +129,10 @@ impl CoseEncrypt0Cipher for FakeCrypto {
         }
         let mut result: Vec<u8> = data.to_vec();
         let aad_result = result.split_off(data.len() - aad.len());
-        if aad != aad_result {
-            Err(CoseCipherError::Other("AADs don't match!".to_string()))
-        } else {
+        if aad == aad_result {
             Ok(result)
+        } else {
+            Err(CoseCipherError::Other("AADs don't match!".to_string()))
         }
     }
 }
@@ -150,10 +150,10 @@ impl CoseSign1Cipher for FakeCrypto {
         sig: &[u8],
         data: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>> {
-        if sig != self.generate_signature(data) {
-            Err(CoseCipherError::VerificationFailure)
-        } else {
+        if sig == self.generate_signature(data) {
             Ok(())
+        } else {
+            Err(CoseCipherError::VerificationFailure)
         }
     }
 }
@@ -171,10 +171,10 @@ impl CoseMac0Cipher for FakeCrypto {
         tag: &[u8],
         maced_data: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>> {
-        if tag != self.generate_tag(maced_data) {
-            Err(CoseCipherError::VerificationFailure)
-        } else {
+        if tag == self.generate_tag(maced_data) {
             Ok(())
+        } else {
+            Err(CoseCipherError::VerificationFailure)
         }
     }
 }

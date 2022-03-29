@@ -35,8 +35,8 @@
 //! If we then want to deserialize it again:
 //! ```
 //! # use ciborium_io::Read;
-//! use serde::de::value::Error;
-//! use dcaf::{AccessTokenRequest, ToCborMap};
+//! # use serde::de::value::Error;
+//! # use dcaf::{AccessTokenRequest, ToCborMap};
 //! let serialized = vec![0xA1, 0x18, 0x18, 0x64, 0x74, 0x65, 0x73, 0x74];
 //! let request = AccessTokenRequest::deserialize_from(serialized.as_slice())?;
 //! assert_eq!(request.client_id, "test");
@@ -153,10 +153,10 @@ pub trait ToCborMap: private::Sealed {
     /// - When serialization of this value failed, e.g. due to malformed input.
     /// - When the output couldn't be put inside the given `writer`.
     fn serialize_into<W>(self, writer: W) -> Result<(), ciborium::ser::Error<W::Error>>
-        where
-            Self: Sized,
-            W: Write,
-            W::Error: Debug,
+    where
+        Self: Sized,
+        W: Write,
+        W::Error: Debug,
     {
         into_writer(&CborMap(self), writer)
     }
@@ -183,10 +183,10 @@ pub trait ToCborMap: private::Sealed {
     ///   contain a valid CBOR map or deserializes to a different type than this one.
     /// - When the input couldn't be read from the given `reader`.
     fn deserialize_from<R>(reader: R) -> Result<Self, ciborium::de::Error<R::Error>>
-        where
-            Self: Sized,
-            R: Read,
-            R::Error: Debug,
+    where
+        Self: Sized,
+        R: Read,
+        R::Error: Debug,
     {
         from_reader(reader).map(|x: CborMap<Self>| x.0)
     }
@@ -207,8 +207,8 @@ pub trait ToCborMap: private::Sealed {
     /// - When the given CBOR map can't be converted to this trait.
     #[doc(hidden)]
     fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
-        where
-            Self: Sized + ToCborMap;
+    where
+        Self: Sized + ToCborMap;
 
     /// Converts this type to a CBOR serializable [`Value`] using [`to_cbor_map`](ToCborMap::to_cbor_map).
     ///
@@ -228,7 +228,7 @@ pub trait ToCborMap: private::Sealed {
     /// # use coset::iana::CwtClaimName;
     /// # use dcaf::ToCborMap;
     /// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
-    /// let key = ProofOfPossessionKey::KeyId(ByteString::from(vec![0xDC, 0xAF]));
+    /// let key = ProofOfPossessionKey::KeyId(vec![0xDC, 0xAF]);
     /// let claims = ClaimsSetBuilder::new()
     ///     .claim(CwtClaimName::Cnf, key.to_ciborium_value())
     ///     .build();
@@ -281,10 +281,10 @@ pub trait ToCborMap: private::Sealed {
 /// # Errors
 /// - If `scope` is not a valid scope.
 pub(crate) fn decode_scope<T, S>(scope: T) -> Result<Option<Scope>, TryFromCborMapError>
-    where
-        S: TryFrom<T>,
-        Scope: From<S>,
-        S::Error: Display,
+where
+    S: TryFrom<T>,
+    Scope: From<S>,
+    S::Error: Display,
 {
     match S::try_from(scope) {
         Ok(scope) => Ok(Some(Scope::from(scope))),
@@ -301,8 +301,8 @@ pub(crate) fn decode_scope<T, S>(scope: T) -> Result<Option<Scope>, TryFromCborM
 /// # Errors
 /// - If `number` can't be a valid instance of type `T`.
 pub(crate) fn decode_number<T>(number: Integer, name: &str) -> Result<T, TryFromCborMapError>
-    where
-        T: TryFrom<Integer>,
+where
+    T: TryFrom<Integer>,
 {
     match T::try_from(number) {
         Ok(i) => Ok(i),
@@ -324,8 +324,8 @@ pub(crate) fn decode_int_map<T>(
     map: Vec<(Value, Value)>,
     name: &str,
 ) -> Result<Vec<(i128, Value)>, TryFromCborMapError>
-    where
-        T: ToCborMap,
+where
+    T: ToCborMap,
 {
     T::cbor_map_from_int(map).map_err(|_| {
         TryFromCborMapError::from_message(format!(
@@ -340,12 +340,12 @@ pub(crate) fn decode_int_map<T>(
 /// This should always be invisible to clients of this crate.
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct CborMap<T>(T)
-    where
-        T: ToCborMap;
+where
+    T: ToCborMap;
 
 impl<T> Display for CborMap<T>
-    where
-        T: ToCborMap + Display,
+where
+    T: ToCborMap + Display,
 {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "{}", self.0)
@@ -382,8 +382,8 @@ mod conversion {
     use crate::common::cbor_map::{CborMap, ToCborMap};
 
     impl<T> From<T> for CborMap<T>
-        where
-            T: ToCborMap,
+    where
+        T: ToCborMap,
     {
         fn from(value: T) -> Self {
             CborMap(value)
@@ -391,24 +391,24 @@ mod conversion {
     }
 
     impl<T> Serialize for CborMap<T>
-        where
-            T: ToCborMap,
+    where
+        T: ToCborMap,
     {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer,
+        where
+            S: Serializer,
         {
             Serialize::serialize(&self.0.to_ciborium_value(), serializer)
         }
     }
 
     impl<'de, T> Deserialize<'de> for CborMap<T>
-        where
-            T: ToCborMap,
+    where
+        T: ToCborMap,
     {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
         {
             match Value::deserialize(deserializer)? {
                 Value::Map(map) => {

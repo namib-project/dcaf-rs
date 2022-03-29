@@ -70,7 +70,7 @@ let request = AccessTokenRequest::builder()
    .client_id("myclient")
    .audience("valve242")
    .scope(TextEncodedScope::try_from("read")?)
-   .req_cnf(ProofOfPossessionKey::KeyId(ByteString::from(base64::decode("6kg0dXJM13U")?)))
+   .req_cnf(ProofOfPossessionKey::KeyId(base64::decode("6kg0dXJM13U")?))
    .build()?;
 let mut encoded = Vec::new();
 request.clone().serialize_into(&mut encoded)?;

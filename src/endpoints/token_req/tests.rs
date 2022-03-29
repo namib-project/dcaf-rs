@@ -53,8 +53,8 @@ fn test_access_token_request_asymmetric() -> Result<(), String> {
             0xbb, 0xfc, 0x11, 0x7e,
         ],
     )
-        .key_id(vec![0x11])
-        .build();
+    .key_id(vec![0x11])
+    .build();
     let request = AccessTokenRequestBuilder::default()
         .client_id("myclient")
         .req_cnf(key)
@@ -70,9 +70,7 @@ fn test_access_token_request_reference() -> Result<(), String> {
         .client_id("myclient")
         .audience("valve424")
         .scope(TextEncodedScope::try_from("read").map_err(|x| x.to_string())?)
-        .req_cnf(ByteString::from(vec![
-            0xea, 0x48, 0x34, 0x75, 0x72, 0x4c, 0xd7, 0x75,
-        ]))
+        .req_cnf(vec![0xea, 0x48, 0x34, 0x75, 0x72, 0x4c, 0xd7, 0x75])
         .build()
         .map_err(|x| x.to_string())?;
     expect_ser_de(
@@ -84,6 +82,24 @@ fn test_access_token_request_reference() -> Result<(), String> {
 
 #[test]
 fn test_access_token_request_encrypted() -> Result<(), String> {
+    // Extract relevant part for comparison (i.e. no protected headers' original data,
+    // which can change after serialization)
+    fn transform_header(mut request: AccessTokenRequest) -> AccessTokenRequest {
+        let enc: CoseEncrypt0 = request
+            .req_cnf
+            .expect("No req_cnf present")
+            .try_into()
+            .expect("Key is not encrypted");
+        request.req_cnf = Some(ProofOfPossessionKey::EncryptedCoseKey(CoseEncrypt0 {
+            protected: ProtectedHeader {
+                original_data: None,
+                ..enc.protected
+            },
+            ..enc
+        }));
+        request
+    }
+
     let unprotected_header = HeaderBuilder::new()
         .iv(vec![
             0x63, 0x68, 0x98, 0x99, 0x4F, 0xF0, 0xEC, 0x7B, 0xFC, 0xF6, 0xD3, 0xF9, 0x5B,
@@ -110,24 +126,6 @@ fn test_access_token_request_encrypted() -> Result<(), String> {
         .build()
         .map_err(|x| x.to_string())?;
 
-    // Extract relevant part for comparison (i.e. no protected headers' original data,
-    // which can change after serialization)
-    fn transform_header(mut request: AccessTokenRequest) -> AccessTokenRequest {
-        let enc: CoseEncrypt0 = request
-            .req_cnf
-            .expect("No req_cnf present")
-            .try_into()
-            .expect("Key is not encrypted");
-        request.req_cnf = Some(ProofOfPossessionKey::EncryptedCoseKey(CoseEncrypt0 {
-            protected: ProtectedHeader {
-                original_data: None,
-                ..enc.protected
-            },
-            ..enc
-        }));
-        request
-    }
-
     expect_ser_de(request, Some(transform_header), "A204A1028343A1010AA1054D636898994FF0EC7BFCF6D3F95B58300573318A3573EB983E55A7C2F06CADD0796C9E584F1D0E3EA8C5B052592A8B2694BE9654F0431F38D5BBC8049FA7F13F1818686D79636C69656E74")
 }
 
@@ -150,8 +148,8 @@ fn test_access_token_response() -> Result<(), String> {
         0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c, 0x42,
         0x71, 0x08,
     ])
-        .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
-        .build();
+    .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
+    .build();
     // We need to specify this here because otherwise it'd be typed as an i32.
     let expires_in: u32 = 3600;
     let response = AccessTokenResponseBuilder::default()

@@ -63,13 +63,13 @@
 //! Creating, serializing and then de-serializing such a structure would look like this:
 //! ```
 //! # use std::error::Error;
-//! use dcaf::{AccessTokenRequest, ToCborMap, ByteString, ProofOfPossessionKey, TextEncodedScope};
+//! use dcaf::{AccessTokenRequest, ToCborMap, ProofOfPossessionKey, TextEncodedScope};
 //!
 //! let request = AccessTokenRequest::builder()
 //!    .client_id("myclient")
 //!    .audience("valve242")
 //!    .scope(TextEncodedScope::try_from("read")?)
-//!    .req_cnf(ProofOfPossessionKey::KeyId(ByteString::from(base64::decode("6kg0dXJM13U")?)))
+//!    .req_cnf(ProofOfPossessionKey::KeyId(base64::decode("6kg0dXJM13U")?))
 //!    .build()?;
 //! let mut encoded = Vec::new();
 //! request.clone().serialize_into(&mut encoded)?;
@@ -85,7 +85,7 @@
 //! # use ciborium::value::Value;
 //! # use dcaf::error::{AccessTokenError, CoseCipherError};
 //! # use dcaf::{CoseCipherCommon, CoseSign1Cipher, ProofOfPossessionKey};
-//! use dcaf::{ToCborMap, ByteString, sign_access_token, verify_access_token};
+//! use dcaf::{ToCborMap, sign_access_token, verify_access_token};
 //! use coset::cwt::ClaimsSetBuilder;
 //! use coset::Header;
 //! use coset::iana::CwtClaimName;
@@ -110,14 +110,14 @@
 //! #         }
 //! #     }
 //! # }
-//! # let key = ProofOfPossessionKey::KeyId(ByteString::from(vec![0xDC, 0xAF]));
+//! # let key = ProofOfPossessionKey::KeyId(vec![0xDC, 0xAF]);
 //! # let mut cipher = FakeCipher {};
 //! let claims = ClaimsSetBuilder::new()
 //!    .audience("valve242".to_string())
 //!    .claim(CwtClaimName::Cnf, key.to_ciborium_value())
 //!    .claim(CwtClaimName::Scope, Value::Text("read".to_string()))
 //!    .build();
-//! let token: ByteString = sign_access_token(claims, &mut cipher, None, None, None)?;
+//! let token = sign_access_token(claims, &mut cipher, None, None, None)?;
 //! assert!(verify_access_token(&token, &mut cipher, None).is_ok());
 //! # Ok::<(), AccessTokenError<String>>(())
 //! ```
@@ -198,9 +198,9 @@
 #![warn(missing_docs, rustdoc::missing_crate_level_docs)]
 // These ones are a little too eager
 #![allow(
-clippy::doc_markdown,
-clippy::module_name_repetitions,
-clippy::wildcard_imports
+    clippy::doc_markdown,
+    clippy::module_name_repetitions,
+    clippy::wildcard_imports
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;

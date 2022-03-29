@@ -132,10 +132,10 @@ pub enum GrantType {
 /// integers instead of strings.
 #[derive(Debug, Default, PartialEq, Clone, Builder)]
 #[builder(
-no_std,
-setter(into, strip_option),
-derive(Debug, PartialEq),
-build_fn(validate = "Self::validate")
+    no_std,
+    setter(into, strip_option),
+    derive(Debug, PartialEq),
+    build_fn(validate = "Self::validate")
 )]
 pub struct AccessTokenRequest {
     /// The client identifier as described in section 2.2 of
@@ -200,7 +200,7 @@ pub struct AccessTokenRequest {
 /// let request = AccessTokenResponse::builder()
 ///     .access_token(vec![1,2,3,4])
 ///     .token_type(TokenType::ProofOfPossession)
-///     .cnf(ProofOfPossessionKey::KeyId(ByteString::from(vec![0xDC, 0xAF])))
+///     .cnf(ProofOfPossessionKey::KeyId(vec![0xDC, 0xAF]))
 ///     .build()?;
 /// # Ok::<(), AccessTokenResponseBuilderError>(())
 /// ```
@@ -350,10 +350,10 @@ pub enum AceProfile {
 ///
 #[derive(Debug, PartialEq, Default, Clone, Builder)]
 #[builder(
-no_std,
-setter(into, strip_option),
-derive(Debug, PartialEq),
-build_fn(validate = "Self::validate")
+    no_std,
+    setter(into, strip_option),
+    derive(Debug, PartialEq),
+    build_fn(validate = "Self::validate")
 )]
 pub struct AccessTokenResponse {
     /// The access token issued by the authorization server.
@@ -506,10 +506,10 @@ pub enum ErrorCode {
 /// integers instead of strings.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Builder)]
 #[builder(
-no_std,
-setter(into, strip_option),
-derive(Debug, PartialEq),
-build_fn(validate = "Self::validate")
+    no_std,
+    setter(into, strip_option),
+    derive(Debug, PartialEq),
+    build_fn(validate = "Self::validate")
 )]
 pub struct ErrorResponse {
     /// Error code for this error.
@@ -592,7 +592,7 @@ mod conversion {
     use crate::common::cbor_map::{
         cbor_map_vec, decode_int_map, decode_number, decode_scope, ToCborMap,
     };
-    use crate::common::cbor_values::{ByteString, CborMapValue, ProofOfPossessionKey};
+    use crate::common::cbor_values::{CborMapValue, ProofOfPossessionKey};
     use crate::constants::cbor_abbreviations::{
         ace_profile, error, grant_types, token, token_types,
     };
@@ -710,13 +710,13 @@ mod conversion {
                 token::REDIRECT_URI => self.redirect_uri.as_ref(),
                 token::GRANT_TYPE => grant_type,
                 token::ACE_PROFILE => self.ace_profile.as_ref(),
-                token::CNONCE => self.client_nonce.as_ref(),
+                token::CNONCE => self.client_nonce.as_ref().map(|v| Value::Bytes(v.clone())),
             }
         }
 
         fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
-            where
-                Self: Sized + ToCborMap,
+        where
+            Self: Sized + ToCborMap,
         {
             let mut request = AccessTokenRequest::default();
             for entry in map {
@@ -726,7 +726,7 @@ mod conversion {
                             Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
                                 Self,
                             >(
-                                x, "req_cnf",
+                                x, "req_cnf"
                             )?)?);
                     }
                     (token::AUDIENCE, Value::Text(x)) => request.audience = Some(x),
@@ -745,7 +745,7 @@ mod conversion {
                     }
                     (token::ACE_PROFILE, Value::Null) => request.ace_profile = Some(()),
                     (token::CNONCE, Value::Bytes(x)) => {
-                        request.client_nonce = Some(ByteString::from(x));
+                        request.client_nonce = Some(x);
                     }
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 };
@@ -759,26 +759,26 @@ mod conversion {
             let token_type: Option<CborMapValue<TokenType>> = self.token_type.map(CborMapValue);
             let ace_profile: Option<CborMapValue<AceProfile>> = self.ace_profile.map(CborMapValue);
             cbor_map_vec! {
-                token::ACCESS_TOKEN => Some(&self.access_token),
+                token::ACCESS_TOKEN => Some(Value::Bytes(self.access_token.clone())),
                 token::EXPIRES_IN => self.expires_in,
                 token::CNF => self.cnf.as_ref().map(ToCborMap::to_ciborium_value),
                 token::SCOPE => self.scope.as_ref(),
                 token::TOKEN_TYPE => token_type,
-                token::REFRESH_TOKEN => self.refresh_token.as_ref(),
+                token::REFRESH_TOKEN => self.refresh_token.as_ref().map(|v| Value::Bytes(v.clone())),
                 token::ACE_PROFILE => ace_profile,
                 token::RS_CNF => self.rs_cnf.as_ref().map(ToCborMap::to_ciborium_value)
             }
         }
 
         fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
-            where
-                Self: Sized + ToCborMap,
+        where
+            Self: Sized + ToCborMap,
         {
             let mut response = AccessTokenResponse::default();
             for entry in map {
                 match (u8::try_from(entry.0)?, entry.1) {
                     (token::ACCESS_TOKEN, Value::Bytes(x)) => {
-                        response.access_token = ByteString::from(x);
+                        response.access_token = x;
                     }
                     (token::EXPIRES_IN, Value::Integer(x)) => {
                         response.expires_in = Some(decode_number::<u32>(x, "expires_in")?);
@@ -788,7 +788,7 @@ mod conversion {
                             Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
                                 Self,
                             >(
-                                x, "cnf",
+                                x, "cnf"
                             )?)?);
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
@@ -803,7 +803,7 @@ mod conversion {
                             Some(TokenType::from(decode_number::<i32>(x, "token_type")?));
                     }
                     (token::REFRESH_TOKEN, Value::Bytes(x)) => {
-                        response.refresh_token = Some(ByteString::from(x));
+                        response.refresh_token = Some(x);
                     }
                     (token::ACE_PROFILE, Value::Integer(x)) => {
                         response.ace_profile =
@@ -814,7 +814,7 @@ mod conversion {
                             Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
                                 Self,
                             >(
-                                x, "rs_cnf",
+                                x, "rs_cnf"
                             )?)?);
                     }
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
@@ -835,8 +835,8 @@ mod conversion {
         }
 
         fn try_from_cbor_map(map: Vec<(i128, Value)>) -> Result<Self, TryFromCborMapError>
-            where
-                Self: Sized + ToCborMap,
+        where
+            Self: Sized + ToCborMap,
         {
             let mut maybe_error: Option<ErrorCode> = None;
             let mut error_description: Option<String> = None;

@@ -82,8 +82,8 @@ impl TryFromCborMapError {
     /// Creates a new error with the given custom `message`.
     #[must_use]
     pub(crate) fn from_message<T>(message: T) -> TryFromCborMapError
-        where
-            T: Into<String>,
+    where
+        T: Into<String>,
     {
         TryFromCborMapError {
             message: message.into(),
@@ -206,8 +206,8 @@ impl Display for InvalidBinaryEncodedScopeError {
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 #[non_exhaustive]
 pub enum CoseCipherError<T>
-    where
-        T: Display,
+where
+    T: Display,
 {
     /// A header which the cipher is supposed to set has already been set.
     HeaderAlreadySet {
@@ -223,8 +223,8 @@ pub enum CoseCipherError<T>
 }
 
 impl<T> CoseCipherError<T>
-    where
-        T: Display,
+where
+    T: Display,
 {
     /// Creates a new [`CoseCipherError`] of type
     /// [`HeaderAlreadySet`](CoseCipherError::HeaderAlreadySet) where the header
@@ -246,8 +246,8 @@ impl<T> CoseCipherError<T>
     /// that was already set has the given `name`.
     #[must_use]
     pub fn existing_header<S>(name: S) -> CoseCipherError<T>
-        where
-            S: Into<String>,
+    where
+        S: Into<String>,
     {
         CoseCipherError::HeaderAlreadySet {
             existing_header_name: name.into(),
@@ -264,8 +264,8 @@ impl<T> CoseCipherError<T>
 }
 
 impl<T> Display for CoseCipherError<T>
-    where
-        T: Display,
+where
+    T: Display,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -371,8 +371,8 @@ impl Display for ScopeFromValueError {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum AccessTokenError<T>
-    where
-        T: Display,
+where
+    T: Display,
 {
     /// A COSE specific error occurred.
     ///
@@ -389,8 +389,8 @@ pub enum AccessTokenError<T>
 }
 
 impl<T> Display for AccessTokenError<T>
-    where
-        T: Display,
+where
+    T: Display,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -405,8 +405,8 @@ impl<T> Display for AccessTokenError<T>
 }
 
 impl<T> AccessTokenError<T>
-    where
-        T: Display,
+where
+    T: Display,
 {
     /// Creates a new [`AccessTokenError`] of variant [`CoseError`](AccessTokenError::CoseError)
     /// with the given `error`.

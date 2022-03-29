@@ -23,8 +23,8 @@ fn example_key() -> CoseKey {
         0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c, 0x42,
         0x71, 0x08,
     ])
-        .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
-        .build()
+    .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
+    .build()
 }
 
 fn example_headers() -> (Header, Header) {
@@ -65,49 +65,47 @@ fn assert_header_is_part_of(subset: &Header, superset: &Header) {
     // If the subset contains a field, the superset must have it set to that as well.
     // All other fields will be ignored.
     if subset.alg.is_some() {
-        assert_eq!(subset.alg, superset.alg, "'alg' has been changed")
+        assert_eq!(subset.alg, superset.alg, "'alg' has been changed");
     }
     if !subset.crit.is_empty() {
-        assert_eq!(subset.crit, superset.crit, "'crit' has been changed")
+        assert_eq!(subset.crit, superset.crit, "'crit' has been changed");
     }
     if subset.content_type.is_some() {
         assert_eq!(
             subset.content_type, superset.content_type,
             "'content_type' has been changed"
-        )
+        );
     }
     if !subset.key_id.is_empty() {
-        assert_eq!(subset.key_id, superset.key_id, "'key_id' has been changed")
+        assert_eq!(subset.key_id, superset.key_id, "'key_id' has been changed");
     }
     if !subset.iv.is_empty() {
-        assert_eq!(subset.iv, superset.iv, "'iv' has been changed")
+        assert_eq!(subset.iv, superset.iv, "'iv' has been changed");
     }
     if !subset.partial_iv.is_empty() {
         assert_eq!(
             subset.partial_iv, superset.partial_iv,
             "'partial_iv' has been changed"
-        )
+        );
     }
     if !subset.counter_signatures.is_empty() {
         assert_eq!(
             subset.counter_signatures, superset.counter_signatures,
             "'counter_signatures' has been changed"
-        )
+        );
     }
-    assert!(subset.rest.iter().all(|x| superset.rest.contains(x)))
+    assert!(subset.rest.iter().all(|x| superset.rest.contains(x)));
 }
 
 #[test]
 fn test_get_headers_enc() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCommon>::Error>> {
     let (unprotected_header, protected_header) = example_headers();
-    let enc_test = ByteString::from(
-        CoseEncrypt0Builder::new()
-            .unprotected(unprotected_header.clone())
-            .protected(protected_header.clone())
-            .build()
-            .to_vec()
-            .map_err(AccessTokenError::CoseError)?,
-    );
+    let enc_test = CoseEncrypt0Builder::new()
+        .unprotected(unprotected_header.clone())
+        .protected(protected_header.clone())
+        .build()
+        .to_vec()
+        .map_err(AccessTokenError::CoseError)?;
     assert_eq!(
         (unprotected_header, protected_header),
         get_token_headers(&enc_test)
@@ -121,14 +119,12 @@ fn test_get_headers_enc() -> Result<(), AccessTokenError<<FakeCrypto as CoseCiph
 fn test_get_headers_sign() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCommon>::Error>>
 {
     let (unprotected_header, protected_header) = example_headers();
-    let sign_test = ByteString::from(
-        CoseSign1Builder::new()
-            .unprotected(unprotected_header.clone())
-            .protected(protected_header.clone())
-            .build()
-            .to_vec()
-            .map_err(AccessTokenError::CoseError)?,
-    );
+    let sign_test = CoseSign1Builder::new()
+        .unprotected(unprotected_header.clone())
+        .protected(protected_header.clone())
+        .build()
+        .to_vec()
+        .map_err(AccessTokenError::CoseError)?;
     assert_eq!(
         (unprotected_header, protected_header),
         get_token_headers(&sign_test)
@@ -141,14 +137,12 @@ fn test_get_headers_sign() -> Result<(), AccessTokenError<<FakeCrypto as CoseCip
 #[test]
 fn test_get_headers_mac() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCommon>::Error>> {
     let (unprotected_header, protected_header) = example_headers();
-    let mac_test = ByteString::from(
-        CoseMac0Builder::new()
-            .unprotected(unprotected_header.clone())
-            .protected(protected_header.clone())
-            .build()
-            .to_vec()
-            .map_err(AccessTokenError::CoseError)?,
-    );
+    let mac_test = CoseMac0Builder::new()
+        .unprotected(unprotected_header.clone())
+        .protected(protected_header.clone())
+        .build()
+        .to_vec()
+        .map_err(AccessTokenError::CoseError)?;
     assert_eq!(
         (unprotected_header, protected_header),
         get_token_headers(&mac_test)
@@ -168,7 +162,7 @@ fn test_get_headers_invalid() {
         CoseKeyBuilder::new_symmetric_key(vec![0xDC, 0xAF]).build().to_vec().unwrap(),
     ];
     for input in inputs {
-        assert!(get_token_headers(&ByteString::from(input)).is_none())
+        assert!(get_token_headers(&input).is_none());
     }
 }
 
@@ -197,7 +191,8 @@ fn test_encrypt_decrypt() -> Result<(), AccessTokenError<<FakeCrypto as CoseCiph
 }
 
 #[test]
-fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCommon>::Error>> {
+fn test_encrypt_decrypt_invalid_header(
+) -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCommon>::Error>> {
     let mut crypto = FakeCrypto {};
     let key = example_key();
     let (unprotected_header, protected_header) = example_headers();
@@ -214,8 +209,8 @@ fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError<<FakeCry
     assert!(encrypted.is_err());
     assert!(encrypted.err().map_or(false, |x| {
         if let AccessTokenError::CoseCipherError(CoseCipherError::HeaderAlreadySet {
-                                                     existing_header_name,
-                                                 }) = x
+            existing_header_name,
+        }) = x
         {
             existing_header_name == "47"
         } else {
@@ -233,8 +228,8 @@ fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError<<FakeCry
     assert!(encrypted.is_err());
     assert!(encrypted.err().map_or(false, |x| {
         if let AccessTokenError::CoseCipherError(CoseCipherError::HeaderAlreadySet {
-                                                     existing_header_name,
-                                                 }) = x
+            existing_header_name,
+        }) = x
         {
             existing_header_name == "alg"
         } else {
@@ -247,14 +242,14 @@ fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError<<FakeCry
 
 #[test]
 fn test_sign_verify() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCommon>::Error>> {
-    let mut signer = FakeCrypto {};
+    let mut crypto = FakeCrypto {};
     let key = example_key();
     let (unprotected_header, protected_header) = example_headers();
     let claims = example_claims(key)?;
     let aad = example_aad();
     let signed = sign_access_token(
         claims,
-        &mut signer,
+        &mut crypto,
         Some(&aad),
         Some(unprotected_header.clone()),
         Some(protected_header.clone()),
@@ -264,6 +259,6 @@ fn test_sign_verify() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCo
         get_token_headers(&signed).ok_or(AccessTokenError::UnknownCoseStructure)?;
     assert_header_is_part_of(&unprotected_header, &unprotected);
     assert_header_is_part_of(&protected_header, &protected.header);
-    verify_access_token(&signed, &mut signer, Some(&aad))?;
+    verify_access_token(&signed, &mut crypto, Some(&aad))?;
     Ok(())
 }

@@ -234,7 +234,7 @@ mod conversion {
         /// assert!(simple.elements().eq(vec!["this", "is", "a", "test"]));
         /// # Ok::<(), InvalidTextEncodedScopeError>(())
         /// ```
-        pub fn elements(&self) -> impl Iterator<Item=&str> {
+        pub fn elements(&self) -> impl Iterator<Item = &str> {
             self.0.split(' ')
         }
     }
@@ -313,7 +313,7 @@ mod conversion {
         pub fn elements(
             &self,
             separator: u8,
-        ) -> Result<impl Iterator<Item=&[u8]>, InvalidBinaryEncodedScopeError> {
+        ) -> Result<impl Iterator<Item = &[u8]>, InvalidBinaryEncodedScopeError> {
             let split = self.0.split(move |x| x == &separator);
             // We use an assert rather than an Error because the client is not expected to handle this.
             assert!(
@@ -348,7 +348,7 @@ mod conversion {
             if vec.is_empty() {
                 Err(InvalidBinaryEncodedScopeError::EmptyScope)
             } else {
-                Ok(BinaryEncodedScope(ByteString::from(value.to_vec())))
+                Ok(BinaryEncodedScope(vec))
             }
         }
     }
@@ -408,8 +408,8 @@ mod conversion {
     impl From<Scope> for Value {
         fn from(scope: Scope) -> Self {
             match scope {
-                Scope::TextEncoded(text) => Value::from(text.0),
-                Scope::BinaryEncoded(binary) => Value::from(binary.0.0),
+                Scope::TextEncoded(text) => Value::Text(text.0),
+                Scope::BinaryEncoded(binary) => Value::Bytes(binary.0),
             }
         }
     }
@@ -430,8 +430,8 @@ mod conversion {
 
     impl<'de> Deserialize<'de> for Scope {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
         {
             Scope::try_from(Value::deserialize(deserializer)?)
                 .map_err(|x| D::Error::custom(x.to_string()))
