@@ -423,6 +423,7 @@ mod conversion {
                     b.as_slice(),
                 )?)),
                 Value::Text(t) => Ok(Scope::TextEncoded(TextEncodedScope::try_from(t.as_str())?)),
+                Value::Array(_) => Err(ScopeFromValueError::AifScopeIsUnsupported),
                 v => Err(ScopeFromValueError::invalid_type(&v)),
             }
         }

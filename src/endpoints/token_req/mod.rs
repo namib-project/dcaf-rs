@@ -735,6 +735,10 @@ mod conversion {
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
                         request.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?;
+                    }
+                    (token::SCOPE, v) => {
+                        request.scope = decode_scope::<Scope, Scope>(Scope::try_from(v).map_err(|x|
+                            TryFromCborMapError::from_message(format!("couldn't decode scope: {x}")))?)?;
                         // TODO: Handle AIF
                     }
                     (token::CLIENT_ID, Value::Text(x)) => request.client_id = x,

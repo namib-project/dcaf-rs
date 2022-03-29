@@ -301,6 +301,9 @@ pub enum ScopeFromValueError {
     ///
     /// Details are provided in the given [`WrongSourceTypeError`].
     InvalidType(WrongSourceTypeError<Value>),
+
+    /// Used when an AIF scope has been detected, which is as of now still unsupported.
+    AifScopeIsUnsupported
 }
 
 fn to_variant_name(value: &Value) -> &'static str {
@@ -360,6 +363,7 @@ impl Display for ScopeFromValueError {
                 write!(f, "invalid text-encoded scope: {s}")
             }
             ScopeFromValueError::InvalidType(t) => write!(f, "invalid type: {t}"),
+            ScopeFromValueError::AifScopeIsUnsupported => write!(f, "AIF scopes are still unsupported")
         }
     }
 }
