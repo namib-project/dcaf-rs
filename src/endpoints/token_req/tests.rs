@@ -15,8 +15,9 @@ use coset::{
     iana, CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder,
     ProtectedHeader,
 };
+use coset::cwt::Timestamp;
 
-use crate::common::scope::TextEncodedScope;
+use crate::common::scope::{AifEncodedScopeElement, AifRestMethodSet, LibdcafEncodedScope, TextEncodedScope};
 use crate::common::test_helper::expect_ser_de;
 use crate::endpoints::token_req::AceProfile::CoapDtls;
 
@@ -36,6 +37,40 @@ fn test_access_token_request_symmetric() -> Result<(), String> {
         "A2056E74656D7053656E736F72343731311818686D79636C69656E74",
     )
 }
+
+
+#[test]
+fn test_access_token_request_libdcaf() -> Result<(), String> {
+    let request = AccessTokenRequest::builder()
+        .audience("coaps://localhost")
+        .scope(LibdcafEncodedScope::new(AifEncodedScopeElement::new("restricted".to_string(), AifRestMethodSet::GET)))
+        .issuer("coaps://127.0.0.1:7744/authorize")
+        .build().map_err(|x| x.to_string())?;
+    expect_ser_de(request,
+                  None,
+                  "A3017820636F6170733A2F2F3132372E302E302E313A373734342F617574686F72697A650571636F6170733A2F2F6C6F63616C686F737409826A7265737472696374656401")
+}
+
+#[test]
+fn test_access_token_response_whole_libdcaf() -> Result<(), String> {
+    let response = AccessTokenResponse::builder()
+        .access_token(vec![0xDC, 0xAF])
+        .scope(LibdcafEncodedScope::new(AifEncodedScopeElement::new("restricted".to_string(), AifRestMethodSet::GET)))
+        .issued_at(Timestamp::WholeSeconds(10))
+        .build().map_err(|x| x.to_string())?;
+    expect_ser_de(response, None, "A30142DCAF060A09826A7265737472696374656401")
+}
+
+#[test]
+fn test_access_token_response_fraction_libdcaf() -> Result<(), String> {
+    let response = AccessTokenResponse::builder()
+        .access_token(vec![0xDC, 0xAF])
+        .scope(LibdcafEncodedScope::new(AifEncodedScopeElement::new("empty".to_string(), AifRestMethodSet::empty())))
+        .issued_at(Timestamp::FractionalSeconds(1.5))
+        .build().map_err(|x| x.to_string())?;
+    expect_ser_de(response, None, "A30142DCAF06F93E00098265656D70747900")
+}
+
 
 /// Example data taken from draft-ietf-ace-oauth-authz-46, Figure 6.
 #[test]
