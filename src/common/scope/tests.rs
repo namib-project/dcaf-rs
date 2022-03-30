@@ -151,7 +151,9 @@ mod binary {
         assert!(simple1.elements(Some(1))?.eq(&vec![vec![0], vec![2]]));
 
         let simple2 = BinaryEncodedScope::try_from(vec![0xDC, 0x20, 0xAF].as_slice())?;
-        assert!(simple2.elements(Some(0x20))?.eq(&vec![vec![0xDC], vec![0xAF]]));
+        assert!(simple2
+            .elements(Some(0x20))?
+            .eq(&vec![vec![0xDC], vec![0xAF]]));
         assert!(simple2.elements(Some(0))?.eq(&vec![vec![0xDC, 0x20, 0xAF]]));
 
         let simple3 = BinaryEncodedScope::try_from(

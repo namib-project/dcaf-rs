@@ -144,6 +144,7 @@ pub struct AccessTokenRequest {
 
     /// The client identifier as described in section 2.2 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+    #[builder(default)]
     pub client_id: Option<String>,
 
     /// Grant type used for this request.
@@ -186,7 +187,7 @@ pub struct AccessTokenRequest {
     pub req_cnf: Option<ProofOfPossessionKey>,
 
     #[builder(default)]
-    pub issuer: Option<String>
+    pub issuer: Option<String>,
 }
 
 /// The type of the token issued as described in section 7.1 of
@@ -527,12 +528,12 @@ pub struct ErrorResponse {
     /// Human-readable ASCII text providing additional information, used to assist the
     /// client developer in understanding the error that occurred.
     #[builder(default)]
-    pub error_description: Option<String>,
+    pub description: Option<String>,
 
     /// A URI identifying a human-readable web page with information about the error, used to
     /// provide the client developer with additional information about the error.
     #[builder(default)]
-    pub error_uri: Option<String>,
+    pub uri: Option<String>,
 }
 
 impl AccessTokenRequest {
@@ -724,44 +725,42 @@ mod conversion {
         where
             Self: Sized + ToCborMap,
         {
-            let mut request = AccessTokenRequest::default();
+            let mut request = AccessTokenRequest::builder();
             for entry in map {
                 match (u8::try_from(entry.0)?, entry.1) {
                     (token::REQ_CNF, Value::Map(x)) => {
-                        request.req_cnf =
-                            Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
-                                Self,
-                            >(
-                                x, "req_cnf"
-                            )?)?);
+                        request.req_cnf(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
+                            Self,
+                        >(
+                            x, "req_cnf",
+                        )?)?)
                     }
-                    (token::AUDIENCE, Value::Text(x)) => request.audience = Some(x),
+                    (token::AUDIENCE, Value::Text(x)) => request.audience(x),
                     (token::SCOPE, Value::Text(x)) => {
-                        request.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?;
+                        request.scope(decode_scope::<&str, TextEncodedScope>(x.as_str())?)
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
-                        request.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?;
+                        request.scope(decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?)
                     }
-                    (token::SCOPE, v) => {
-                        request.scope = decode_scope::<Scope, Scope>(Scope::try_from(v).map_err(|x|
-                            TryFromCborMapError::from_message(format!("couldn't decode scope: {x}")))?)?;
-                        // TODO: Handle AIF
-                    }
-                    (token::CLIENT_ID, Value::Text(x)) => request.client_id = Some(x),
-                    (token::REDIRECT_URI, Value::Text(x)) => request.redirect_uri = Some(x),
+                    (token::SCOPE, v) => request.scope(decode_scope::<Scope, Scope>(
+                        Scope::try_from(v).map_err(|x| {
+                            TryFromCborMapError::from_message(format!("couldn't decode scope: {x}"))
+                        })?,
+                    )?),
+                    (token::CLIENT_ID, Value::Text(x)) => request.client_id(x),
+                    (token::REDIRECT_URI, Value::Text(x)) => request.redirect_uri(x),
                     (token::GRANT_TYPE, Value::Integer(x)) => {
-                        request.grant_type =
-                            Some(GrantType::from(decode_number::<i32>(x, "grant_type")?));
+                        request.grant_type(GrantType::from(decode_number::<i32>(x, "grant_type")?))
                     }
-                    (token::ACE_PROFILE, Value::Null) => request.ace_profile = Some(()),
-                    (token::CNONCE, Value::Bytes(x)) => {
-                        request.client_nonce = Some(x);
-                    },
-                    (token::ISSUER, Value::Text(x)) => request.issuer = Some(x),
+                    (token::ACE_PROFILE, Value::Null) => request.ace_profile(),
+                    (token::CNONCE, Value::Bytes(x)) => request.client_nonce(x),
+                    (token::ISSUER, Value::Text(x)) => request.issuer(x),
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 };
             }
-            Ok(request)
+            request
+                .build()
+                .map_err(|x| TryFromCborMapError::build_failed("AccessTokenRequest", x))
         }
     }
 
@@ -785,53 +784,51 @@ mod conversion {
         where
             Self: Sized + ToCborMap,
         {
-            let mut response = AccessTokenResponse::default();
+            let mut response = AccessTokenResponse::builder();
             for entry in map {
                 match (u8::try_from(entry.0)?, entry.1) {
-                    (token::ACCESS_TOKEN, Value::Bytes(x)) => {
-                        response.access_token = x;
-                    }
+                    (token::ACCESS_TOKEN, Value::Bytes(x)) => response.access_token(x),
                     (token::EXPIRES_IN, Value::Integer(x)) => {
-                        response.expires_in = Some(decode_number::<u32>(x, "expires_in")?);
+                        response.expires_in(decode_number::<u32>(x, "expires_in")?)
                     }
                     (token::CNF, Value::Map(x)) => {
-                        response.cnf =
-                            Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
-                                Self,
-                            >(
-                                x, "cnf"
-                            )?)?);
+                        response.cnf(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
+                            Self,
+                        >(
+                            x, "cnf",
+                        )?)?)
                     }
                     (token::SCOPE, Value::Bytes(x)) => {
-                        response.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?;
-                        // TODO: Handle AIF
+                        response.scope(decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?)
                     }
+                    // TODO: Handle AIF
                     (token::SCOPE, Value::Text(x)) => {
-                        response.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?;
+                        response.scope(decode_scope::<&str, TextEncodedScope>(x.as_str())?)
                     }
+                    (token::SCOPE, v) => response.scope(decode_scope::<Scope, Scope>(
+                        Scope::try_from(v).map_err(|x| {
+                            TryFromCborMapError::from_message(format!("couldn't decode scope: {x}"))
+                        })?,
+                    )?),
                     (token::TOKEN_TYPE, Value::Integer(x)) => {
-                        response.token_type =
-                            Some(TokenType::from(decode_number::<i32>(x, "token_type")?));
+                        response.token_type(TokenType::from(decode_number::<i32>(x, "token_type")?))
                     }
-                    (token::REFRESH_TOKEN, Value::Bytes(x)) => {
-                        response.refresh_token = Some(x);
-                    }
-                    (token::ACE_PROFILE, Value::Integer(x)) => {
-                        response.ace_profile =
-                            Some(AceProfile::from(decode_number::<i32>(x, "ace_profile")?));
-                    }
+                    (token::REFRESH_TOKEN, Value::Bytes(x)) => response.refresh_token(x),
+                    (token::ACE_PROFILE, Value::Integer(x)) => response
+                        .ace_profile(AceProfile::from(decode_number::<i32>(x, "ace_profile")?)),
                     (token::RS_CNF, Value::Map(x)) => {
-                        response.rs_cnf =
-                            Some(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
-                                Self,
-                            >(
-                                x, "rs_cnf"
-                            )?)?);
+                        response.rs_cnf(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
+                            Self,
+                        >(
+                            x, "rs_cnf",
+                        )?)?)
                     }
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
-                }
+                };
             }
-            Ok(response)
+            response
+                .build()
+                .map_err(|x| TryFromCborMapError::build_failed("AccessTokenResponse", x))
         }
     }
 
@@ -840,8 +837,8 @@ mod conversion {
             let error = CborMapValue(self.error);
             cbor_map_vec! {
                 token::ERROR => Some(error),
-                token::ERROR_DESCRIPTION => self.error_description.as_ref(),
-                token::ERROR_URI => self.error_uri.as_ref()
+                token::ERROR_DESCRIPTION => self.description.as_ref(),
+                token::ERROR_URI => self.uri.as_ref()
             }
         }
 
@@ -849,26 +846,20 @@ mod conversion {
         where
             Self: Sized + ToCborMap,
         {
-            let mut maybe_error: Option<ErrorCode> = None;
-            let mut error_description: Option<String> = None;
-            let mut error_uri: Option<String> = None;
+            let mut error = ErrorResponse::builder();
             for entry in map {
                 match (u8::try_from(entry.0)?, entry.1) {
                     (token::ERROR, Value::Integer(x)) => {
-                        maybe_error = Some(ErrorCode::from(decode_number::<i32>(x, "error")?));
+                        error.error(ErrorCode::from(decode_number::<i32>(x, "error")?))
                     }
-                    (token::ERROR_URI, Value::Text(x)) => error_uri = Some(x),
-                    (token::ERROR_DESCRIPTION, Value::Text(x)) => error_description = Some(x),
+                    (token::ERROR_URI, Value::Text(x)) => error.uri(x),
+                    (token::ERROR_DESCRIPTION, Value::Text(x)) => error.description(x),
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
-                }
+                };
             }
-            maybe_error
-                .map(|error| ErrorResponse {
-                    error,
-                    error_description,
-                    error_uri,
-                })
-                .ok_or_else(|| TryFromCborMapError::missing_field("error"))
+            error
+                .build()
+                .map_err(|x| TryFromCborMapError::build_failed("ErrorResponse", x))
         }
     }
 }

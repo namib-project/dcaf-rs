@@ -166,8 +166,8 @@ fn test_access_token_response() -> Result<(), String> {
 fn test_error_response() -> Result<(), String> {
     let error = ErrorResponse::builder()
         .error(ErrorCode::UnauthorizedClient)
-        .error_description("You are not authorized to receive this token.")
-        .error_uri("https://http.cat/401")
+        .description("You are not authorized to receive this token.")
+        .uri("https://http.cat/401")
         .build()
         .map_err(|x| x.to_string())?;
     expect_ser_de(error, None, "A3181E04181F782D596F7520617265206E6F7420617574686F72697A656420746F2072656365697665207468697320746F6B656E2E18207468747470733A2F2F687474702E6361742F343031")
@@ -177,8 +177,8 @@ fn test_error_response() -> Result<(), String> {
 fn test_error_response_other() -> Result<(), String> {
     let error = ErrorResponse::builder()
         .error(ErrorCode::Other(418))
-        .error_description("I can't help you, I'm just a teapot.")
-        .error_uri("https://http.cat/418")
+        .description("I can't help you, I'm just a teapot.")
+        .uri("https://http.cat/418")
         .build()
         .map_err(|x| x.to_string())?;
     expect_ser_de(error, None, "A3181E1901A2181F7824492063616E27742068656C7020796F752C2049276D206A757374206120746561706F742E18207468747470733A2F2F687474702E6361742F343138")

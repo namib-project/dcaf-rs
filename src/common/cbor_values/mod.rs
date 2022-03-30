@@ -238,7 +238,10 @@ mod conversion {
                     (x, _) => Err(TryFromCborMapError::unknown_field(u8::try_from(x)?)),
                 }
             } else {
-                unreachable!("we have previously verified that map.len() == 1, so map.into_iter().next() must return a next element")
+                unreachable!(
+                    "we have previously verified that map.len() == 1, \
+                so map.into_iter().next() must return a next element"
+                )
             }
         }
     }

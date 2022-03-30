@@ -107,6 +107,18 @@ impl TryFromCborMapError {
             message: format!("required field {name} is missing"),
         }
     }
+
+    /// Creates a new error with a message describing that the target type could not be built,
+    /// either due to a missing field or due to a validation error in the builder.
+    #[must_use]
+    pub(crate) fn build_failed<T>(name: &'static str, builder_error: T) -> TryFromCborMapError
+        where
+            T: Display,
+    {
+        TryFromCborMapError {
+            message: format!("couldn't build {name}: {builder_error}"),
+        }
+    }
 }
 
 impl From<TryFromIntError> for TryFromCborMapError {
@@ -303,7 +315,7 @@ pub enum ScopeFromValueError {
     InvalidType(WrongSourceTypeError<Value>),
 
     /// Used when an AIF scope has been detected, which is as of now still unsupported.
-    AifScopeIsUnsupported
+    AifScopeIsUnsupported,
 }
 
 fn to_variant_name(value: &Value) -> &'static str {
@@ -363,7 +375,9 @@ impl Display for ScopeFromValueError {
                 write!(f, "invalid text-encoded scope: {s}")
             }
             ScopeFromValueError::InvalidType(t) => write!(f, "invalid type: {t}"),
-            ScopeFromValueError::AifScopeIsUnsupported => write!(f, "AIF scopes are still unsupported")
+            ScopeFromValueError::AifScopeIsUnsupported => {
+                write!(f, "AIF scopes are still unsupported")
+            }
         }
     }
 }

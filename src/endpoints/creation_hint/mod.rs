@@ -149,25 +149,24 @@ mod conversion {
         where
             Self: Sized + ToCborMap,
         {
-            let mut hint = AuthServerRequestCreationHint::default();
+            let mut hint = AuthServerRequestCreationHint::builder();
             for entry in map {
                 match (u8::try_from(entry.0)?, entry.1) {
-                    (creation_hint::AS, Value::Text(x)) => hint.auth_server = Some(x),
-                    (creation_hint::KID, Value::Bytes(x)) => hint.kid = Some(x),
-                    (creation_hint::AUDIENCE, Value::Text(x)) => hint.audience = Some(x),
+                    (creation_hint::AS, Value::Text(x)) => hint.auth_server(x),
+                    (creation_hint::KID, Value::Bytes(x)) => hint.kid(x),
+                    (creation_hint::AUDIENCE, Value::Text(x)) => hint.audience(x),
                     (creation_hint::SCOPE, Value::Text(x)) => {
-                        hint.scope = decode_scope::<&str, TextEncodedScope>(x.as_str())?;
+                        hint.scope(decode_scope::<&str, TextEncodedScope>(x.as_str())?)
                     }
                     (creation_hint::SCOPE, Value::Bytes(x)) => {
-                        hint.scope = decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?;
+                        hint.scope(decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?)
                     }
-                    (creation_hint::CNONCE, Value::Bytes(x)) => {
-                        hint.client_nonce = Some(x);
-                    }
+                    (creation_hint::CNONCE, Value::Bytes(x)) => hint.client_nonce(x),
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 };
             }
-            Ok(hint)
+            hint.build()
+                .map_err(|x| TryFromCborMapError::build_failed("AuthServerRequestCreationHint", x))
         }
     }
 }

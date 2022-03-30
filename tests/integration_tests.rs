@@ -181,8 +181,8 @@ fn test_scenario() -> Result<(), String> {
 
     let error = ErrorResponse::builder()
         .error(ErrorCode::InvalidRequest)
-        .error_description("You sent an invalid request.")
-        .error_uri("https://example.org/400")
+        .description("You sent an invalid request.")
+        .uri("https://example.org/400")
         .build()
         .map_err(|x| x.to_string())?;
     let result = pseudo_send_receive(error.clone())?;
