@@ -26,12 +26,14 @@
 //! This also applies to cryptographic functions, as mentioned in the previous paragraph.
 //!
 //! The name DCAF was chosen because eventually, it's planned for this crate to support
-//! functionality from the
-//! [Delegated CoAP Authentication and Authorization Framework (DCAF)](https://dcaf.science/)
+//! functionality from the [Delegated CoAP Authentication and Authorization Framework (DCAF)](https://dcaf.science/)
 //! specified in [`draft-gerdes-ace-dcaf-authorize`](https://datatracker.ietf.org/doc/html/draft-gerdes-ace-dcaf-authorize-04)
 //! (which was specified prior to ACE-OAuth and inspired many design choices in it)---
 //! specifically, it's planned to support using a CAM (Client Authorization Manager)
 //! instead of just a SAM (Server Authorization Manager), as is done in ACE-OAuth.
+//! Compatibility with the existing [DCAF implementation in C](https://gitlab.informatik.uni-bremen.de/DCAF/dcaf)
+//! (which we'll call `libdcaf` to disambiguate from `dcaf` referring to this crate) is also an
+//! additional design goal, though the primary objective is still to support ACE-OAuth.
 //!
 //! As one of the possible use-cases for this crate is usage on constrained IoT devices,
 //! requirements are minimal---as such, while `alloc` is still needed, this crate offers
