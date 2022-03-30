@@ -182,6 +182,9 @@ pub struct AccessTokenRequest {
     /// See also the documentation of [`ProofOfPossessionKey`] for details.
     #[builder(default)]
     pub req_cnf: Option<ProofOfPossessionKey>,
+
+    #[builder(default)]
+    pub issuer: Option<String>
 }
 
 /// The type of the token issued as described in section 7.1 of
@@ -703,6 +706,7 @@ mod conversion {
         fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             let grant_type: Option<CborMapValue<GrantType>> = self.grant_type.map(CborMapValue);
             cbor_map_vec! {
+                token::ISSUER => self.issuer.as_ref(),
                 token::REQ_CNF => self.req_cnf.as_ref().map(ToCborMap::to_ciborium_value),
                 token::AUDIENCE => self.audience.as_ref(),
                 token::SCOPE => self.scope.as_ref(),
@@ -710,7 +714,7 @@ mod conversion {
                 token::REDIRECT_URI => self.redirect_uri.as_ref(),
                 token::GRANT_TYPE => grant_type,
                 token::ACE_PROFILE => self.ace_profile.as_ref(),
-                token::CNONCE => self.client_nonce.as_ref().map(|v| Value::Bytes(v.clone())),
+                token::CNONCE => self.client_nonce.as_ref().map(|v| Value::Bytes(v.clone()))
             }
         }
 
@@ -750,7 +754,8 @@ mod conversion {
                     (token::ACE_PROFILE, Value::Null) => request.ace_profile = Some(()),
                     (token::CNONCE, Value::Bytes(x)) => {
                         request.client_nonce = Some(x);
-                    }
+                    },
+                    (token::ISSUER, Value::Text(x)) => request.issuer = Some(x),
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 };
             }
