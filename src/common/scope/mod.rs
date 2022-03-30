@@ -27,7 +27,7 @@
 //! assert!(text_scope.elements().eq(vec!["first_client", "second_client"]));
 //! // Separator is only specified upon `elements` call.
 //! let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice())?;
-//! assert!(binary_scope.elements(0)?.eq(vec![vec![1, 2], vec![3, 4]]));
+//! assert!(binary_scope.elements(Some(0))?.eq(&vec![vec![1, 2], vec![3, 4]]));
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //! And then you could wrap it in the [Scope] type and use it in a field,
@@ -129,7 +129,7 @@ impl Display for TextEncodedScope {
 /// # use dcaf::common::scope::{BinaryEncodedScope};
 /// # use dcaf::error::InvalidBinaryEncodedScopeError;
 /// let scope = BinaryEncodedScope::try_from(vec![0x00, 0x21, 0xDC, 0xAF].as_slice())?;
-/// assert!(scope.elements(0x21)?.eq(vec![vec![0x00], vec![0xDC, 0xAF]]));
+/// assert!(scope.elements(Some(0x21))?.eq(&vec![vec![0x00], vec![0xDC, 0xAF]]));
 /// # Ok::<(), InvalidBinaryEncodedScopeError>(())
 /// ```
 ///
@@ -195,8 +195,9 @@ pub enum Scope {
     /// # use dcaf::common::scope::BinaryEncodedScope;
     /// # use dcaf::error::InvalidBinaryEncodedScopeError;
     /// let scope = BinaryEncodedScope::try_from(vec![0xDC, 0xAF, 0x00, 0xAF, 0xDC].as_slice())?;
-    /// assert!(scope.elements(0x00)?.eq(vec![vec![0xDC, 0xAF], vec![0xAF, 0xDC]]));
-    /// assert!(scope.elements(0xDC).is_err());  // no separators at the beginning or end
+    /// assert!(scope.elements(Some(0x00))?.eq(&vec![vec![0xDC, 0xAF], vec![0xAF, 0xDC]]));
+    /// assert!(scope.elements(None)?.eq(&vec![vec![0xDC, 0xAF, 0x00, 0xAF, 0xDC]]));
+    /// assert!(scope.elements(Some(0xDC)).is_err());  // no separators at the beginning or end
     /// # Ok::<(), InvalidBinaryEncodedScopeError>(())
     /// ```
     BinaryEncoded(BinaryEncodedScope),
@@ -279,15 +280,20 @@ mod conversion {
     impl BinaryEncodedScope {
         /// Return the individual elements (i.e., access ranges) of this scope.
         ///
+        /// If no separator is given (i.e. it is `None`), it is assumed that the scope consists
+        /// of a single element and will be returned as such.
+        ///
         /// ## Pre-conditions
-        /// - The given separator may neither be the first nor last element of the scope.
-        /// - The given separator may not occur twice in a row in the scope.
+        /// - If a separator is given, it may neither be the first nor last element of the scope.
+        /// - If a separator is given, it may not occur twice in a row in the scope.
         /// - The scope must not be empty.
         ///
         /// ## Post-conditions
-        /// - The returned iterator will not be empty.
+        /// - The returned vector will not be empty.
         /// - None of its elements will be empty.
-        /// - None of its elements will contain the given separator.
+        /// - If a separator is given, none of its elements will contain it.
+        /// - If no separator is given, the vector will consist of a single element, containing
+        ///   the whole binary-encoded scope.
         ///
         /// # Example
         ///
@@ -295,8 +301,9 @@ mod conversion {
         /// # use dcaf::common::scope::BinaryEncodedScope;
         /// # use dcaf::error::InvalidBinaryEncodedScopeError;
         /// let simple = BinaryEncodedScope::try_from(vec![0xDC, 0x21, 0xAF].as_slice())?;
-        /// assert!(simple.elements(0x21)?.eq(vec![vec![0xDC], vec![0xAF]]));
-        /// assert!(simple.elements(0xDC).is_err());
+        /// assert!(simple.elements(Some(0x21))?.eq(&vec![vec![0xDC], vec![0xAF]]));
+        /// assert!(simple.elements(None)?.eq(&vec![vec![0xDC, 0x21, 0xAF]]));
+        /// assert!(simple.elements(Some(0xDC)).is_err());
         /// # Ok::<(), InvalidBinaryEncodedScopeError>(())
         /// ```
         ///
@@ -312,30 +319,35 @@ mod conversion {
         /// This shouldn't occur, as it's an invariant of [BinaryEncodedScope].
         pub fn elements(
             &self,
-            separator: u8,
-        ) -> Result<impl Iterator<Item = &[u8]>, InvalidBinaryEncodedScopeError> {
-            let split = self.0.split(move |x| x == &separator);
+            separator: Option<u8>,
+        ) -> Result<Vec<&[u8]>, InvalidBinaryEncodedScopeError> {
             // We use an assert rather than an Error because the client is not expected to handle this.
             assert!(
                 !self.0.is_empty(),
                 "Invariant violated: Scope may not be empty"
             );
-            if self.0.first().filter(|x| **x != separator).is_none() {
-                Err(InvalidBinaryEncodedScopeError::StartsWithSeparator(
-                    separator,
-                ))
-            } else if self.0.last().filter(|x| **x != separator).is_none() {
-                Err(InvalidBinaryEncodedScopeError::EndsWithSeparator(separator))
-            } else if self.0.windows(2).any(|x| x[0] == x[1] && x[1] == separator) {
-                Err(InvalidBinaryEncodedScopeError::ConsecutiveSeparators(
-                    separator,
-                ))
+            if let Some(separator) = separator {
+                let split = self.0.split(move |x| x == &separator);
+                if self.0.first().filter(|x| **x != separator).is_none() {
+                    Err(InvalidBinaryEncodedScopeError::StartsWithSeparator(
+                        separator,
+                    ))
+                } else if self.0.last().filter(|x| **x != separator).is_none() {
+                    Err(InvalidBinaryEncodedScopeError::EndsWithSeparator(separator))
+                } else if self.0.windows(2).any(|x| x[0] == x[1] && x[1] == separator) {
+                    Err(InvalidBinaryEncodedScopeError::ConsecutiveSeparators(
+                        separator,
+                    ))
+                } else {
+                    debug_assert!(
+                        split.clone().all(|x| !x.is_empty()),
+                        "Post-condition violated: Result may not contain empty slices"
+                    );
+                    Ok(split.collect())
+                }
             } else {
-                debug_assert!(
-                    split.clone().all(|x| !x.is_empty()),
-                    "Post-condition violated: Result may not contain empty slices"
-                );
-                Ok(split)
+                // no separator given
+                Ok(vec![self.0.as_slice()])
             }
         }
     }

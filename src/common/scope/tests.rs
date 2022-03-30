@@ -144,30 +144,30 @@ mod binary {
     #[test]
     fn test_scope_elements_normal() -> Result<(), InvalidBinaryEncodedScopeError> {
         let single = BinaryEncodedScope::try_from(vec![0].as_slice())?;
-        assert!(single.elements(0x20)?.eq(vec![vec![0]]));
+        assert!(single.elements(Some(0x20))?.eq(&vec![vec![0]]));
 
         let simple1 = BinaryEncodedScope::try_from(vec![0, 1, 2].as_slice())?;
-        assert!(simple1.elements(0x20)?.eq(vec![vec![0, 1, 2]]));
-        assert!(simple1.elements(1)?.eq(vec![vec![0], vec![2]]));
+        assert!(simple1.elements(Some(0x20))?.eq(&vec![vec![0, 1, 2]]));
+        assert!(simple1.elements(Some(1))?.eq(&vec![vec![0], vec![2]]));
 
         let simple2 = BinaryEncodedScope::try_from(vec![0xDC, 0x20, 0xAF].as_slice())?;
-        assert!(simple2.elements(0x20)?.eq(vec![vec![0xDC], vec![0xAF]]));
-        assert!(simple2.elements(0)?.eq(vec![vec![0xDC, 0x20, 0xAF]]));
+        assert!(simple2.elements(Some(0x20))?.eq(&vec![vec![0xDC], vec![0xAF]]));
+        assert!(simple2.elements(Some(0))?.eq(&vec![vec![0xDC, 0x20, 0xAF]]));
 
         let simple3 = BinaryEncodedScope::try_from(
             vec![0xDE, 0xAD, 0xBE, 0xEF, 0, 0xDC, 0xAF, 0, 1].as_slice(),
         )?;
-        assert!(simple3.elements(0)?.eq(vec![
+        assert!(simple3.elements(Some(0))?.eq(&vec![
             vec![0xDE, 0xAD, 0xBE, 0xEF],
             vec![0xDC, 0xAF],
             vec![1],
         ]));
         assert!(simple3
-            .elements(0xEF)?
-            .eq(vec![vec![0xDE, 0xAD, 0xBE], vec![0, 0xDC, 0xAF, 0, 1]]));
+            .elements(Some(0xEF))?
+            .eq(&vec![vec![0xDE, 0xAD, 0xBE], vec![0, 0xDC, 0xAF, 0, 1]]));
         assert!(simple3
-            .elements(2)?
-            .eq(vec![vec![0xDE, 0xAD, 0xBE, 0xEF, 0, 0xDC, 0xAF, 0, 1]]));
+            .elements(Some(2))?
+            .eq(&vec![vec![0xDE, 0xAD, 0xBE, 0xEF, 0, 0xDC, 0xAF, 0, 1]]));
         Ok(())
     }
 
@@ -178,13 +178,13 @@ mod binary {
         let empty_vecs = vec![vec![0], vec![0, 0], vec![0, 0, 0]];
         for vec in empty_vecs {
             assert!(BinaryEncodedScope::try_from(vec.as_slice())?
-                .elements(0)
+                .elements(Some(0))
                 .is_err());
             // If the separator is something else, the result should just contain the vec
             // as a single element.
             assert!(BinaryEncodedScope::try_from(vec.as_slice())?
-                .elements(1)?
-                .eq(vec![vec]));
+                .elements(Some(1))?
+                .eq(&vec![vec]));
         }
         Ok(())
     }
@@ -209,13 +209,13 @@ mod binary {
         ];
         for vec in invalid {
             assert!(BinaryEncodedScope::try_from(vec.as_slice())?
-                .elements(0)
+                .elements(Some(0))
                 .is_err());
             // If the separator is something else, the result should just contain the vec
             // as a single element.
             assert!(BinaryEncodedScope::try_from(vec.as_slice())?
-                .elements(1)?
-                .eq(vec![vec]));
+                .elements(Some(1))?
+                .eq(&vec![vec]));
         }
         Ok(())
     }
