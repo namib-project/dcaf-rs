@@ -138,11 +138,13 @@ pub enum GrantType {
     build_fn(validate = "Self::validate")
 )]
 pub struct AccessTokenRequest {
+
+    // TODO: Certain grant types have certain required fields. These should be verified in the
+    //       builder's `validate` method (only if the grant type is given! Otherwise, check spec.)
+
     /// The client identifier as described in section 2.2 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
-    ///
-    /// Must be included.
-    pub client_id: String,
+    pub client_id: Option<String>,
 
     /// Grant type used for this request.
     ///
@@ -710,7 +712,7 @@ mod conversion {
                 token::REQ_CNF => self.req_cnf.as_ref().map(ToCborMap::to_ciborium_value),
                 token::AUDIENCE => self.audience.as_ref(),
                 token::SCOPE => self.scope.as_ref(),
-                token::CLIENT_ID => Some(&self.client_id),
+                token::CLIENT_ID => self.client_id.as_ref(),
                 token::REDIRECT_URI => self.redirect_uri.as_ref(),
                 token::GRANT_TYPE => grant_type,
                 token::ACE_PROFILE => self.ace_profile.as_ref(),
@@ -745,7 +747,7 @@ mod conversion {
                             TryFromCborMapError::from_message(format!("couldn't decode scope: {x}")))?)?;
                         // TODO: Handle AIF
                     }
-                    (token::CLIENT_ID, Value::Text(x)) => request.client_id = x,
+                    (token::CLIENT_ID, Value::Text(x)) => request.client_id = Some(x),
                     (token::REDIRECT_URI, Value::Text(x)) => request.redirect_uri = Some(x),
                     (token::GRANT_TYPE, Value::Integer(x)) => {
                         request.grant_type =

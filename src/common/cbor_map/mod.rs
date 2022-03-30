@@ -39,7 +39,7 @@
 //! # use dcaf::{AccessTokenRequest, ToCborMap};
 //! let serialized = vec![0xA1, 0x18, 0x18, 0x64, 0x74, 0x65, 0x73, 0x74];
 //! let request = AccessTokenRequest::deserialize_from(serialized.as_slice())?;
-//! assert_eq!(request.client_id, "test");
+//! assert_eq!(request.client_id, Some("test".to_string()));
 //! # Ok::<(), ciborium::de::Error<<&[u8] as Read>::Error>>(())
 //! ```
 //!
