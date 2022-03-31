@@ -112,8 +112,12 @@ pub mod cbor_abbreviations {
 
         /// See section 3.2 of [`draft-ietf-ace-oauth-params-16`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-params-16.html).
         pub const RS_CNF: u8 = 41;
+    }
 
+    pub mod introspection {
         pub const ISSUER: u8 = 1;
+
+        pub const ISSUED_AT: u8 = 6;
     }
 
     /// Constants for CBOR abbreviations in grant types,

@@ -17,6 +17,7 @@
 //! Other members are mainly used as part of the aforementioned structures.
 
 use crate::common::cbor_values::{ByteString, ProofOfPossessionKey};
+use coset::AsCborValue;
 use crate::Scope;
 use alloc::string::String;
 
@@ -409,6 +410,9 @@ pub struct AccessTokenResponse {
     /// See the documentation of [`ProofOfPossessionKey`] for details.
     #[builder(default)]
     pub rs_cnf: Option<ProofOfPossessionKey>,
+
+    #[builder(default)]
+    pub issued_at: Option<coset::cwt::Timestamp>
 }
 
 /// Error code specifying what went wrong for a token request, as specified in
@@ -599,10 +603,9 @@ mod conversion {
         cbor_map_vec, decode_int_map, decode_number, decode_scope, ToCborMap,
     };
     use crate::common::cbor_values::{CborMapValue, ProofOfPossessionKey};
-    use crate::constants::cbor_abbreviations::{
-        ace_profile, error, grant_types, token, token_types,
-    };
+    use crate::constants::cbor_abbreviations::{ace_profile, error, grant_types, introspection, token, token_types};
     use ciborium::value::Value;
+    use coset::cwt::Timestamp;
     use erased_serde::Serialize as ErasedSerialize;
 
     use crate::common::scope::{BinaryEncodedScope, TextEncodedScope};
@@ -709,7 +712,7 @@ mod conversion {
         fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             let grant_type: Option<CborMapValue<GrantType>> = self.grant_type.map(CborMapValue);
             cbor_map_vec! {
-                token::ISSUER => self.issuer.as_ref(),
+                introspection::ISSUER => self.issuer.as_ref(),
                 token::REQ_CNF => self.req_cnf.as_ref().map(ToCborMap::to_ciborium_value),
                 token::AUDIENCE => self.audience.as_ref(),
                 token::SCOPE => self.scope.as_ref(),
@@ -754,7 +757,7 @@ mod conversion {
                     }
                     (token::ACE_PROFILE, Value::Null) => request.ace_profile(),
                     (token::CNONCE, Value::Bytes(x)) => request.client_nonce(x),
-                    (token::ISSUER, Value::Text(x)) => request.issuer(x),
+                    (introspection::ISSUER, Value::Text(x)) => request.issuer(x),
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 };
             }
@@ -771,6 +774,7 @@ mod conversion {
             cbor_map_vec! {
                 token::ACCESS_TOKEN => Some(Value::Bytes(self.access_token.clone())),
                 token::EXPIRES_IN => self.expires_in,
+                introspection::ISSUED_AT => self.issued_at.as_ref().map(|x| x.clone().to_cbor_value().expect("serialization of issued_at failed")),
                 token::CNF => self.cnf.as_ref().map(ToCborMap::to_ciborium_value),
                 token::SCOPE => self.scope.as_ref(),
                 token::TOKEN_TYPE => token_type,
@@ -790,6 +794,9 @@ mod conversion {
                     (token::ACCESS_TOKEN, Value::Bytes(x)) => response.access_token(x),
                     (token::EXPIRES_IN, Value::Integer(x)) => {
                         response.expires_in(decode_number::<u32>(x, "expires_in")?)
+                    }
+                    (introspection::ISSUED_AT, v) => {
+                        response.issued_at(Timestamp::from_cbor_value(v).map_err(|x| TryFromCborMapError::from_message(x.to_string()))?)
                     }
                     (token::CNF, Value::Map(x)) => {
                         response.cnf(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
