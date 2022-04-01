@@ -1,4 +1,5 @@
-![Maintenance](https://img.shields.io/badge/maintenance-actively--developed-brightgreen.svg)
+[![Crates.io](https://img.shields.io/crates/v/dcaf?style=for-the-badge&logo=rust)](https://crates.io/crates/dcaf)
+[![Docs](https://img.shields.io/docsrs/dcaf?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDUxMiA1MTIiPjxwYXRoIGZpbGw9IiNmNWY1ZjUiIGQ9Ik00ODguNiAyNTAuMkwzOTIgMjE0VjEwNS41YzAtMTUtOS4zLTI4LjQtMjMuNC0zMy43bC0xMDAtMzcuNWMtOC4xLTMuMS0xNy4xLTMuMS0yNS4zIDBsLTEwMCAzNy41Yy0xNC4xIDUuMy0yMy40IDE4LjctMjMuNCAzMy43VjIxNGwtOTYuNiAzNi4yQzkuMyAyNTUuNSAwIDI2OC45IDAgMjgzLjlWMzk0YzAgMTMuNiA3LjcgMjYuMSAxOS45IDMyLjJsMTAwIDUwYzEwLjEgNS4xIDIyLjEgNS4xIDMyLjIgMGwxMDMuOS01MiAxMDMuOSA1MmMxMC4xIDUuMSAyMi4xIDUuMSAzMi4yIDBsMTAwLTUwYzEyLjItNi4xIDE5LjktMTguNiAxOS45LTMyLjJWMjgzLjljMC0xNS05LjMtMjguNC0yMy40LTMzLjd6TTM1OCAyMTQuOGwtODUgMzEuOXYtNjguMmw4NS0zN3Y3My4zek0xNTQgMTA0LjFsMTAyLTM4LjIgMTAyIDM4LjJ2LjZsLTEwMiA0MS40LTEwMi00MS40di0uNnptODQgMjkxLjFsLTg1IDQyLjV2LTc5LjFsODUtMzguOHY3NS40em0wLTExMmwtMTAyIDQxLjQtMTAyLTQxLjR2LS42bDEwMi0zOC4yIDEwMiAzOC4ydi42em0yNDAgMTEybC04NSA0Mi41di03OS4xbDg1LTM4Ljh2NzUuNHptMC0xMTJsLTEwMiA0MS40LTEwMi00MS40di0uNmwxMDItMzguMiAxMDIgMzguMnYuNnoiPjwvcGF0aD48L3N2Zz4K)](https://docs.rs/dcaf)
 
 # dcaf-rs
 
@@ -21,27 +22,27 @@ Note that actually transmitting the serialized values (e.g. via CoAP) or providi
 in the ACE-OAuth Internet Draft (e.g. a permission management system for the Authorization Server) is *out of scope* for
 this crate. This also applies to cryptographic functions, as mentioned in the previous paragraph.
 
-The name DCAF was chosen because eventually, it's planned for this crate to support functionality from the
-[Delegated CoAP Authentication and Authorization Framework (DCAF)](https://dcaf.science/)
+The name DCAF was chosen because eventually, it's planned for this crate to support functionality from
+the [Delegated CoAP Authentication and Authorization Framework (DCAF)](https://dcaf.science/)
 specified
 in [`draft-gerdes-ace-dcaf-authorize`](https://datatracker.ietf.org/doc/html/draft-gerdes-ace-dcaf-authorize-04)
 (which was specified prior to ACE-OAuth and inspired many design choices in it)--- specifically, it's planned to support
 using a CAM (Client Authorization Manager)
-instead of just a SAM (Server Authorization Manager), as is done in ACE-OAuth.
+instead of just a SAM (Server Authorization Manager), as is done in ACE-OAuth. Compatibility with the
+existing [DCAF implementation in C](https://gitlab.informatik.uni-bremen.de/DCAF/dcaf)
+(which we'll call `libdcaf` to disambiguate from `dcaf` referring to this crate) is also an additional design goal,
+though the primary objective is still to support ACE-OAuth.
 
 As one of the possible use-cases for this crate is usage on constrained IoT devices, requirements are minimal---as such,
 while `alloc` is still needed, this crate offers
 `no_std` support by omitting the default `std` feature.
 
 ## Usage
-
 ```toml
 [dependencies]
 dcaf = { version = "^0.1.0" }
 ```
-
 Or, if you plan to use this crate in a `no_std` environment:
-
 ```toml
 [dependencies]
 dcaf = { version = "^0.1.0", default-features = false }
@@ -62,9 +63,8 @@ also work), as well as a
 `ProofOfPossessionKey` (the key the access token should be bound to) in the `req_cnf` field.
 
 Creating, serializing and then de-serializing such a structure would look like this:
-
 ```rust
-use dcaf::{AccessTokenRequest, AsCborMap, ByteString, ProofOfPossessionKey, TextEncodedScope};
+use dcaf::{AccessTokenRequest, ToCborMap, ProofOfPossessionKey, TextEncodedScope};
 
 let request = AccessTokenRequest::builder()
    .client_id("myclient")
@@ -81,19 +81,18 @@ assert_eq!(AccessTokenRequest::deserialize_from(encoded.as_slice())?, request);
 
 Following up from the previous example, let's assume we now want to create a signed access token containing the
 existing `key`, as well as claims about the audience and issuer of the token, using an existing `cipher`[^cipher]:
-
 ```rust
-use dcaf::{AsCborMap, ByteString, sign_access_token, verify_access_token};
+use dcaf::{ToCborMap, sign_access_token, verify_access_token};
 use coset::cwt::ClaimsSetBuilder;
 use coset::Header;
 use coset::iana::CwtClaimName;
 
 let claims = ClaimsSetBuilder::new()
    .audience("valve242".to_string())
-   .claim(CwtClaimName::Cnf, key.as_ciborium_value())
+   .claim(CwtClaimName::Cnf, key.to_ciborium_value())
    .claim(CwtClaimName::Scope, Value::Text("read".to_string()))
    .build();
-let token: ByteString = sign_access_token(claims, &mut cipher, None, None, None)?;
+let token = sign_access_token(claims, &mut cipher, None, None, None)?;
 assert!(verify_access_token(&token, &mut cipher, None).is_ok());
 ```
 
@@ -105,16 +104,15 @@ assert!(verify_access_token(&token, &mut cipher, None).is_ok());
 ### Token Endpoint
 
 The most commonly used models will probably be the token endpoint's `AccessTokenRequest` and
-`AccessTokenResponse` described
-in [section 5.8 of the ACE-OAuth draft](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8).
-In case of an error, an `ErrorResponse` should be used.
+`AccessTokenResponse` described in
+[section 5.8 of the ACE-OAuth draft](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8). In
+case of an error, an `ErrorResponse` should be used.
 
 After an initial Unauthorized Resource Request Message, an `AuthServerRequestCreationHint` can be used to provide
 additional information to the client, as described in
 [section 5.3 of the ACE-OAuth draft](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3).
 
 ### Common Data Types
-
 Some types used across multiple scenarios include:
 
 - `Scope` (as described
@@ -123,8 +121,8 @@ Some types used across multiple scenarios include:
 - `ProofOfPossessionKey` as specified
   in [section 3.1 of RFC 8747](https://datatracker.ietf.org/doc/html/rfc8747#section-3.1). For example, this will be
   used in the access token's `cnf` claim.
-- While not really a data type, various constants representing values used in ACE-OAuth are provided in
-  the [`constants`](https://docs.rs/dcaf/latest/dcaf/common/constants/) module.
+- While not really a data type, various constants representing values used in ACE-OAuth are provided in the `constants`
+  module.
 
 ## Creating Access Tokens
 
@@ -167,8 +165,8 @@ specified in sections 4, 5, and 6 of
 [RFC 8152](https://datatracker.ietf.org/doc/html/rfc8152).
 
 Note that these ciphers *don't* need to wrap their results in e.g. a `Cose_Encrypt0` structure, this part is already
-handled using this library (which uses `coset`)---only the cryptographic algorithms themself need to be implemented (
-e.g. step 4 of
+handled using this library (which uses `coset`)---only the cryptographic algorithms themselves need to be implemented
+(e.g. step 4 of
 "how to decrypt a message" in [section 5.3 of RFC 8152](https://datatracker.ietf.org/doc/html/rfc8152#section-5.3)).
 
 When implementing any of the specific COSE ciphers, you'll also need to implement the

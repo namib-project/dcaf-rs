@@ -189,7 +189,7 @@
 //!
 //! Note that these ciphers *don't* need to wrap their results in e.g. a `Cose_Encrypt0` structure,
 //! this part is already handled using this library (which uses [`coset`])---only the
-//! cryptographic algorithms themself need to be implemented (e.g. step 4 of
+//! cryptographic algorithms themselves need to be implemented (e.g. step 4 of
 //! "how to decrypt a message" in [section 5.3 of RFC 8152](https://datatracker.ietf.org/doc/html/rfc8152#section-5.3)).
 //!
 //! When implementing any of the specific COSE ciphers, you'll also need to implement the
