@@ -99,15 +99,6 @@ impl TryFromCborMapError {
         }
     }
 
-    /// Creates a new error with a message describing that a required field for
-    /// the target type with the given `name` was missing from the CBOR map.
-    #[must_use]
-    pub(crate) fn missing_field(name: &str) -> TryFromCborMapError {
-        TryFromCborMapError {
-            message: format!("required field {name} is missing"),
-        }
-    }
-
     /// Creates a new error with a message describing that the target type could not be built,
     /// either due to a missing field or due to a validation error in the builder.
     #[must_use]

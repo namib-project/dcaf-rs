@@ -10,10 +10,10 @@
  */
 
 use ciborium::value::Value;
-use coset::cwt::{ClaimsSet, ClaimsSetBuilder, Timestamp};
+use coset::cwt::{ClaimsSetBuilder, Timestamp};
 use coset::iana::EllipticCurve::P_256;
 use coset::iana::{Algorithm, CwtClaimName};
-use coset::{AsCborValue, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, Label};
+use coset::{CoseKeyBuilder, Header, HeaderBuilder, Label};
 use dcaf::common::cbor_map::ToCborMap;
 use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
 use dcaf::common::scope::TextEncodedScope;
@@ -22,7 +22,7 @@ use dcaf::endpoints::token_req::{
     AccessTokenRequest, AccessTokenResponse, AceProfile, ErrorCode, ErrorResponse, GrantType,
     TokenType,
 };
-use dcaf::error::{AccessTokenError, CoseCipherError};
+use dcaf::error::CoseCipherError;
 use dcaf::token::CoseCipherCommon;
 use dcaf::{sign_access_token, CoseSign1Cipher};
 use std::fmt::Debug;
@@ -39,16 +39,6 @@ fn example_headers() -> (Header, Header) {
 
 fn example_aad() -> Vec<u8> {
     vec![0x01, 0x02, 0x03, 0x04, 0x05]
-}
-
-fn example_claims(key: CoseKey) -> Result<ClaimsSet, AccessTokenError<String>> {
-    Ok(ClaimsSetBuilder::new()
-        .claim(
-            CwtClaimName::Cnf,
-            key.to_cbor_value()
-                .map_err(AccessTokenError::from_cose_error)?,
-        )
-        .build())
 }
 
 #[derive(Copy, Clone)]

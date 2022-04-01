@@ -17,9 +17,9 @@
 //! Other members are mainly used as part of the aforementioned structures.
 
 use crate::common::cbor_values::{ByteString, ProofOfPossessionKey};
-use coset::AsCborValue;
 use crate::Scope;
 use alloc::string::String;
+use coset::AsCborValue;
 
 #[cfg(test)]
 mod tests;
@@ -139,10 +139,8 @@ pub enum GrantType {
     build_fn(validate = "Self::validate")
 )]
 pub struct AccessTokenRequest {
-
     // TODO: Certain grant types have certain required fields. These should be verified in the
     //       builder's `validate` method (only if the grant type is given! Otherwise, check spec.)
-
     /// The client identifier as described in section 2.2 of
     /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
     #[builder(default)]
@@ -426,7 +424,7 @@ pub struct AccessTokenResponse {
     /// Defined in [section 3.1.6 of RFC 8392](https://www.rfc-editor.org/rfc/rfc8392.html#section-3.1.6)
     /// and [Figure 16 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-16).
     #[builder(default)]
-    pub issued_at: Option<coset::cwt::Timestamp>
+    pub issued_at: Option<coset::cwt::Timestamp>,
 }
 
 /// Error code specifying what went wrong for a token request, as specified in
@@ -617,7 +615,9 @@ mod conversion {
         cbor_map_vec, decode_int_map, decode_number, decode_scope, ToCborMap,
     };
     use crate::common::cbor_values::{CborMapValue, ProofOfPossessionKey};
-    use crate::constants::cbor_abbreviations::{ace_profile, error, grant_types, introspection, token, token_types};
+    use crate::constants::cbor_abbreviations::{
+        ace_profile, error, grant_types, introspection, token, token_types,
+    };
     use ciborium::value::Value;
     use coset::cwt::Timestamp;
     use erased_serde::Serialize as ErasedSerialize;
@@ -809,9 +809,10 @@ mod conversion {
                     (token::EXPIRES_IN, Value::Integer(x)) => {
                         response.expires_in(decode_number::<u32>(x, "expires_in")?)
                     }
-                    (introspection::ISSUED_AT, v) => {
-                        response.issued_at(Timestamp::from_cbor_value(v).map_err(|x| TryFromCborMapError::from_message(x.to_string()))?)
-                    }
+                    (introspection::ISSUED_AT, v) => response.issued_at(
+                        Timestamp::from_cbor_value(v)
+                            .map_err(|x| TryFromCborMapError::from_message(x.to_string()))?,
+                    ),
                     (token::CNF, Value::Map(x)) => {
                         response.cnf(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
                             Self,

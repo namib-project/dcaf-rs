@@ -281,10 +281,10 @@ pub trait ToCborMap: private::Sealed {
 /// # Errors
 /// - If `scope` is not a valid scope.
 pub(crate) fn decode_scope<T, S>(scope: T) -> Result<Scope, TryFromCborMapError>
-    where
-        S: TryFrom<T>,
-        Scope: From<S>,
-        S::Error: Display,
+where
+    S: TryFrom<T>,
+    Scope: From<S>,
+    S::Error: Display,
 {
     match S::try_from(scope) {
         Ok(scope) => Ok(Scope::from(scope)),
