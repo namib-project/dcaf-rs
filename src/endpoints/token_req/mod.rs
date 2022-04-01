@@ -187,6 +187,13 @@ pub struct AccessTokenRequest {
     #[builder(default)]
     pub req_cnf: Option<ProofOfPossessionKey>,
 
+    /// Issuer of the token.
+    /// Note that this is only used by libdcaf and not present in the ACE-OAuth specification
+    /// for access token requests.
+    /// Instead, it is usually encoded as a claim in the access token itself.
+    ///
+    /// Defined in [section 3.1.1 of RFC 8392](https://www.rfc-editor.org/rfc/rfc8392.html#section-3.1.1)
+    /// and [Figure 16 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-16).
     #[builder(default)]
     pub issuer: Option<String>,
 }
@@ -411,6 +418,13 @@ pub struct AccessTokenResponse {
     #[builder(default)]
     pub rs_cnf: Option<ProofOfPossessionKey>,
 
+    /// Timestamp when the token was issued.
+    /// Note that this is only used by libdcaf and not present in the ACE-OAuth specification
+    /// for access token responses.
+    /// It is instead usually encoded as a claim in the access token itself.
+    ///
+    /// Defined in [section 3.1.6 of RFC 8392](https://www.rfc-editor.org/rfc/rfc8392.html#section-3.1.6)
+    /// and [Figure 16 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-16).
     #[builder(default)]
     pub issued_at: Option<coset::cwt::Timestamp>
 }
