@@ -201,10 +201,20 @@ impl Display for InvalidBinaryEncodedScopeError {
     }
 }
 
+/// Error type used when an [`AifEncodedScope`](crate::common::scope::AifEncodedScope)
+/// does not conform to the specification given in [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) and
+/// [`draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif).
+///
+/// This is also used when a [`LibdcafEncodedScope`](crate::common::scope::LibdcafEncodedScope)
+/// does not conform to the format specified in its documentation.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 #[non_exhaustive]
 pub enum InvalidAifEncodedScopeError {
+
+    /// Scope's [AifRestMethodSet](crate::common::scope::AifRestMethodSet) was not a valid bitmask.
     InvalidRestMethodSet,
+
+    /// Scope contained a malformed array, i.e., didn't conform to the specification.
     MalformedArray,
 }
 
@@ -317,6 +327,9 @@ pub enum ScopeFromValueError {
     /// Details are provided in the given [`InvalidTextEncodedScopeError`].
     InvalidTextEncodedScope(InvalidTextEncodedScopeError),
 
+    /// The AIF-encoded scope contained in the [`Value`] is invalid.
+    ///
+    /// Details are provided in the given [`InvalidAifEncodedScopeError`].
     InvalidAifEncodedScope(InvalidAifEncodedScopeError),
 
     /// The [`Value`] isn't a scope, but something else.
