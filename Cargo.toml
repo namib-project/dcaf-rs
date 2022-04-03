@@ -1,7 +1,7 @@
 [package]
 name = "dcaf"
 description = "An implementation of the ACE-OAuth framework"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Falko Galperin <falko1@uni-bremen.de>"]
 rust-version = "1.58"
