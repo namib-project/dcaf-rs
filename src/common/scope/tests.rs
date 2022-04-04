@@ -134,6 +134,154 @@ mod text {
     }
 }
 
+mod aif {
+    use ciborium::de::from_reader;
+    use ciborium::ser::into_writer;
+    use ciborium::value::Value;
+    use serde::{Deserialize, Serialize};
+    use crate::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
+    use crate::error::InvalidAifEncodedScopeError;
+    use crate::{AifEncodedScope, Scope};
+
+    pub(crate) fn example_elements() -> (
+        AifEncodedScopeElement,
+        AifEncodedScopeElement,
+        AifEncodedScopeElement,
+        AifEncodedScopeElement,
+    ) {
+        let restricted =
+            AifEncodedScopeElement::new("restricted".to_string(), AifRestMethodSet::GET);
+        let dynamic = AifEncodedScopeElement::new(
+            "dynamic".to_string(),
+            AifRestMethodSet::DYNAMIC_GET | AifRestMethodSet::DYNAMIC_FETCH,
+        );
+        let all = AifEncodedScopeElement::new("all".to_string(), AifRestMethodSet::all());
+        let none = AifEncodedScopeElement::new("none".to_string(), AifRestMethodSet::empty());
+        (restricted, dynamic, all, none)
+    }
+
+    #[test]
+    fn test_scope_elements_normal() {
+        let (restricted, dynamic, all, none) = example_elements();
+        let single = AifEncodedScope::new(vec![restricted.clone()]);
+        assert_eq!(single.elements(), &vec![restricted]);
+
+        let multiple = AifEncodedScope::new(vec![dynamic.clone(), all.clone()]);
+        assert_eq!(multiple.elements(), &vec![dynamic.clone(), all.clone()]);
+
+        let single_arr =
+            AifEncodedScope::from(vec![("none".to_string(), AifRestMethodSet::empty())]);
+        assert_eq!(single_arr.elements(), &vec![none]);
+
+        let multi_arr = AifEncodedScope::from(vec![
+            (
+                "dynamic".to_string(),
+                AifRestMethodSet::DYNAMIC_GET | AifRestMethodSet::DYNAMIC_FETCH,
+            ),
+            ("all".to_string(), AifRestMethodSet::all()),
+        ]);
+        assert_eq!(multi_arr.to_elements(), vec![dynamic, all]);
+    }
+
+    #[test]
+    fn test_scope_elements_valid() -> Result<(), InvalidAifEncodedScopeError> {
+        let (restricted, dynamic, all, none) = example_elements();
+        let multi = AifEncodedScope::try_from(vec![
+            ("restricted".to_string(), u64::pow(2, 0)),
+            ("all".to_string(), AifRestMethodSet::all().bits),
+            ("none".to_string(), 0),
+        ])?;
+        assert_eq!(multi.to_elements(), vec![restricted, all, none]);
+
+        let single = AifEncodedScope::try_from(vec![(
+            "dynamic".to_string(),
+            u64::pow(2, 32) + u64::pow(2, 36),
+        )])?;
+        assert_eq!(single.to_elements(), vec![dynamic]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_elements_invalid() {
+        // String part can't be invalid, so we ignore it here
+        let invalids = vec![
+            u64::pow(2, 7),
+            u64::pow(2, 31),
+            u64::pow(2, 39),
+            u64::pow(2, 63),
+            0xFFFF_FFFF_FFFF_FFFF,  // maximum
+        ];
+        for invalid in invalids {
+            assert!(AifEncodedScope::try_from(vec![("whatever".to_string(), invalid)]).is_err());
+        }
+    }
+
+    #[test]
+    fn test_scope_elements_empty() -> Result<(), String> {
+        // Note: Spec doesn't seem to mention anything about emptiness, so we assume it's allowed.
+        assert!(AifEncodedScope::try_from(Vec::<(String, u64)>::new()).is_ok());
+        let empty = AifEncodedScope::from(vec![]);
+        assert_eq!(empty.elements(), &vec![]);
+        let mut serialized = Vec::<u8>::new();
+        into_writer(&empty, &mut serialized).map_err(|x| x.to_string())?;
+        assert_eq!(&serialized, &Vec::from([0x80]));
+        assert_eq!(from_reader::<Scope, &[u8]>(serialized.as_slice()).map_err(|x| x.to_string())?, Scope::from(empty));
+        Ok(())
+    }
+}
+
+mod libdcaf {
+    use ciborium::de::from_reader;
+    use ciborium::ser::into_writer;
+    use ciborium::value::Value;
+    use serde::{Deserialize, Serialize};
+    use crate::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
+    use crate::error::InvalidAifEncodedScopeError;
+    use crate::{AifEncodedScope, LibdcafEncodedScope, Scope};
+    use super::aif::example_elements;
+
+    #[test]
+    fn test_scope_elements_normal() {
+        let (restricted, dynamic, all, none) = example_elements();
+
+        for element in vec![restricted, dynamic, all, none] {
+            let scope = LibdcafEncodedScope::new(element.clone());
+            assert_eq!(scope.elements(), vec![&element]);
+        }
+    }
+
+    #[test]
+    fn test_scope_element_valid() -> Result<(), InvalidAifEncodedScopeError> {
+        let (restricted, _, _, _) = example_elements();
+        let scope = LibdcafEncodedScope::try_from_bits("restricted".to_string(), u64::pow(2, 0))?;
+        assert_eq!(scope.to_elements(), vec![restricted]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_element_invalid() {
+        // String part can't be invalid, so we ignore it here
+        let invalids = vec![
+            u64::pow(2, 7),
+            u64::pow(2, 31),
+            u64::pow(2, 39),
+            u64::pow(2, 63),
+            0xFFFF_FFFF_FFFF_FFFF,  // maximum
+        ];
+        for invalid in invalids {
+            assert!(LibdcafEncodedScope::try_from_bits("whatever".to_string(), invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn test_scope_element_empty() {
+        // Emptiness isn't allowed here.
+        let serialized = vec![0x80];  // empty CBOR array
+        // That means that this *must not* resolve to a libdcaf scope
+        assert!(from_reader::<Scope, &[u8]>(serialized.as_slice()).ok().map(LibdcafEncodedScope::try_from).and_then(Result::ok).is_none());
+    }
+}
+
 /// Tests for binary encoded scopes.
 mod binary {
     use crate::common::scope::BinaryEncodedScope;
