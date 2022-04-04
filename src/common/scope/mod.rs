@@ -159,7 +159,7 @@ bitflags! {
         const DYNAMIC_DELETE = u64::pow(2, 35);
         const DYNAMIC_FETCH = u64::pow(2, 36);
         const DYNAMIC_PATCH = u64::pow(2, 37);
-        const DYNAMIC_iPATCH = u64::pow(2, 38);
+        const DYNAMIC_IPATCH = u64::pow(2, 38);
     }
 }
 
