@@ -40,12 +40,12 @@ while `alloc` is still needed, this crate offers
 ## Usage
 ```toml
 [dependencies]
-dcaf = { version = "^0.1.0" }
+dcaf = { version = "^0.2.0" }
 ```
 Or, if you plan to use this crate in a `no_std` environment:
 ```toml
 [dependencies]
-dcaf = { version = "^0.1.0", default-features = false }
+dcaf = { version = "^0.2.0", default-features = false }
 ```
 
 ## Example
@@ -58,7 +58,7 @@ quickly introduce both of these here.
 [For example](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-7), say you (the client) want to
 request an access token from an Authorization Server. For this, you'd need to create an `AccessTokenRequest`, which has
 to include at least a
-`client_id`. We'll also specify an audience, a scope (using `TextEncodedScope`---note that binary-encoded scopes would
+`client_id`. We'll also specify an audience, a scope (using `TextEncodedScope`---note that binary-encoded scopes or AIF-encoded scopes would
 also work), as well as a
 `ProofOfPossessionKey` (the key the access token should be bound to) in the `req_cnf` field.
 
@@ -172,6 +172,9 @@ handled using this library (which uses `coset`)---only the cryptographic algorit
 When implementing any of the specific COSE ciphers, you'll also need to implement the
 `CoseCipherCommon` trait, which can be used to set headers specific to your COSE cipher
 (e.g. the used algorithm).
+
+## Changelog
+You can find a list of changes in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

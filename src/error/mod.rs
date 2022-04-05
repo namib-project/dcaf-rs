@@ -103,8 +103,8 @@ impl TryFromCborMapError {
     /// either due to a missing field or due to a validation error in the builder.
     #[must_use]
     pub(crate) fn build_failed<T>(name: &'static str, builder_error: T) -> TryFromCborMapError
-        where
-            T: Display,
+    where
+        T: Display,
     {
         TryFromCborMapError {
             message: format!("couldn't build {name}: {builder_error}"),
@@ -201,6 +201,35 @@ impl Display for InvalidBinaryEncodedScopeError {
     }
 }
 
+/// Error type used when an [`AifEncodedScope`](crate::common::scope::AifEncodedScope)
+/// does not conform to the specification given in [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) and
+/// [`draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif).
+///
+/// This is also used when a [`LibdcafEncodedScope`](crate::common::scope::LibdcafEncodedScope)
+/// does not conform to the format specified in its documentation.
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[non_exhaustive]
+pub enum InvalidAifEncodedScopeError {
+    /// Scope's [AifRestMethodSet](crate::common::scope::AifRestMethodSet) was not a valid bitmask.
+    InvalidRestMethodSet,
+
+    /// Scope contained a malformed array, i.e., didn't conform to the specification.
+    MalformedArray,
+}
+
+impl Display for InvalidAifEncodedScopeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            InvalidAifEncodedScopeError::InvalidRestMethodSet => {
+                write!(f, "given REST method bitfield is invalid")
+            }
+            InvalidAifEncodedScopeError::MalformedArray => {
+                write!(f, "given AIF CBOR array is malformed")
+            }
+        }
+    }
+}
+
 /// Error type used when a [`CoseEncrypt0Cipher`](crate::CoseEncrypt0Cipher),
 /// [`CoseSign1Cipher`](crate::CoseSign1Cipher), or [`CoseMac0Cipher`](crate::CoseMac0Cipher).
 /// fails to perform an operation.
@@ -289,6 +318,7 @@ where
 ///
 /// This can be because it isn't a scope, or because the scope is invalid.
 #[derive(Debug, PartialEq, Clone)]
+#[non_exhaustive]
 pub enum ScopeFromValueError {
     /// The binary scope contained in the [`Value`] is invalid.
     ///
@@ -300,13 +330,15 @@ pub enum ScopeFromValueError {
     /// Details are provided in the given [`InvalidTextEncodedScopeError`].
     InvalidTextEncodedScope(InvalidTextEncodedScopeError),
 
+    /// The AIF-encoded scope contained in the [`Value`] is invalid.
+    ///
+    /// Details are provided in the given [`InvalidAifEncodedScopeError`].
+    InvalidAifEncodedScope(InvalidAifEncodedScopeError),
+
     /// The [`Value`] isn't a scope, but something else.
     ///
     /// Details are provided in the given [`WrongSourceTypeError`].
     InvalidType(WrongSourceTypeError<Value>),
-
-    /// Used when an AIF scope has been detected, which is as of now still unsupported.
-    AifScopeIsUnsupported,
 }
 
 fn to_variant_name(value: &Value) -> &'static str {
@@ -350,6 +382,12 @@ impl From<InvalidBinaryEncodedScopeError> for ScopeFromValueError {
     }
 }
 
+impl From<InvalidAifEncodedScopeError> for ScopeFromValueError {
+    fn from(err: InvalidAifEncodedScopeError) -> Self {
+        ScopeFromValueError::InvalidAifEncodedScope(err)
+    }
+}
+
 impl From<WrongSourceTypeError<Value>> for ScopeFromValueError {
     fn from(err: WrongSourceTypeError<Value>) -> Self {
         ScopeFromValueError::InvalidType(err)
@@ -366,8 +404,8 @@ impl Display for ScopeFromValueError {
                 write!(f, "invalid text-encoded scope: {s}")
             }
             ScopeFromValueError::InvalidType(t) => write!(f, "invalid type: {t}"),
-            ScopeFromValueError::AifScopeIsUnsupported => {
-                write!(f, "AIF scopes are still unsupported")
+            ScopeFromValueError::InvalidAifEncodedScope(a) => {
+                write!(f, "invalid AIF-encoded scope: {a}")
             }
         }
     }
@@ -452,6 +490,8 @@ mod std_error {
     impl Error for InvalidTextEncodedScopeError {}
 
     impl Error for InvalidBinaryEncodedScopeError {}
+
+    impl Error for InvalidAifEncodedScopeError {}
 
     impl Error for ScopeFromValueError {}
 

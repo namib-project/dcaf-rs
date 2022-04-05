@@ -622,7 +622,6 @@ mod conversion {
     use coset::cwt::Timestamp;
     use erased_serde::Serialize as ErasedSerialize;
 
-    use crate::common::scope::{BinaryEncodedScope, TextEncodedScope};
     use crate::endpoints::token_req::AceProfile::CoapDtls;
     use crate::error::TryFromCborMapError;
 
@@ -749,21 +748,11 @@ mod conversion {
                         request.req_cnf(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
                             Self,
                         >(
-                            x, "req_cnf",
+                            x, "req_cnf"
                         )?)?)
                     }
                     (token::AUDIENCE, Value::Text(x)) => request.audience(x),
-                    (token::SCOPE, Value::Text(x)) => {
-                        request.scope(decode_scope::<&str, TextEncodedScope>(x.as_str())?)
-                    }
-                    (token::SCOPE, Value::Bytes(x)) => {
-                        request.scope(decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?)
-                    }
-                    (token::SCOPE, v) => request.scope(decode_scope::<Scope, Scope>(
-                        Scope::try_from(v).map_err(|x| {
-                            TryFromCborMapError::from_message(format!("couldn't decode scope: {x}"))
-                        })?,
-                    )?),
+                    (token::SCOPE, v) => request.scope(decode_scope(v)?),
                     (token::CLIENT_ID, Value::Text(x)) => request.client_id(x),
                     (token::REDIRECT_URI, Value::Text(x)) => request.redirect_uri(x),
                     (token::GRANT_TYPE, Value::Integer(x)) => {
@@ -817,21 +806,10 @@ mod conversion {
                         response.cnf(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
                             Self,
                         >(
-                            x, "cnf",
+                            x, "cnf"
                         )?)?)
                     }
-                    (token::SCOPE, Value::Bytes(x)) => {
-                        response.scope(decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?)
-                    }
-                    // TODO: Handle AIF
-                    (token::SCOPE, Value::Text(x)) => {
-                        response.scope(decode_scope::<&str, TextEncodedScope>(x.as_str())?)
-                    }
-                    (token::SCOPE, v) => response.scope(decode_scope::<Scope, Scope>(
-                        Scope::try_from(v).map_err(|x| {
-                            TryFromCborMapError::from_message(format!("couldn't decode scope: {x}"))
-                        })?,
-                    )?),
+                    (token::SCOPE, v) => response.scope(decode_scope(v)?),
                     (token::TOKEN_TYPE, Value::Integer(x)) => {
                         response.token_type(TokenType::from(decode_number::<i32>(x, "token_type")?))
                     }
@@ -842,7 +820,7 @@ mod conversion {
                         response.rs_cnf(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
                             Self,
                         >(
-                            x, "rs_cnf",
+                            x, "rs_cnf"
                         )?)?)
                     }
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),

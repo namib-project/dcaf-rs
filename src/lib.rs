@@ -42,12 +42,12 @@
 //! # Usage
 //! ```toml
 //! [dependencies]
-//! dcaf = { version = "^0.1.0" }
+//! dcaf = { version = "^0.2.0" }
 //! ```
 //! Or, if you plan to use this crate in a `no_std` environment:
 //! ```toml
 //! [dependencies]
-//! dcaf = { version = "^0.1.0", default-features = false }
+//! dcaf = { version = "^0.2.0", default-features = false }
 //! ```
 //!
 //! # Example
@@ -59,7 +59,7 @@
 //! say you (the client) want to request an access token from an Authorization Server.
 //! For this, you'd need to create an [`AccessTokenRequest`], which has to include at least a
 //! `client_id`. We'll also specify an audience, a scope (using [`TextEncodedScope`]---note that
-//! [binary-encoded scopes](BinaryEncodedScope) would also work), as well as a
+//! [binary-encoded scopes](BinaryEncodedScope) or [AIF-encoded scopes](AifEncodedScope) would also work), as well as a
 //! [`ProofOfPossessionKey`] (the key the access token should be bound to) in the `req_cnf` field.
 //!
 //! Creating, serializing and then de-serializing such a structure would look like this:
@@ -217,7 +217,9 @@ pub use common::cbor_values::{ByteString, ProofOfPossessionKey};
 #[doc(inline)]
 pub use common::constants;
 #[doc(inline)]
-pub use common::scope::{BinaryEncodedScope, Scope, TextEncodedScope};
+pub use common::scope::{
+    AifEncodedScope, BinaryEncodedScope, LibdcafEncodedScope, Scope, TextEncodedScope,
+};
 #[doc(inline)]
 pub use endpoints::creation_hint::AuthServerRequestCreationHint;
 #[doc(inline)]

@@ -9,6 +9,8 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
+use crate::{AifEncodedScope, BinaryEncodedScope};
+use coset::cwt::Timestamp;
 use coset::iana::Algorithm;
 /// Tests for CBOR serialization and deserialization of ACE-OAuth data models.
 use coset::{
@@ -16,7 +18,9 @@ use coset::{
     ProtectedHeader,
 };
 
-use crate::common::scope::TextEncodedScope;
+use crate::common::scope::{
+    AifEncodedScopeElement, AifRestMethodSet, LibdcafEncodedScope, TextEncodedScope,
+};
 use crate::common::test_helper::expect_ser_de;
 use crate::endpoints::token_req::AceProfile::CoapDtls;
 
@@ -35,6 +39,117 @@ fn test_access_token_request_symmetric() -> Result<(), String> {
         None,
         "A2056E74656D7053656E736F72343731311818686D79636C69656E74",
     )
+}
+
+#[test]
+fn test_access_token_request_binary() -> Result<(), String> {
+    let request = AccessTokenRequestBuilder::default()
+        .client_id("myclient")
+        .audience("tempSensor4711")
+        .scope(
+            BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice()).map_err(|x| x.to_string())?,
+        )
+        .build()
+        .map_err(|x| x.to_string())?;
+    expect_ser_de(
+        request,
+        None,
+        "A3056E74656D7053656E736F72343731310942DCAF1818686D79636C69656E74",
+    )
+}
+
+#[test]
+fn test_access_token_request_aif() -> Result<(), String> {
+    let request = AccessTokenRequest::builder()
+        .client_id("testclient")
+        .audience("coaps://localhost")
+        .scope(AifEncodedScope::new(vec![
+            AifEncodedScopeElement::new("restricted".to_string(), AifRestMethodSet::GET),
+            AifEncodedScopeElement::new(
+                "extended".to_string(),
+                AifRestMethodSet::GET | AifRestMethodSet::POST | AifRestMethodSet::PUT,
+            ),
+            AifEncodedScopeElement::new(
+                "dynamic".to_string(),
+                AifRestMethodSet::DYNAMIC_GET
+                    | AifRestMethodSet::DYNAMIC_POST
+                    | AifRestMethodSet::DYNAMIC_PUT,
+            ),
+            AifEncodedScopeElement::new("unrestricted".to_string(), AifRestMethodSet::all()),
+            AifEncodedScopeElement::new("useless".to_string(), AifRestMethodSet::empty()),
+        ]))
+        .build()
+        .map_err(|x| x.to_string())?;
+    expect_ser_de(request,
+                  None,
+                  "A30571636F6170733A2F2F6C6F63616C686F73740985826A72657374726963746564018268657874656E64656407826764796E616D69631B0000000700000000826C756E726573747269637465641B0000007F0000007F82677573656C6573730018186A74657374636C69656E74")
+}
+
+#[test]
+fn test_access_token_response_aif() -> Result<(), String> {
+    let request = AccessTokenResponse::builder()
+        .access_token(vec![0xDC, 0xAF])
+        .scope(AifEncodedScope::new(vec![
+            AifEncodedScopeElement::new("restricted".to_string(), AifRestMethodSet::GET),
+            AifEncodedScopeElement::new(
+                "extended".to_string(),
+                AifRestMethodSet::GET | AifRestMethodSet::POST | AifRestMethodSet::PUT,
+            ),
+            AifEncodedScopeElement::new(
+                "dynamic".to_string(),
+                AifRestMethodSet::DYNAMIC_GET
+                    | AifRestMethodSet::DYNAMIC_POST
+                    | AifRestMethodSet::DYNAMIC_PUT,
+            ),
+            AifEncodedScopeElement::new("unrestricted".to_string(), AifRestMethodSet::all()),
+            AifEncodedScopeElement::new("useless".to_string(), AifRestMethodSet::empty()),
+        ]))
+        .build()
+        .map_err(|x| x.to_string())?;
+    expect_ser_de(request,
+                  None,
+                  "A20142DCAF0985826A72657374726963746564018268657874656E64656407826764796E616D69631B0000000700000000826C756E726573747269637465641B0000007F0000007F82677573656C65737300")
+}
+
+#[test]
+fn test_access_token_request_libdcaf() -> Result<(), String> {
+    let request = AccessTokenRequest::builder()
+        .audience("coaps://localhost")
+        .scope(LibdcafEncodedScope::new(
+            "restricted",
+            AifRestMethodSet::GET,
+        ))
+        .issuer("coaps://127.0.0.1:7744/authorize")
+        .build()
+        .map_err(|x| x.to_string())?;
+    expect_ser_de(request,
+                  None,
+                  "A3017820636F6170733A2F2F3132372E302E302E313A373734342F617574686F72697A650571636F6170733A2F2F6C6F63616C686F737409826A7265737472696374656401")
+}
+
+#[test]
+fn test_access_token_response_whole_libdcaf() -> Result<(), String> {
+    let response = AccessTokenResponse::builder()
+        .access_token(vec![0xDC, 0xAF])
+        .scope(LibdcafEncodedScope::new(
+            "restricted",
+            AifRestMethodSet::GET,
+        ))
+        .issued_at(Timestamp::WholeSeconds(10))
+        .build()
+        .map_err(|x| x.to_string())?;
+    expect_ser_de(response, None, "A30142DCAF060A09826A7265737472696374656401")
+}
+
+#[test]
+fn test_access_token_response_fraction_libdcaf() -> Result<(), String> {
+    let response = AccessTokenResponse::builder()
+        .access_token(vec![0xDC, 0xAF])
+        .scope(LibdcafEncodedScope::new("empty", AifRestMethodSet::empty()))
+        .issued_at(Timestamp::FractionalSeconds(1.5))
+        .build()
+        .map_err(|x| x.to_string())?;
+    expect_ser_de(response, None, "A30142DCAF06F93E00098265656D70747900")
 }
 
 /// Example data taken from draft-ietf-ace-oauth-authz-46, Figure 6.
@@ -135,11 +250,14 @@ fn test_access_token_request_other_fields() -> Result<(), String> {
         .client_id("myclient")
         .redirect_uri("coaps://server.example.com")
         .grant_type(GrantType::ClientCredentials)
+        .scope(
+            BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice()).map_err(|x| x.to_string())?,
+        )
         .ace_profile()
         .client_nonce(vec![0, 1, 2, 3, 4])
         .build()
         .map_err(|x| x.to_string())?;
-    expect_ser_de(request, None, "A51818686D79636C69656E74181B781A636F6170733A2F2F7365727665722E6578616D706C652E636F6D1821021826F61827450001020304")
+    expect_ser_de(request, None, "A60942DCAF1818686D79636C69656E74181B781A636F6170733A2F2F7365727665722E6578616D706C652E636F6D1821021826F61827450001020304")
 }
 
 #[test]
