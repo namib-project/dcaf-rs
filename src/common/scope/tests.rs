@@ -220,7 +220,7 @@ mod aif {
     fn test_scope_elements_empty() -> Result<(), String> {
         // Note: Spec doesn't seem to mention anything about emptiness, so we assume it's allowed.
         assert!(AifEncodedScope::try_from(Vec::<(String, u64)>::new()).is_ok());
-        let empty = AifEncodedScope::from(vec![]);
+        let empty = AifEncodedScope::from(Vec::<(String, AifRestMethodSet)>::new());
         assert_eq!(empty.elements(), &vec![]);
         let mut serialized = Vec::<u8>::new();
         into_writer(&empty, &mut serialized).map_err(|x| x.to_string())?;
@@ -245,7 +245,7 @@ mod libdcaf {
         let (restricted, dynamic, all, none) = example_elements();
 
         for element in vec![restricted, dynamic, all, none] {
-            let scope = LibdcafEncodedScope::new(element.clone());
+            let scope = LibdcafEncodedScope::from_element(element.clone());
             assert_eq!(scope.elements(), vec![&element]);
         }
     }

@@ -88,7 +88,7 @@ fn test_access_token_response_aif() -> Result<(), String> {
 fn test_access_token_request_libdcaf() -> Result<(), String> {
     let request = AccessTokenRequest::builder()
         .audience("coaps://localhost")
-        .scope(LibdcafEncodedScope::new(AifEncodedScopeElement::new(
+        .scope(LibdcafEncodedScope::from_element(AifEncodedScopeElement::new(
             "restricted".to_string(),
             AifRestMethodSet::GET,
         )))
@@ -104,7 +104,7 @@ fn test_access_token_request_libdcaf() -> Result<(), String> {
 fn test_access_token_response_whole_libdcaf() -> Result<(), String> {
     let response = AccessTokenResponse::builder()
         .access_token(vec![0xDC, 0xAF])
-        .scope(LibdcafEncodedScope::new(AifEncodedScopeElement::new(
+        .scope(LibdcafEncodedScope::from_element(AifEncodedScopeElement::new(
             "restricted".to_string(),
             AifRestMethodSet::GET,
         )))
@@ -118,7 +118,7 @@ fn test_access_token_response_whole_libdcaf() -> Result<(), String> {
 fn test_access_token_response_fraction_libdcaf() -> Result<(), String> {
     let response = AccessTokenResponse::builder()
         .access_token(vec![0xDC, 0xAF])
-        .scope(LibdcafEncodedScope::new(AifEncodedScopeElement::new(
+        .scope(LibdcafEncodedScope::from_element(AifEncodedScopeElement::new(
             "empty".to_string(),
             AifRestMethodSet::empty(),
         )))

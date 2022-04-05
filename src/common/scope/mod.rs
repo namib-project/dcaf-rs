@@ -11,23 +11,34 @@
 
 //! Contains data types and methods for working with OAuth scopes.
 //!
-//! The main use case of this module is creating [Scope] instances for either text- or
-//! binary-encoded scopes, whose elements can then be extracted using the `elements()` method.
+//! The main use case of this module is creating [Scope] instances for either text-,
+//! binary-, or AIF-encoded scopes,
+//! whose elements can then be extracted using the `elements()` method.
 //!
 //! # Example
-//! For example, you could first create a text or binary encoded scope:
+//! For example, you could first create a text-, binary-, or AIF-encoded scope:
 //! ```
 //! # use std::error::Error;
-//! # use dcaf::common::scope::{BinaryEncodedScope, TextEncodedScope};
+//! # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethodSet, BinaryEncodedScope, TextEncodedScope};
 //! # use dcaf::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError};
-//! # use dcaf::Scope;
+//! # use dcaf::{AifEncodedScope, Scope};
 //! // Will be encoded with a space-separator.
 //! let text_scope = TextEncodedScope::try_from(vec!["first_client", "second_client"])?;
 //! assert_eq!(text_scope.to_string(), "first_client second_client");
 //! assert!(text_scope.elements().eq(vec!["first_client", "second_client"]));
+//!
 //! // Separator is only specified upon `elements` call.
 //! let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice())?;
-//! assert!(binary_scope.elements(Some(0))?.eq(&vec![vec![1, 2], vec![3, 4]]));
+//! assert!(binary_scope.elements(Some(0))?.eq(&vec![&vec![1, 2], &vec![3, 4]]));
+//!
+//! // Will be encoded as path and REST-method-set pairs.
+//! let aif_scope = AifEncodedScope::from(vec![
+//!    ("/s/temp", AifRestMethodSet::GET), ("/none", AifRestMethodSet::empty())
+//! ]);
+//! assert_eq!(aif_scope.elements(), &vec![
+//!    AifEncodedScopeElement::new("/s/temp", AifRestMethodSet::GET),
+//!    AifEncodedScopeElement::new("/none", AifRestMethodSet::empty())
+//! ]);
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //! And then you could wrap it in the [Scope] type and use it in a field,
@@ -56,11 +67,27 @@
 //! # assert_eq!(hint.scope, Some(Scope::from(original_scope)));
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
+//! As well as with the AIF-encoded scope:
+//! ```
+//! # use std::error::Error;
+//! # use dcaf::common::scope::{AifEncodedScope, AifRestMethodSet};
+//! # use dcaf::{AuthServerRequestCreationHint, Scope};
+//! # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
+//! # let aif_scope = AifEncodedScope::from(vec![
+//! #    ("/s/temp", AifRestMethodSet::GET), ("/none", AifRestMethodSet::empty())
+//! # ]);
+//! # let original_scope = aif_scope.clone();
+//! let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder().scope(Scope::from(aif_scope)).build()?;
+//! # assert_eq!(hint.scope, Some(Scope::from(original_scope)));
+//! # Ok::<(), Box<dyn Error>>(())
+//! ```
+//!
 //! # Sources
 //! For the original OAuth 2.0 standard, scopes are defined in
 //! [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3),
 //! while for ACE-OAuth, they're specified in
 //! [`draft-ietf-ace-oauth-authz`, section 5.8.1](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1-2.4).
+//! AIF is defined in [`draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3).
 
 use alloc::string::String;
 use bitflags::bitflags;
@@ -144,34 +171,231 @@ impl Display for TextEncodedScope {
 pub struct BinaryEncodedScope(ByteString);
 
 bitflags! {
+    /// Bitmask of possible REST (CoAP or HTTP) methods,
+    /// intended for use in an [AifEncodedScopeElement].
+    ///
+    /// Note that in addition to the usual CoAP and HTTP REST methods
+    /// (see "Relevant Documents" below),
+    /// methods for [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3)
+    /// are also provided.
+    ///
+    /// This uses the [`bitmask`] crate to make it easy to work with this bitmask.
+    ///
+    /// # Relevant Documents
+    /// - Definition of `REST-method-set` data model for use in AIF:
+    ///   Figure 4 of [`draft-ietf-ace-aif`, section 3](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3)
+    /// - Specification of HTTP methods GET, POST, PUT, DELETE: [RFC 7231, section 4.3](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3)
+    /// - Specification of HTTP PATCH method: [RFC 5789](https://datatracker.ietf.org/doc/html/rfc5789)
+    /// - Specification of CoAP methods GET, POST, PUT, DELETE: [RFC 7252, section 5.8](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8),
+    /// - Specification of CoAP methods FETCH, PATCH, AND iPATCH: [RFC 8132](https://datatracker.ietf.org/doc/html/rfc8132)
+    /// - Specification of Dynamic CoAP methods:
+    ///   Figure 4 of [`draft-ietf-ace-aif`, section 2.3](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3)
+    ///
+    /// # Example
+    /// You can easily combine multiple fields using the bitwise OR operator, as well as
+    /// using the built-in methods from [`bitmask`].
+    /// Created bitmasks can then be used in an [AifEncodedScopeElement]:
+    /// ```
+    /// # use dcaf::AifEncodedScope;
+    /// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
+    /// let get = AifEncodedScopeElement::new("restricted", AifRestMethodSet::GET);
+    /// let multiple = AifEncodedScopeElement::new("less_restricted",
+    ///                                            AifRestMethodSet::GET | AifRestMethodSet::FETCH);
+    /// // GET equals 2^0, FETCH equals 2^4
+    /// assert_eq!(multiple.permissions.bits(), 0b1 | 0b10000);
+    /// let all = AifEncodedScopeElement::new("unrestricted", AifRestMethodSet::all());
+    /// ```
+    /// These elements can in turn be used in an [AifEncodedScope] (or [LibdcafEncodedScope]):
+    /// ```
+    /// # use dcaf::AifEncodedScope;
+    /// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
+    /// # let get = AifEncodedScopeElement::new("restricted", AifRestMethodSet::GET);
+    /// # let multiple = AifEncodedScopeElement::new("less_restricted",
+    /// #                                            AifRestMethodSet::GET | AifRestMethodSet::FETCH);
+    /// # let all = AifEncodedScopeElement::new("unrestricted", AifRestMethodSet::all());
+    /// let scope = AifEncodedScope::new(vec![get, multiple, all]);
+    /// ```
     #[derive(Serialize)]
     pub struct AifRestMethodSet: u64 {
+
+        /// GET method as specified in [RFC 7252, section 5.8.1 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.1)
+        /// and [RFC 7231, section 4.3.1 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.1).
         const GET = u64::pow(2, 0);
+
+        /// POST method as specified in [RFC 7252, section 5.8.2 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.2)
+        /// and [RFC 7231, section 4.3.3 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.3).
         const POST = u64::pow(2, 1);
+
+        /// PUT method as specified in [RFC 7252, section 5.8.3 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.3)
+        /// and [RFC 7231, section 4.3.4 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.4).
         const PUT = u64::pow(2, 2);
+
+        /// DELETE method as specified in [RFC 7252, section 5.8.4 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.4)
+        /// and [RFC 7231, section 4.3.5 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.5).
         const DELETE = u64::pow(2, 3);
+
+        /// FETCH method as specified in [RFC 8132, section 2 (CoAP)](https://datatracker.ietf.org/doc/html/rfc8132#section-2).
+        ///
+        /// Not available for HTTP.
         const FETCH = u64::pow(2, 4);
+
+        /// PATCH method as specified in [RFC 8132, section 3 (CoAP)](https://datatracker.ietf.org/doc/html/rfc8132#section-3).
+        ///
+        /// Not available for HTTP.
         const PATCH = u64::pow(2, 5);
+
+        /// iPATCH method as specified in [RFC 8132, section 3 (CoAP)](https://datatracker.ietf.org/doc/html/rfc8132#section-3).
+        ///
+        /// Not available for HTTP.
         const IPATCH = u64::pow(2, 6);
+
+        /// GET method as specified in [RFC 7252, section 5.8.1 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.1)
+        /// and [RFC 7231, section 4.3.1 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.1),
+        /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
         const DYNAMIC_GET = u64::pow(2, 32);
+
+        /// POST method as specified in [RFC 7252, section 5.8.2 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.2)
+        /// and [RFC 7231, section 4.3.3 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.3),
+        /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
         const DYNAMIC_POST = u64::pow(2, 33);
+
+        /// PUT method as specified in [RFC 7252, section 5.8.3 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.3)
+        /// and [RFC 7231, section 4.3.4 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.4),
+        /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
         const DYNAMIC_PUT = u64::pow(2, 34);
+
+        /// DELETE method as specified in [RFC 7252, section 5.8.4 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.4)
+        /// and [RFC 7231, section 4.3.5 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.5),
+        /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
         const DYNAMIC_DELETE = u64::pow(2, 35);
+
+        /// FETCH method as specified in [RFC 8132, section 2 (CoAP)](https://datatracker.ietf.org/doc/html/rfc8132#section-2),
+        /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
+        ///
+        /// Not available for HTTP.
         const DYNAMIC_FETCH = u64::pow(2, 36);
+
+        /// PATCH method as specified in [RFC 8132, section 3 (CoAP)](https://datatracker.ietf.org/doc/html/rfc8132#section-3),
+        /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
+        ///
+        /// Not available for HTTP.
         const DYNAMIC_PATCH = u64::pow(2, 37);
+
+        /// iPATCH method as specified in [RFC 8132, section 3 (CoAP)](https://datatracker.ietf.org/doc/html/rfc8132#section-3),
+        /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
+        ///
+        /// Not available for HTTP.
         const DYNAMIC_IPATCH = u64::pow(2, 38);
     }
 }
 
+/// An element as part of an [`AifEncodedScope`], consisting of a path and a set of permissions
+/// which are specified as a set of REST methods.
+///
+/// See [`AifEncodedScope`] for more information and a usage example.
+///
+/// Can also be used as the single member of a [`LibdcafEncodedScope`].
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct AifEncodedScopeElement {
+    /// Identifier for the object of this scope element,
+    /// given as a URI of a resource on a CoAP server.
+    ///
+    /// Refer to [section 2 of `draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2)
+    /// for specification details.
     pub path: String,
+
+    /// Permissions for the object (identified by [path](AifEncodedScopeElement::path))
+    /// of this scope element, given as a set of REST (CoAP or HTTP) methods.
+    ///
+    /// More specifically, this is a bitmask---see [`AifRestMethodSet`] for further explanation.
+    /// Refer to [section 2 of `draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2)
+    /// for specification details.
     pub permissions: AifRestMethodSet,
 }
 
+/// A scope encoded using the
+/// [Authorization Information Format (AIF) for ACE](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif).
+///
+/// More specifically, this uses the specific instantiation of AIF intended for REST resources
+/// which are identified by URI paths, as described in [`draft-ietf-ace-aif`, section 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.1).
+/// An AIF-encoded scope consists of [`AifEncodedScopeElement`]s, each describing a URI path
+/// (the object of the scope) and a set of REST methods (the permissions of the scope).
+///
+/// Note that the [`libdcaf` implementation](https://gitlab.informatik.uni-bremen.de/DCAF/dcaf)
+/// uses a format in which only a single [`AifEncodedScopeElement`] is used in the scope.
+/// To use this format, please use the [`LibdcafEncodedScope`] instead.
+///
+/// # Example
+/// For example, say you want to crate a scope consisting of two elements:
+/// - A scope for the local path `/restricted`,
+///   consisting only of "read-only" methods GET and FETCH.
+/// - A scope for the local path `/unrestricted`, allowing every method.
+///
+/// This would look like the following:
+/// ```
+/// # use dcaf::AifEncodedScope;
+/// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
+/// let restricted = AifEncodedScopeElement::new("restricted", AifRestMethodSet::GET | AifRestMethodSet::FETCH);
+/// let unrestricted = AifEncodedScopeElement::new("unrestricted", AifRestMethodSet::all());
+/// let scope = AifEncodedScope::new(vec![restricted, unrestricted]);
+/// # let restricted = AifEncodedScopeElement::new("restricted", AifRestMethodSet::GET | AifRestMethodSet::FETCH);
+/// # let unrestricted = AifEncodedScopeElement::new("unrestricted", AifRestMethodSet::all());
+/// assert_eq!(scope.elements(), &vec![restricted, unrestricted])
+/// ```
+///
+/// ## Encoding
+/// The scope from the example above would be encoded like this (given in JSON):
+/// ```json
+/// [["restricted", 17], ["unrestricted", 545460846719]]
+/// ```
+/// As specified in [`draft-ietf-ace-aif`, section 3](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3),
+/// `GET` to `iPATCH` are encoded from 2<sup>0</sup> to 2<sup>6</sup>, while the dynamic variants
+/// go from 2<sup>32</sup> to 2<sup>38</sup>. This is why in `restricted`, the number equals
+/// 17 (2<sup>0</sup> + 2<sup>4</sup>), and in `unrestricted` equals the sum of all these numbers.
+/// [`AifRestMethodSet`] does the work on this (including encoding and decoding bitmasks given as
+/// numbers), clients do not need to handle this themselves and can simply use its methods.
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
 pub struct AifEncodedScope(Vec<AifEncodedScopeElement>);
 
+/// A scope encoded using the [Authorization Information Format (AIF) for ACE](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif)
+/// as in [`AifEncodedScope`], but only consisting of a single [`AifEncodedScopeElement`]
+/// instead of an array of them.
+///
+/// This is done to provide interoperability support for the
+/// [`libdcaf` implementation](https://gitlab.informatik.uni-bremen.de/DCAF/dcaf),
+/// which currently uses this format to describe its scopes.
+///
+/// *This struct is only provided to allow compatability with the
+/// [`libdcaf` implementation](https://gitlab.informatik.uni-bremen.de/DCAF/dcaf)---if you don't
+/// require this, simply use the spec-compliant [`AifEncodedScope`] instead, as it provides a
+/// superset of the functionality of this type.*
+///
+/// Refer to [`AifEncodedScope`] for details on the format, and "Difference to [`AifEncodedScope`]"
+/// for details on the difference to it.
+///
+/// # Example
+/// To create a scope allowing only the GET and FETCH methods to be called the local URI `readonly`:
+/// ```
+/// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
+/// # use dcaf::LibdcafEncodedScope;
+/// let scope = LibdcafEncodedScope::new("readonly", AifRestMethodSet::GET | AifRestMethodSet::FETCH);
+/// assert_eq!(scope.element().permissions.bits(), u64::pow(2, 0) + u64::pow(2, 4));
+/// ```
+///
+/// # Difference to [`AifEncodedScope`]
+/// The only difference here is that while [`AifEncodedScope`] would encode the above example
+/// like so (given as JSON):
+/// ```json
+/// [["readonly", 17]]
+/// ```
+/// [`LibdcafEncodedScope`] would encode it like so:
+/// ```json
+/// ["readonly", 17]
+/// ```
+/// Note that this implies that the latter only allows a single scope element (i.e. a single row
+/// in the access matrix) to be specified, while the former allows multiple elements.
+/// As mentioned in the beginning, only use this struct if you need to communicate with libdcaf,
+/// use [`AifEncodedScope`] in all other cases.
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
 pub struct LibdcafEncodedScope(AifEncodedScopeElement);
 
@@ -181,8 +405,8 @@ pub struct LibdcafEncodedScope(AifEncodedScopeElement);
 /// May be used both for [AccessTokenRequest](crate::AccessTokenRequest)s and
 /// [AccessTokenResponse](crate::AccessTokenResponse)s.
 /// Note that you rarely need to create instances of this type for that purpose,
-/// instead you can just pass in the concrete [TextEncodedScope] or [BinaryEncodedScope] directly
-/// into the builder.
+/// instead you can just pass in the concrete types (e.g. [TextEncodedScope], [BinaryEncodedScope])
+/// directly into the builder.
 ///
 /// AIF (from [`draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif))
 /// support is planned, but not yet implemented.
@@ -199,12 +423,14 @@ pub struct LibdcafEncodedScope(AifEncodedScopeElement);
 /// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///
-/// For information on how to initialize [BinaryEncodedScope] and [TextEncodedScope],
+/// For information on how to initialize a specific scope type
 /// or retrieve the individual elements inside them, see their respective documentation pages.
 #[derive(Debug, PartialEq, Eq, Clone, Hash, IntoStaticStr)]
 pub enum Scope {
     /// Scope encoded using Text, as specified in
     /// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3).
+    ///
+    /// For details, see the documentation of [`TextEncodedScope`].
     ///
     /// # Example
     /// Creating a scope containing "device_alpha" and "device_beta" (note that spaces in their
@@ -221,6 +447,9 @@ pub enum Scope {
     TextEncoded(TextEncodedScope),
 
     /// Scope encoded using custom binary encoding.
+    ///
+    /// For details, see the documentation of [`BinaryEncodedScope`].
+    ///
     /// # Example
     /// Creating a scope containing 0xDCAF and 0xAFDC with a separator of 0x00:
     /// ```
@@ -234,8 +463,38 @@ pub enum Scope {
     /// ```
     BinaryEncoded(BinaryEncodedScope),
 
-    // TODO: Docs & Tests
+    /// Scope encoded using the [Authorization Information Format (AIF) for ACE](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif).
+    ///
+    /// For details, see the documentation of [`AifEncodedScope`].
+    ///
+    /// # Example
+    /// Creating a scope containing `["/s/temp", 1]` (1 representing `GET`) and `["/a/led", 5]`
+    /// (5 representing `GET` and `FETCH`):
+    /// ```
+    /// # use dcaf::AifEncodedScope;
+    /// # use dcaf::common::scope::AifRestMethodSet;
+    /// let scope = AifEncodedScope::from(vec![
+    ///    ("/s/temp", AifRestMethodSet::GET),
+    ///    ("/a/led", AifRestMethodSet::GET | AifRestMethodSet::FETCH)
+    /// ]);
+    /// ```
     AifEncoded(AifEncodedScope),
+
+    /// [`libdcaf`](https://gitlab.informatik.uni-bremen.de/DCAF/dcaf)-specific
+    /// variant of [`AifEncoded`](Scope::AifEncoded) which consists of only a single
+    /// [`AifEncodedScopeElement`].
+    ///
+    /// *Use only if trying to maintain compatibility to `libdcaf`.*
+    ///
+    /// For details, see the documentation of [`LibdcafEncodedScope`].
+    ///
+    /// # Example
+    /// Creating a scope containing `["/s/temp", 1]` (1 representing `GET`):
+    /// ```
+    /// # use dcaf::LibdcafEncodedScope;
+    /// # use dcaf::common::scope::AifRestMethodSet;
+    /// let scope = LibdcafEncodedScope::new("/s/temp", AifRestMethodSet::GET);
+    /// ```
     LibdcafEncoded(LibdcafEncodedScope),
 }
 
@@ -401,21 +660,66 @@ mod conversion {
     }
 
     impl AifEncodedScopeElement {
+        /// Creates a new [`AifEncodedScopeElement`] over the given `path` and `permissions`.
+        ///
+        /// # Example
+        /// Let's take the example given in Table 2 of [the draft](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3):
+        /// ```text
+        ///   +================+===================================+
+        ///   | URI-local-part | Permission Set                    |
+        ///   +================+===================================+
+        ///   | /a/make-coffee | POST, Dynamic-GET, Dynamic-DELETE |
+        ///   +----------------+-----------------------------------+
+        /// ```
+        ///
+        /// We could create an `AifEncodedScopeElement` from that data like this:
+        /// ```
+        /// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
+        /// let element = AifEncodedScopeElement::new(
+        ///    "/a/make-coffee", AifRestMethodSet::POST | AifRestMethodSet::DYNAMIC_GET | AifRestMethodSet::DYNAMIC_DELETE
+        /// );
+        /// ```
         #[must_use]
-        pub fn new(path: String, permissions: AifRestMethodSet) -> AifEncodedScopeElement {
-            AifEncodedScopeElement { path, permissions }
+        pub fn new<T>(path: T, permissions: AifRestMethodSet) -> AifEncodedScopeElement where T: Into<String> {
+            AifEncodedScopeElement { path: path.into(), permissions }
         }
 
-        #[must_use]
-        pub fn try_from_bits(
-            path: String,
+        /// Tries to create a new [`AifEncodedScopeElement`] from the given `path` and `permissions`.
+        ///
+        /// `permissions` must be a valid bitmask of REST methods, as defined in
+        /// [section 3 of `draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3).
+        ///
+        /// # Errors
+        /// If the given `permissions` do not correspond to a valid [`AifRestMethodSet`]
+        /// as defined in
+        /// [section 3 of `draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3).
+        ///
+        /// # Example
+        /// For example, say we want to encode `["/a/led", 5]`, where the 5 corresponds to
+        /// `GET` and `FETCH` (due to 2<sup>0</sup> and 2<sup>4</sup>):
+        /// ```
+        /// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
+        /// # use dcaf::error::InvalidAifEncodedScopeError;
+        /// let element = AifEncodedScopeElement::try_from_bits("/a/led", 5)?;
+        /// assert_eq!(element, AifEncodedScopeElement::new("/a/led", AifRestMethodSet::GET | AifRestMethodSet::PUT));
+        /// # Ok::<(), InvalidAifEncodedScopeError>(())
+        /// ```
+        /// This method returns a result because it's possible to specify a bitmask that doesn't
+        /// represent a REST method (such as 2<sup>31</sup>):
+        /// ```
+        /// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
+        /// assert!(AifEncodedScopeElement::try_from_bits("no", u64::pow(2, 31)).is_err());
+        /// ```
+        pub fn try_from_bits<T>(
+            path: T,
             permissions: u64,
-        ) -> Result<AifEncodedScopeElement, InvalidAifEncodedScopeError> {
+        ) -> Result<AifEncodedScopeElement, InvalidAifEncodedScopeError> where T: Into<String> {
             AifRestMethodSet::from_bits(permissions)
                 .ok_or(InvalidAifEncodedScopeError::InvalidRestMethodSet)
-                .map(|permissions| AifEncodedScopeElement { path, permissions })
+                .map(|permissions| AifEncodedScopeElement { path: path.into(), permissions })
         }
 
+        /// Turns itself into a [`Value`].
         fn into_cbor_value(self) -> Value {
             Value::Array(vec![
                 Value::Text(self.path),
@@ -425,19 +729,44 @@ mod conversion {
     }
 
     impl AifEncodedScope {
+        /// Creates a new [`AifEncodedScope`] consisting of the given `elements`.
+        #[must_use]
+        pub fn new(elements: Vec<AifEncodedScopeElement>) -> AifEncodedScope {
+            AifEncodedScope(elements)
+        }
+
+        /// Returns a reference to the [`AifEncodedScopeElement`]s of this scope.
+        ///
+        /// # Example
+        /// ```
+        /// # use dcaf::AifEncodedScope;
+        /// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
+        /// let first = AifEncodedScopeElement::new("first", AifRestMethodSet::empty());
+        /// let second = AifEncodedScopeElement::new("second", AifRestMethodSet::PATCH);
+        /// // We only clone here for the assert call below. This is usually not required.
+        /// let scope = AifEncodedScope::new(vec![first.clone(), second.clone()]);
+        /// assert_eq!(scope.elements(), &vec![first, second]);
+        /// ```
         #[must_use]
         pub fn elements(&self) -> &Vec<AifEncodedScopeElement> {
             &self.0
         }
 
+        /// Returns the [`AifEncodedScopeElement`]s of this scope.
+        ///
+        /// # Example
+        /// ```
+        /// # use dcaf::AifEncodedScope;
+        /// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
+        /// let first = AifEncodedScopeElement::new("first", AifRestMethodSet::empty());
+        /// let second = AifEncodedScopeElement::new("second", AifRestMethodSet::PATCH);
+        /// // We only clone here for the assert call below. This is usually not required.
+        /// let scope = AifEncodedScope::new(vec![first.clone(), second.clone()]);
+        /// assert_eq!(scope.to_elements(), vec![first, second]);
+        /// ```
         #[must_use]
         pub fn to_elements(self) -> Vec<AifEncodedScopeElement> {
             self.0
-        }
-
-        #[must_use]
-        pub fn new(elements: Vec<AifEncodedScopeElement>) -> AifEncodedScope {
-            AifEncodedScope(elements)
         }
     }
 
@@ -460,8 +789,8 @@ mod conversion {
         }
     }
 
-    impl From<Vec<(String, AifRestMethodSet)>> for AifEncodedScope {
-        fn from(value: Vec<(String, AifRestMethodSet)>) -> Self {
+    impl<T> From<Vec<(T, AifRestMethodSet)>> for AifEncodedScope where T: Into<String> {
+        fn from(value: Vec<(T, AifRestMethodSet)>) -> Self {
             AifEncodedScope::new(
                 value
                     .into_iter()
@@ -485,28 +814,64 @@ mod conversion {
     }
 
     impl LibdcafEncodedScope {
+        /// Creates a new libdcaf-encoded scope from the given `path` and `permissions`.
+        ///
+        /// Refer to [`AifEncodedScopeElement::new`] for details and
+        /// an example applicable to this method.
         #[must_use]
-        pub fn new(element: AifEncodedScopeElement) -> LibdcafEncodedScope {
+        pub fn new<T>(path: T, permissions: AifRestMethodSet) -> LibdcafEncodedScope where T: Into<String> {
+            LibdcafEncodedScope(AifEncodedScopeElement::new(path, permissions))
+        }
+
+        /// Creates a new libdcaf-encoded scope from the given `element`.
+        ///
+        /// Refer to [`AifEncodedScopeElement`] and [`LibdcafEncodedScope`] for details.
+        #[must_use]
+        pub fn from_element(element: AifEncodedScopeElement) -> LibdcafEncodedScope {
             LibdcafEncodedScope(element)
         }
 
-        #[must_use]
-        pub fn elements(&self) -> Vec<&AifEncodedScopeElement> {
-            vec![&self.0]
-        }
-
-        #[must_use]
-        pub fn to_elements(self) -> Vec<AifEncodedScopeElement> {
-            vec![self.0]
-        }
-
-        pub fn try_from_bits(
-            path: String,
+        /// Tries to create a new libdcaf-encoded scope from the given `path` and `permissions`.
+        ///
+        /// The given `permissions` must be a valid bitmask of the allowed REST methods,
+        /// as defined in [section 3 of `draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3).
+        ///
+        /// # Errors
+        /// Refer to [`AifEncodedScopeElement::try_from_bits`].
+        ///
+        /// # Example
+        /// Refer to [`AifEncodedScopeElement::try_from_bits`].
+        pub fn try_from_bits<T>(
+            path: T,
             permissions: u64,
-        ) -> Result<LibdcafEncodedScope, InvalidAifEncodedScopeError> {
-            Ok(LibdcafEncodedScope::new(
+        ) -> Result<LibdcafEncodedScope, InvalidAifEncodedScopeError> where T: Into<String> {
+            Ok(LibdcafEncodedScope::from_element(
                 AifEncodedScopeElement::try_from_bits(path, permissions)?,
             ))
+        }
+
+        /// Returns a reference to the single element contained in this scope.
+        #[must_use]
+        pub fn element(&self) -> &AifEncodedScopeElement {
+            &self.0
+        }
+
+        /// Returns the single element contained in this scope.
+        #[must_use]
+        pub fn to_element(self) -> AifEncodedScopeElement {
+            self.0
+        }
+
+        /// Returns a vector of a reference to the single element in this scope.
+        #[must_use]
+        pub fn elements(&self) -> Vec<&AifEncodedScopeElement> {
+            vec![self.element()]
+        }
+
+        /// Returns a vector of the single element in this scope.
+        #[must_use]
+        pub fn to_elements(self) -> Vec<AifEncodedScopeElement> {
+            vec![self.to_element()]
         }
     }
 
@@ -626,6 +991,7 @@ mod conversion {
         type Error = ScopeFromValueError;
 
         fn try_from(value: Value) -> Result<Self, Self::Error> {
+            #[allow(clippy::needless_pass_by_value)]  // makes it easier to use later on
             fn value_to_aif_element(
                 value: Value,
             ) -> Result<AifEncodedScopeElement, InvalidAifEncodedScopeError> {
@@ -641,9 +1007,7 @@ mod conversion {
                     .get(1)
                     .and_then(|x| {
                         x.as_integer().map(|x| {
-                            u64::try_from(x)
-                                .map(|x| AifRestMethodSet::from_bits(x))
-                                .ok()
+                            u64::try_from(x).map(AifRestMethodSet::from_bits).ok()
                         })
                     })
                     .flatten()
@@ -668,7 +1032,7 @@ mod conversion {
                             .map(value_to_aif_element)
                             .collect::<Result<Vec<AifEncodedScopeElement>, InvalidAifEncodedScopeError>>()
                             .map(|x| Scope::AifEncoded(AifEncodedScope::new(x)))
-                            .map_err(|x| ScopeFromValueError::InvalidAifEncodedScope(x))
+                            .map_err(ScopeFromValueError::InvalidAifEncodedScope)
                     }
                 }
                 v => Err(ScopeFromValueError::invalid_type(&v)),
@@ -684,8 +1048,8 @@ mod conversion {
 
     impl<'de> Deserialize<'de> for Scope {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+            where
+                D: Deserializer<'de>,
         {
             Scope::try_from(Value::deserialize(deserializer)?)
                 .map_err(|x| D::Error::custom(x.to_string()))
