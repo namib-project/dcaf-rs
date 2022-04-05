@@ -9,7 +9,7 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-use crate::AifEncodedScope;
+use crate::{AifEncodedScope, BinaryEncodedScope};
 use coset::cwt::Timestamp;
 use coset::iana::Algorithm;
 /// Tests for CBOR serialization and deserialization of ACE-OAuth data models.
@@ -38,6 +38,21 @@ fn test_access_token_request_symmetric() -> Result<(), String> {
         request,
         None,
         "A2056E74656D7053656E736F72343731311818686D79636C69656E74",
+    )
+}
+
+#[test]
+fn test_access_token_request_binary() -> Result<(), String> {
+    let request = AccessTokenRequestBuilder::default()
+        .client_id("myclient")
+        .audience("tempSensor4711")
+        .scope(BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice()).map_err(|x| x.to_string())?)
+        .build()
+        .map_err(|x| x.to_string())?;
+    expect_ser_de(
+        request,
+        None,
+        "A3056E74656D7053656E736F72343731310942DCAF1818686D79636C69656E74",
     )
 }
 
@@ -88,10 +103,7 @@ fn test_access_token_response_aif() -> Result<(), String> {
 fn test_access_token_request_libdcaf() -> Result<(), String> {
     let request = AccessTokenRequest::builder()
         .audience("coaps://localhost")
-        .scope(LibdcafEncodedScope::from_element(AifEncodedScopeElement::new(
-            "restricted".to_string(),
-            AifRestMethodSet::GET,
-        )))
+        .scope(LibdcafEncodedScope::new("restricted", AifRestMethodSet::GET))
         .issuer("coaps://127.0.0.1:7744/authorize")
         .build()
         .map_err(|x| x.to_string())?;
@@ -104,10 +116,7 @@ fn test_access_token_request_libdcaf() -> Result<(), String> {
 fn test_access_token_response_whole_libdcaf() -> Result<(), String> {
     let response = AccessTokenResponse::builder()
         .access_token(vec![0xDC, 0xAF])
-        .scope(LibdcafEncodedScope::from_element(AifEncodedScopeElement::new(
-            "restricted".to_string(),
-            AifRestMethodSet::GET,
-        )))
+        .scope(LibdcafEncodedScope::new("restricted", AifRestMethodSet::GET))
         .issued_at(Timestamp::WholeSeconds(10))
         .build()
         .map_err(|x| x.to_string())?;
@@ -118,10 +127,7 @@ fn test_access_token_response_whole_libdcaf() -> Result<(), String> {
 fn test_access_token_response_fraction_libdcaf() -> Result<(), String> {
     let response = AccessTokenResponse::builder()
         .access_token(vec![0xDC, 0xAF])
-        .scope(LibdcafEncodedScope::from_element(AifEncodedScopeElement::new(
-            "empty".to_string(),
-            AifRestMethodSet::empty(),
-        )))
+        .scope(LibdcafEncodedScope::new("empty", AifRestMethodSet::empty()))
         .issued_at(Timestamp::FractionalSeconds(1.5))
         .build()
         .map_err(|x| x.to_string())?;
@@ -226,11 +232,12 @@ fn test_access_token_request_other_fields() -> Result<(), String> {
         .client_id("myclient")
         .redirect_uri("coaps://server.example.com")
         .grant_type(GrantType::ClientCredentials)
+        .scope(BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice()).map_err(|x| x.to_string())?)
         .ace_profile()
         .client_nonce(vec![0, 1, 2, 3, 4])
         .build()
         .map_err(|x| x.to_string())?;
-    expect_ser_de(request, None, "A51818686D79636C69656E74181B781A636F6170733A2F2F7365727665722E6578616D706C652E636F6D1821021826F61827450001020304")
+    expect_ser_de(request, None, "A60942DCAF1818686D79636C69656E74181B781A636F6170733A2F2F7365727665722E6578616D706C652E636F6D1821021826F61827450001020304")
 }
 
 #[test]

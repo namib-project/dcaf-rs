@@ -137,8 +137,6 @@ mod text {
 mod aif {
     use ciborium::de::from_reader;
     use ciborium::ser::into_writer;
-    use ciborium::value::Value;
-    use serde::{Deserialize, Serialize};
     use crate::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
     use crate::error::InvalidAifEncodedScopeError;
     use crate::{AifEncodedScope, Scope};
@@ -228,16 +226,25 @@ mod aif {
         assert_eq!(from_reader::<Scope, &[u8]>(serialized.as_slice()).map_err(|x| x.to_string())?, Scope::from(empty));
         Ok(())
     }
+
+    #[test]
+    fn test_scope_encoding() -> Result<(), String> {
+        // This tests the encoding of the scope using the example given in Figure 5 of the AIF draft.
+        let cbor = hex::decode("8382672F732F74656D700182662F612F6C65640582652F64746C7302").map_err(|x| x.to_string())?;
+        let expected: Scope = AifEncodedScope::from(vec![
+            ("/s/temp", AifRestMethodSet::GET),
+            ("/a/led", AifRestMethodSet::PUT | AifRestMethodSet::GET),
+            ("/dtls", AifRestMethodSet::POST),
+        ]).into();
+        assert_eq!(expected, from_reader::<Scope, &[u8]>(cbor.as_slice()).map_err(|x| x.to_string())?);
+        Ok(())
+    }
 }
 
 mod libdcaf {
     use ciborium::de::from_reader;
-    use ciborium::ser::into_writer;
-    use ciborium::value::Value;
-    use serde::{Deserialize, Serialize};
-    use crate::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
     use crate::error::InvalidAifEncodedScopeError;
-    use crate::{AifEncodedScope, LibdcafEncodedScope, Scope};
+    use crate::{LibdcafEncodedScope, Scope};
     use super::aif::example_elements;
 
     #[test]
