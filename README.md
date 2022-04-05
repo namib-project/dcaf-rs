@@ -173,6 +173,9 @@ When implementing any of the specific COSE ciphers, you'll also need to implemen
 `CoseCipherCommon` trait, which can be used to set headers specific to your COSE cipher
 (e.g. the used algorithm).
 
+## Changelog
+You can find a list of changes in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 Licensed under either of
