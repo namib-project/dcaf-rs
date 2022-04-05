@@ -48,12 +48,10 @@ fn test_creation_hint_aif_scope() -> Result<(), String> {
     let hint = AuthServerRequestCreationHintBuilder::default()
         .auth_server("coaps://as.example.com/token")
         .audience("coaps://rs.example.com")
-        .scope(
-            AifEncodedScope::from(vec![
-                ("/s/temp", AifRestMethodSet::GET),
-                ("/a/led", AifRestMethodSet::GET | AifRestMethodSet::PUT),
-            ])
-        )
+        .scope(AifEncodedScope::from(vec![
+            ("/s/temp", AifRestMethodSet::GET),
+            ("/a/led", AifRestMethodSet::GET | AifRestMethodSet::PUT),
+        ]))
         .client_nonce(hex::decode("e0a156bb3f").map_err(|x| x.to_string())?)
         .build()
         .map_err(|x| x.to_string())?;
@@ -65,9 +63,10 @@ fn test_creation_hint_libdcaf_scope() -> Result<(), String> {
     let hint = AuthServerRequestCreationHintBuilder::default()
         .auth_server("coaps://as.example.com/token")
         .audience("coaps://rs.example.com")
-        .scope(
-            LibdcafEncodedScope::new("/x/none", AifRestMethodSet::empty())
-        )
+        .scope(LibdcafEncodedScope::new(
+            "/x/none",
+            AifRestMethodSet::empty(),
+        ))
         .client_nonce(hex::decode("e0a156bb3f").map_err(|x| x.to_string())?)
         .build()
         .map_err(|x| x.to_string())?;

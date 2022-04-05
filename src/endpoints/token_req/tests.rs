@@ -46,7 +46,9 @@ fn test_access_token_request_binary() -> Result<(), String> {
     let request = AccessTokenRequestBuilder::default()
         .client_id("myclient")
         .audience("tempSensor4711")
-        .scope(BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice()).map_err(|x| x.to_string())?)
+        .scope(
+            BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice()).map_err(|x| x.to_string())?,
+        )
         .build()
         .map_err(|x| x.to_string())?;
     expect_ser_de(
@@ -67,7 +69,12 @@ fn test_access_token_request_aif() -> Result<(), String> {
                 "extended".to_string(),
                 AifRestMethodSet::GET | AifRestMethodSet::POST | AifRestMethodSet::PUT,
             ),
-            AifEncodedScopeElement::new("dynamic".to_string(), AifRestMethodSet::DYNAMIC_GET | AifRestMethodSet::DYNAMIC_POST | AifRestMethodSet::DYNAMIC_PUT),
+            AifEncodedScopeElement::new(
+                "dynamic".to_string(),
+                AifRestMethodSet::DYNAMIC_GET
+                    | AifRestMethodSet::DYNAMIC_POST
+                    | AifRestMethodSet::DYNAMIC_PUT,
+            ),
             AifEncodedScopeElement::new("unrestricted".to_string(), AifRestMethodSet::all()),
             AifEncodedScopeElement::new("useless".to_string(), AifRestMethodSet::empty()),
         ]))
@@ -88,7 +95,12 @@ fn test_access_token_response_aif() -> Result<(), String> {
                 "extended".to_string(),
                 AifRestMethodSet::GET | AifRestMethodSet::POST | AifRestMethodSet::PUT,
             ),
-            AifEncodedScopeElement::new("dynamic".to_string(), AifRestMethodSet::DYNAMIC_GET | AifRestMethodSet::DYNAMIC_POST | AifRestMethodSet::DYNAMIC_PUT),
+            AifEncodedScopeElement::new(
+                "dynamic".to_string(),
+                AifRestMethodSet::DYNAMIC_GET
+                    | AifRestMethodSet::DYNAMIC_POST
+                    | AifRestMethodSet::DYNAMIC_PUT,
+            ),
             AifEncodedScopeElement::new("unrestricted".to_string(), AifRestMethodSet::all()),
             AifEncodedScopeElement::new("useless".to_string(), AifRestMethodSet::empty()),
         ]))
@@ -103,7 +115,10 @@ fn test_access_token_response_aif() -> Result<(), String> {
 fn test_access_token_request_libdcaf() -> Result<(), String> {
     let request = AccessTokenRequest::builder()
         .audience("coaps://localhost")
-        .scope(LibdcafEncodedScope::new("restricted", AifRestMethodSet::GET))
+        .scope(LibdcafEncodedScope::new(
+            "restricted",
+            AifRestMethodSet::GET,
+        ))
         .issuer("coaps://127.0.0.1:7744/authorize")
         .build()
         .map_err(|x| x.to_string())?;
@@ -116,7 +131,10 @@ fn test_access_token_request_libdcaf() -> Result<(), String> {
 fn test_access_token_response_whole_libdcaf() -> Result<(), String> {
     let response = AccessTokenResponse::builder()
         .access_token(vec![0xDC, 0xAF])
-        .scope(LibdcafEncodedScope::new("restricted", AifRestMethodSet::GET))
+        .scope(LibdcafEncodedScope::new(
+            "restricted",
+            AifRestMethodSet::GET,
+        ))
         .issued_at(Timestamp::WholeSeconds(10))
         .build()
         .map_err(|x| x.to_string())?;
@@ -232,7 +250,9 @@ fn test_access_token_request_other_fields() -> Result<(), String> {
         .client_id("myclient")
         .redirect_uri("coaps://server.example.com")
         .grant_type(GrantType::ClientCredentials)
-        .scope(BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice()).map_err(|x| x.to_string())?)
+        .scope(
+            BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice()).map_err(|x| x.to_string())?,
+        )
         .ace_profile()
         .client_nonce(vec![0, 1, 2, 3, 4])
         .build()

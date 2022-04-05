@@ -748,7 +748,7 @@ mod conversion {
                         request.req_cnf(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
                             Self,
                         >(
-                            x, "req_cnf",
+                            x, "req_cnf"
                         )?)?)
                     }
                     (token::AUDIENCE, Value::Text(x)) => request.audience(x),
@@ -806,7 +806,7 @@ mod conversion {
                         response.cnf(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
                             Self,
                         >(
-                            x, "cnf",
+                            x, "cnf"
                         )?)?)
                     }
                     (token::SCOPE, v) => response.scope(decode_scope(v)?),
@@ -820,7 +820,7 @@ mod conversion {
                         response.rs_cnf(ProofOfPossessionKey::try_from_cbor_map(decode_int_map::<
                             Self,
                         >(
-                            x, "rs_cnf",
+                            x, "rs_cnf"
                         )?)?)
                     }
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),

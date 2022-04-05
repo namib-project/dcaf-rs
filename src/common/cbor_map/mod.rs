@@ -280,9 +280,9 @@ pub trait ToCborMap: private::Sealed {
 ///
 /// # Errors
 /// - If `scope` is not a valid scope.
-pub(crate) fn decode_scope(scope: Value) -> Result<Scope, TryFromCborMapError>
-{
-    Scope::try_from(scope).map_err(|e| TryFromCborMapError::from_message(format!("couldn't decode scope: {e}")))
+pub(crate) fn decode_scope(scope: Value) -> Result<Scope, TryFromCborMapError> {
+    Scope::try_from(scope)
+        .map_err(|e| TryFromCborMapError::from_message(format!("couldn't decode scope: {e}")))
 }
 
 /// Decodes the given `number` Integer into a more specific integer of type `T`.

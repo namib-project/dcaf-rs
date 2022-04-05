@@ -103,8 +103,8 @@ impl TryFromCborMapError {
     /// either due to a missing field or due to a validation error in the builder.
     #[must_use]
     pub(crate) fn build_failed<T>(name: &'static str, builder_error: T) -> TryFromCborMapError
-        where
-            T: Display,
+    where
+        T: Display,
     {
         TryFromCborMapError {
             message: format!("couldn't build {name}: {builder_error}"),
@@ -210,7 +210,6 @@ impl Display for InvalidBinaryEncodedScopeError {
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 #[non_exhaustive]
 pub enum InvalidAifEncodedScopeError {
-
     /// Scope's [AifRestMethodSet](crate::common::scope::AifRestMethodSet) was not a valid bitmask.
     InvalidRestMethodSet,
 
@@ -221,8 +220,12 @@ pub enum InvalidAifEncodedScopeError {
 impl Display for InvalidAifEncodedScopeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
-            InvalidAifEncodedScopeError::InvalidRestMethodSet => write!(f, "given REST method bitfield is invalid"),
-            InvalidAifEncodedScopeError::MalformedArray => write!(f, "given AIF CBOR array is malformed")
+            InvalidAifEncodedScopeError::InvalidRestMethodSet => {
+                write!(f, "given REST method bitfield is invalid")
+            }
+            InvalidAifEncodedScopeError::MalformedArray => {
+                write!(f, "given AIF CBOR array is malformed")
+            }
         }
     }
 }
@@ -235,7 +238,7 @@ impl Display for InvalidAifEncodedScopeError {
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 #[non_exhaustive]
 pub enum CoseCipherError<T>
-    where
+where
     T: Display,
 {
     /// A header which the cipher is supposed to set has already been set.

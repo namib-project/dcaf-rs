@@ -154,9 +154,7 @@ mod conversion {
                     (creation_hint::AS, Value::Text(x)) => hint.auth_server(x),
                     (creation_hint::KID, Value::Bytes(x)) => hint.kid(x),
                     (creation_hint::AUDIENCE, Value::Text(x)) => hint.audience(x),
-                    (creation_hint::SCOPE, v) => {
-                        hint.scope(decode_scope(v)?)
-                    }
+                    (creation_hint::SCOPE, v) => hint.scope(decode_scope(v)?),
                     (creation_hint::CNONCE, Value::Bytes(x)) => hint.client_nonce(x),
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),
                 };

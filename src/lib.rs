@@ -217,7 +217,9 @@ pub use common::cbor_values::{ByteString, ProofOfPossessionKey};
 #[doc(inline)]
 pub use common::constants;
 #[doc(inline)]
-pub use common::scope::{BinaryEncodedScope, Scope, TextEncodedScope, AifEncodedScope, LibdcafEncodedScope};
+pub use common::scope::{
+    AifEncodedScope, BinaryEncodedScope, LibdcafEncodedScope, Scope, TextEncodedScope,
+};
 #[doc(inline)]
 pub use endpoints::creation_hint::AuthServerRequestCreationHint;
 #[doc(inline)]

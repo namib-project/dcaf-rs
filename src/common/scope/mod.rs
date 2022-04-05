@@ -680,8 +680,14 @@ mod conversion {
         /// );
         /// ```
         #[must_use]
-        pub fn new<T>(path: T, permissions: AifRestMethodSet) -> AifEncodedScopeElement where T: Into<String> {
-            AifEncodedScopeElement { path: path.into(), permissions }
+        pub fn new<T>(path: T, permissions: AifRestMethodSet) -> AifEncodedScopeElement
+        where
+            T: Into<String>,
+        {
+            AifEncodedScopeElement {
+                path: path.into(),
+                permissions,
+            }
         }
 
         /// Tries to create a new [`AifEncodedScopeElement`] from the given `path` and `permissions`.
@@ -713,10 +719,16 @@ mod conversion {
         pub fn try_from_bits<T>(
             path: T,
             permissions: u64,
-        ) -> Result<AifEncodedScopeElement, InvalidAifEncodedScopeError> where T: Into<String> {
+        ) -> Result<AifEncodedScopeElement, InvalidAifEncodedScopeError>
+        where
+            T: Into<String>,
+        {
             AifRestMethodSet::from_bits(permissions)
                 .ok_or(InvalidAifEncodedScopeError::InvalidRestMethodSet)
-                .map(|permissions| AifEncodedScopeElement { path: path.into(), permissions })
+                .map(|permissions| AifEncodedScopeElement {
+                    path: path.into(),
+                    permissions,
+                })
         }
 
         /// Turns itself into a [`Value`].
@@ -771,25 +783,40 @@ mod conversion {
     }
 
     impl Serialize for AifEncodedScopeElement {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-            Value::Array(vec![Value::Text(self.path.clone()),
-                              Value::Integer(Integer::from(self.permissions.bits))])
-                .serialize(serializer)
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            Value::Array(vec![
+                Value::Text(self.path.clone()),
+                Value::Integer(Integer::from(self.permissions.bits)),
+            ])
+            .serialize(serializer)
         }
     }
 
     impl<'de> Deserialize<'de> for AifRestMethodSet {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
             if let Ok(Value::Integer(i)) = Value::deserialize(deserializer) {
-                let number = u64::try_from(i).map_err(|_| D::Error::custom("invalid integer value"))?;
-                AifRestMethodSet::from_bits(number).ok_or_else(|| D::Error::custom("invalid bitfield value"))
+                let number =
+                    u64::try_from(i).map_err(|_| D::Error::custom("invalid integer value"))?;
+                AifRestMethodSet::from_bits(number)
+                    .ok_or_else(|| D::Error::custom("invalid bitfield value"))
             } else {
-                Err(D::Error::custom("AifRestMethodSet must be an integer".to_string()))
+                Err(D::Error::custom(
+                    "AifRestMethodSet must be an integer".to_string(),
+                ))
             }
         }
     }
 
-    impl<T> From<Vec<(T, AifRestMethodSet)>> for AifEncodedScope where T: Into<String> {
+    impl<T> From<Vec<(T, AifRestMethodSet)>> for AifEncodedScope
+    where
+        T: Into<String>,
+    {
         fn from(value: Vec<(T, AifRestMethodSet)>) -> Self {
             AifEncodedScope::new(
                 value
@@ -808,7 +835,8 @@ mod conversion {
                 value
                     .into_iter()
                     .map(|(path, rest)| AifEncodedScopeElement::try_from_bits(path, rest))
-                    .collect::<Result<Vec<AifEncodedScopeElement>, InvalidAifEncodedScopeError>>()?,
+                    .collect::<Result<Vec<AifEncodedScopeElement>, InvalidAifEncodedScopeError>>(
+                    )?,
             ))
         }
     }
@@ -819,7 +847,10 @@ mod conversion {
         /// Refer to [`AifEncodedScopeElement::new`] for details and
         /// an example applicable to this method.
         #[must_use]
-        pub fn new<T>(path: T, permissions: AifRestMethodSet) -> LibdcafEncodedScope where T: Into<String> {
+        pub fn new<T>(path: T, permissions: AifRestMethodSet) -> LibdcafEncodedScope
+        where
+            T: Into<String>,
+        {
             LibdcafEncodedScope(AifEncodedScopeElement::new(path, permissions))
         }
 
@@ -844,7 +875,10 @@ mod conversion {
         pub fn try_from_bits<T>(
             path: T,
             permissions: u64,
-        ) -> Result<LibdcafEncodedScope, InvalidAifEncodedScopeError> where T: Into<String> {
+        ) -> Result<LibdcafEncodedScope, InvalidAifEncodedScopeError>
+        where
+            T: Into<String>,
+        {
             Ok(LibdcafEncodedScope::from_element(
                 AifEncodedScopeElement::try_from_bits(path, permissions)?,
             ))
@@ -991,7 +1025,7 @@ mod conversion {
         type Error = ScopeFromValueError;
 
         fn try_from(value: Value) -> Result<Self, Self::Error> {
-            #[allow(clippy::needless_pass_by_value)]  // makes it easier to use later on
+            #[allow(clippy::needless_pass_by_value)] // makes it easier to use later on
             fn value_to_aif_element(
                 value: Value,
             ) -> Result<AifEncodedScopeElement, InvalidAifEncodedScopeError> {
@@ -1006,9 +1040,8 @@ mod conversion {
                 let permissions = values
                     .get(1)
                     .and_then(|x| {
-                        x.as_integer().map(|x| {
-                            u64::try_from(x).map(AifRestMethodSet::from_bits).ok()
-                        })
+                        x.as_integer()
+                            .map(|x| u64::try_from(x).map(AifRestMethodSet::from_bits).ok())
                     })
                     .flatten()
                     .flatten() // better than ???, I guess
@@ -1041,15 +1074,18 @@ mod conversion {
     }
 
     impl Serialize for Scope {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
             Value::from(self.clone()).serialize(serializer)
         }
     }
 
     impl<'de> Deserialize<'de> for Scope {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
         {
             Scope::try_from(Value::deserialize(deserializer)?)
                 .map_err(|x| D::Error::custom(x.to_string()))

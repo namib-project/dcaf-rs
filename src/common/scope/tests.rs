@@ -135,11 +135,11 @@ mod text {
 }
 
 mod aif {
-    use ciborium::de::from_reader;
-    use ciborium::ser::into_writer;
     use crate::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
     use crate::error::InvalidAifEncodedScopeError;
     use crate::{AifEncodedScope, Scope};
+    use ciborium::de::from_reader;
+    use ciborium::ser::into_writer;
 
     pub(crate) fn example_elements() -> (
         AifEncodedScopeElement,
@@ -207,7 +207,7 @@ mod aif {
             u64::pow(2, 31),
             u64::pow(2, 39),
             u64::pow(2, 63),
-            0xFFFF_FFFF_FFFF_FFFF,  // maximum
+            0xFFFF_FFFF_FFFF_FFFF, // maximum
         ];
         for invalid in invalids {
             assert!(AifEncodedScope::try_from(vec![("whatever".to_string(), invalid)]).is_err());
@@ -223,29 +223,37 @@ mod aif {
         let mut serialized = Vec::<u8>::new();
         into_writer(&empty, &mut serialized).map_err(|x| x.to_string())?;
         assert_eq!(&serialized, &Vec::from([0x80]));
-        assert_eq!(from_reader::<Scope, &[u8]>(serialized.as_slice()).map_err(|x| x.to_string())?, Scope::from(empty));
+        assert_eq!(
+            from_reader::<Scope, &[u8]>(serialized.as_slice()).map_err(|x| x.to_string())?,
+            Scope::from(empty)
+        );
         Ok(())
     }
 
     #[test]
     fn test_scope_encoding() -> Result<(), String> {
         // This tests the encoding of the scope using the example given in Figure 5 of the AIF draft.
-        let cbor = hex::decode("8382672F732F74656D700182662F612F6C65640582652F64746C7302").map_err(|x| x.to_string())?;
+        let cbor = hex::decode("8382672F732F74656D700182662F612F6C65640582652F64746C7302")
+            .map_err(|x| x.to_string())?;
         let expected: Scope = AifEncodedScope::from(vec![
             ("/s/temp", AifRestMethodSet::GET),
             ("/a/led", AifRestMethodSet::PUT | AifRestMethodSet::GET),
             ("/dtls", AifRestMethodSet::POST),
-        ]).into();
-        assert_eq!(expected, from_reader::<Scope, &[u8]>(cbor.as_slice()).map_err(|x| x.to_string())?);
+        ])
+        .into();
+        assert_eq!(
+            expected,
+            from_reader::<Scope, &[u8]>(cbor.as_slice()).map_err(|x| x.to_string())?
+        );
         Ok(())
     }
 }
 
 mod libdcaf {
-    use ciborium::de::from_reader;
+    use super::aif::example_elements;
     use crate::error::InvalidAifEncodedScopeError;
     use crate::{LibdcafEncodedScope, Scope};
-    use super::aif::example_elements;
+    use ciborium::de::from_reader;
 
     #[test]
     fn test_scope_elements_normal() {
@@ -273,7 +281,7 @@ mod libdcaf {
             u64::pow(2, 31),
             u64::pow(2, 39),
             u64::pow(2, 63),
-            0xFFFF_FFFF_FFFF_FFFF,  // maximum
+            0xFFFF_FFFF_FFFF_FFFF, // maximum
         ];
         for invalid in invalids {
             assert!(LibdcafEncodedScope::try_from_bits("whatever".to_string(), invalid).is_err());
@@ -283,9 +291,13 @@ mod libdcaf {
     #[test]
     fn test_scope_element_empty() {
         // Emptiness isn't allowed here.
-        let serialized = vec![0x80];  // empty CBOR array
-        // That means that this *must not* resolve to a libdcaf scope
-        assert!(from_reader::<Scope, &[u8]>(serialized.as_slice()).ok().map(LibdcafEncodedScope::try_from).and_then(Result::ok).is_none());
+        let serialized = vec![0x80]; // empty CBOR array
+                                     // That means that this *must not* resolve to a libdcaf scope
+        assert!(from_reader::<Scope, &[u8]>(serialized.as_slice())
+            .ok()
+            .map(LibdcafEncodedScope::try_from)
+            .and_then(Result::ok)
+            .is_none());
     }
 }
 
