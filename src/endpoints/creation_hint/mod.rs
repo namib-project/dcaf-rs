@@ -129,7 +129,6 @@ mod conversion {
     use erased_serde::Serialize as ErasedSerialize;
 
     use crate::common::constants::cbor_abbreviations::creation_hint;
-    use crate::common::scope::{BinaryEncodedScope, TextEncodedScope};
     use crate::error::TryFromCborMapError;
 
     use super::*;
@@ -155,11 +154,8 @@ mod conversion {
                     (creation_hint::AS, Value::Text(x)) => hint.auth_server(x),
                     (creation_hint::KID, Value::Bytes(x)) => hint.kid(x),
                     (creation_hint::AUDIENCE, Value::Text(x)) => hint.audience(x),
-                    (creation_hint::SCOPE, Value::Text(x)) => {
-                        hint.scope(decode_scope::<&str, TextEncodedScope>(x.as_str())?)
-                    }
-                    (creation_hint::SCOPE, Value::Bytes(x)) => {
-                        hint.scope(decode_scope::<&[u8], BinaryEncodedScope>(x.as_slice())?)
+                    (creation_hint::SCOPE, v) => {
+                        hint.scope(decode_scope(v)?)
                     }
                     (creation_hint::CNONCE, Value::Bytes(x)) => hint.client_nonce(x),
                     (key, _) => return Err(TryFromCborMapError::unknown_field(key)),

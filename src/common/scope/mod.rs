@@ -416,7 +416,7 @@ mod conversion {
                 .map(|permissions| AifEncodedScopeElement { path, permissions })
         }
 
-        fn to_cbor_value(self) -> Value {
+        fn into_cbor_value(self) -> Value {
             Value::Array(vec![
                 Value::Text(self.path),
                 Value::Integer(Integer::from(self.permissions.bits)),
@@ -614,7 +614,7 @@ mod conversion {
                 Scope::AifEncoded(aif) => Value::Array(
                     aif.to_elements()
                         .into_iter()
-                        .map(AifEncodedScopeElement::to_cbor_value)
+                        .map(AifEncodedScopeElement::into_cbor_value)
                         .collect(),
                 ),
                 Scope::LibdcafEncoded(lib) => lib.0.into_cbor_value(),

@@ -276,24 +276,13 @@ pub trait ToCborMap: private::Sealed {
     }
 }
 
-/// Decodes the given specific `scope` of type `T` into the general [`Scope`] type.
+/// Decodes the given specific `scope` into the general [`Scope`] type.
 ///
 /// # Errors
 /// - If `scope` is not a valid scope.
-pub(crate) fn decode_scope<T, S>(scope: T) -> Result<Scope, TryFromCborMapError>
-where
-    S: TryFrom<T>,
-    Scope: From<S>,
-    S::Error: Display,
+pub(crate) fn decode_scope(scope: Value) -> Result<Scope, TryFromCborMapError>
 {
-    match S::try_from(scope) {
-        Ok(scope) => Ok(Scope::from(scope)),
-        Err(e) => {
-            return Err(TryFromCborMapError::from_message(format!(
-                "couldn't decode scope: {e}"
-            )));
-        }
-    }
+    Scope::try_from(scope).map_err(|e| TryFromCborMapError::from_message(format!("couldn't decode scope: {e}")))
 }
 
 /// Decodes the given `number` Integer into a more specific integer of type `T`.
