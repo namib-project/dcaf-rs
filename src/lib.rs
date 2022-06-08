@@ -141,7 +141,7 @@
 //! ## Common Data Types
 //! Some types used across multiple scenarios include:
 //! - [`Scope`] (as described in [section 5.8.1 of the ACE-OAuth draft](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1)),
-//!   either as a [`TextEncodedScope`] or as a [`BinaryEncodedScope`].
+//!   either as a [`TextEncodedScope`], a [`BinaryEncodedScope`] or an [`AifEncodedScope`].
 //! - [`ProofOfPossessionKey`] as specified in [section 3.1 of RFC 8747](https://datatracker.ietf.org/doc/html/rfc8747#section-3.1).
 //!   For example, this will be used in the access token's `cnf` claim.
 //! - While not really a data type, various constants representing values used in ACE-OAuth
@@ -229,8 +229,8 @@ pub use endpoints::token_req::{
 };
 #[doc(inline)]
 pub use token::{
-    decrypt_access_token, encrypt_access_token, get_token_headers, sign_access_token,
-    verify_access_token, CoseCipherCommon, CoseEncrypt0Cipher, CoseMac0Cipher, CoseSign1Cipher,
+    CoseCipherCommon, CoseEncrypt0Cipher, CoseMac0Cipher, CoseSign1Cipher,
+    decrypt_access_token, encrypt_access_token, get_token_headers, sign_access_token, verify_access_token,
 };
 
 pub mod common;

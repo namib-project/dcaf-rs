@@ -9,10 +9,12 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-/// Tests for CBOR serialization and deserialization of ACE-OAuth data models.
-use crate::common::scope::{AifRestMethodSet, TextEncodedScope};
-use crate::common::test_helper::expect_ser_de;
+use enumflags2::{BitFlags, make_bitflags};
+
 use crate::{AifEncodedScope, BinaryEncodedScope, LibdcafEncodedScope};
+/// Tests for CBOR serialization and deserialization of ACE-OAuth data models.
+use crate::common::scope::{AifRestMethod, TextEncodedScope};
+use crate::common::test_helper::expect_ser_de;
 
 use super::*;
 
@@ -49,8 +51,8 @@ fn test_creation_hint_aif_scope() -> Result<(), String> {
         .auth_server("coaps://as.example.com/token")
         .audience("coaps://rs.example.com")
         .scope(AifEncodedScope::from(vec![
-            ("/s/temp", AifRestMethodSet::GET),
-            ("/a/led", AifRestMethodSet::GET | AifRestMethodSet::PUT),
+            ("/s/temp", make_bitflags!(AifRestMethod::{Get})),
+            ("/a/led", make_bitflags!(AifRestMethod::{Get | Put})),
         ]))
         .client_nonce(hex::decode("e0a156bb3f").map_err(|x| x.to_string())?)
         .build()
@@ -65,7 +67,7 @@ fn test_creation_hint_libdcaf_scope() -> Result<(), String> {
         .audience("coaps://rs.example.com")
         .scope(LibdcafEncodedScope::new(
             "/x/none",
-            AifRestMethodSet::empty(),
+            BitFlags::empty(),
         ))
         .client_nonce(hex::decode("e0a156bb3f").map_err(|x| x.to_string())?)
         .build()

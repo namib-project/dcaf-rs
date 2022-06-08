@@ -9,22 +9,22 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-use crate::{AifEncodedScope, BinaryEncodedScope};
-use coset::cwt::Timestamp;
-use coset::iana::Algorithm;
 /// Tests for CBOR serialization and deserialization of ACE-OAuth data models.
 use coset::{
-    iana, CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder,
+    CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder, iana,
     ProtectedHeader,
 };
+use coset::cwt::Timestamp;
+use coset::iana::Algorithm;
+use enumflags2::{BitFlags, make_bitflags};
 
-use crate::common::scope::{
-    AifEncodedScopeElement, AifRestMethodSet, LibdcafEncodedScope, TextEncodedScope,
-};
+use crate::{AifEncodedScope, BinaryEncodedScope};
+use crate::common::scope::{AifEncodedScopeElement, AifRestMethod, LibdcafEncodedScope, TextEncodedScope};
 use crate::common::test_helper::expect_ser_de;
 use crate::endpoints::token_req::AceProfile::CoapDtls;
 
 use super::*;
+
 
 /// Example data taken from draft-ietf-ace-oauth-authz-46, Figure 5.
 #[test]
@@ -64,19 +64,19 @@ fn test_access_token_request_aif() -> Result<(), String> {
         .client_id("testclient")
         .audience("coaps://localhost")
         .scope(AifEncodedScope::new(vec![
-            AifEncodedScopeElement::new("restricted".to_string(), AifRestMethodSet::GET),
+            AifEncodedScopeElement::new("restricted".to_string(), AifRestMethod::Get),
             AifEncodedScopeElement::new(
                 "extended".to_string(),
-                AifRestMethodSet::GET | AifRestMethodSet::POST | AifRestMethodSet::PUT,
+                AifRestMethod::Get | AifRestMethod::Post | AifRestMethod::Put,
             ),
             AifEncodedScopeElement::new(
                 "dynamic".to_string(),
-                AifRestMethodSet::DYNAMIC_GET
-                    | AifRestMethodSet::DYNAMIC_POST
-                    | AifRestMethodSet::DYNAMIC_PUT,
+                AifRestMethod::DynamicGet
+                    | AifRestMethod::DynamicPost
+                    | AifRestMethod::DynamicPut,
             ),
-            AifEncodedScopeElement::new("unrestricted".to_string(), AifRestMethodSet::all()),
-            AifEncodedScopeElement::new("useless".to_string(), AifRestMethodSet::empty()),
+            AifEncodedScopeElement::new("unrestricted".to_string(), BitFlags::all()),
+            AifEncodedScopeElement::new("useless".to_string(), BitFlags::empty()),
         ]))
         .build()
         .map_err(|x| x.to_string())?;
@@ -90,19 +90,19 @@ fn test_access_token_response_aif() -> Result<(), String> {
     let request = AccessTokenResponse::builder()
         .access_token(vec![0xDC, 0xAF])
         .scope(AifEncodedScope::new(vec![
-            AifEncodedScopeElement::new("restricted".to_string(), AifRestMethodSet::GET),
+            AifEncodedScopeElement::new("restricted".to_string(), AifRestMethod::Get),
             AifEncodedScopeElement::new(
                 "extended".to_string(),
-                AifRestMethodSet::GET | AifRestMethodSet::POST | AifRestMethodSet::PUT,
+                AifRestMethod::Get | AifRestMethod::Post | AifRestMethod::Put,
             ),
             AifEncodedScopeElement::new(
                 "dynamic".to_string(),
-                AifRestMethodSet::DYNAMIC_GET
-                    | AifRestMethodSet::DYNAMIC_POST
-                    | AifRestMethodSet::DYNAMIC_PUT,
+                AifRestMethod::DynamicGet
+                    | AifRestMethod::DynamicPost
+                    | AifRestMethod::DynamicPut,
             ),
-            AifEncodedScopeElement::new("unrestricted".to_string(), AifRestMethodSet::all()),
-            AifEncodedScopeElement::new("useless".to_string(), AifRestMethodSet::empty()),
+            AifEncodedScopeElement::new("unrestricted".to_string(), BitFlags::all()),
+            AifEncodedScopeElement::new("useless".to_string(), BitFlags::empty()),
         ]))
         .build()
         .map_err(|x| x.to_string())?;
@@ -117,7 +117,7 @@ fn test_access_token_request_libdcaf() -> Result<(), String> {
         .audience("coaps://localhost")
         .scope(LibdcafEncodedScope::new(
             "restricted",
-            AifRestMethodSet::GET,
+            make_bitflags!(AifRestMethod::{Get}),
         ))
         .issuer("coaps://127.0.0.1:7744/authorize")
         .build()
@@ -133,7 +133,7 @@ fn test_access_token_response_whole_libdcaf() -> Result<(), String> {
         .access_token(vec![0xDC, 0xAF])
         .scope(LibdcafEncodedScope::new(
             "restricted",
-            AifRestMethodSet::GET,
+            make_bitflags!(AifRestMethod::{Get}),
         ))
         .issued_at(Timestamp::WholeSeconds(10))
         .build()
@@ -145,7 +145,7 @@ fn test_access_token_response_whole_libdcaf() -> Result<(), String> {
 fn test_access_token_response_fraction_libdcaf() -> Result<(), String> {
     let response = AccessTokenResponse::builder()
         .access_token(vec![0xDC, 0xAF])
-        .scope(LibdcafEncodedScope::new("empty", AifRestMethodSet::empty()))
+        .scope(LibdcafEncodedScope::new("empty", BitFlags::empty()))
         .issued_at(Timestamp::FractionalSeconds(1.5))
         .build()
         .map_err(|x| x.to_string())?;

@@ -11,10 +11,11 @@
 
 /// Tests for text encoded scopes.
 mod text {
+    use ciborium::value::Value;
+
     use crate::common::scope::TextEncodedScope;
     use crate::error::{InvalidTextEncodedScopeError, ScopeFromValueError};
     use crate::Scope;
-    use ciborium::value::Value;
 
     #[test]
     fn test_scope_element_normal() -> Result<(), InvalidTextEncodedScopeError> {
@@ -135,11 +136,13 @@ mod text {
 }
 
 mod aif {
-    use crate::common::scope::{AifEncodedScopeElement, AifRestMethodSet};
-    use crate::error::InvalidAifEncodedScopeError;
-    use crate::{AifEncodedScope, Scope};
     use ciborium::de::from_reader;
     use ciborium::ser::into_writer;
+    use enumflags2::{BitFlags, make_bitflags};
+
+    use crate::{AifEncodedScope, Scope};
+    use crate::common::scope::{AifEncodedScopeElement, AifRestMethod};
+    use crate::error::InvalidAifEncodedScopeError;
 
     pub(crate) fn example_elements() -> (
         AifEncodedScopeElement,
@@ -148,13 +151,13 @@ mod aif {
         AifEncodedScopeElement,
     ) {
         let restricted =
-            AifEncodedScopeElement::new("restricted".to_string(), AifRestMethodSet::GET);
+            AifEncodedScopeElement::new("restricted".to_string(), AifRestMethod::Get);
         let dynamic = AifEncodedScopeElement::new(
             "dynamic".to_string(),
-            AifRestMethodSet::DYNAMIC_GET | AifRestMethodSet::DYNAMIC_FETCH,
+            make_bitflags!(AifRestMethod::{DynamicGet | DynamicFetch}),
         );
-        let all = AifEncodedScopeElement::new("all".to_string(), AifRestMethodSet::all());
-        let none = AifEncodedScopeElement::new("none".to_string(), AifRestMethodSet::empty());
+        let all = AifEncodedScopeElement::new("all".to_string(), BitFlags::all());
+        let none = AifEncodedScopeElement::new("none".to_string(), BitFlags::empty());
         (restricted, dynamic, all, none)
     }
 
@@ -168,15 +171,15 @@ mod aif {
         assert_eq!(multiple.elements(), &vec![dynamic.clone(), all.clone()]);
 
         let single_arr =
-            AifEncodedScope::from(vec![("none".to_string(), AifRestMethodSet::empty())]);
+            AifEncodedScope::from(vec![("none".to_string(), BitFlags::empty())]);
         assert_eq!(single_arr.elements(), &vec![none]);
 
         let multi_arr = AifEncodedScope::from(vec![
             (
                 "dynamic".to_string(),
-                AifRestMethodSet::DYNAMIC_GET | AifRestMethodSet::DYNAMIC_FETCH,
+                make_bitflags!(AifRestMethod::{DynamicGet | DynamicFetch})
             ),
-            ("all".to_string(), AifRestMethodSet::all()),
+            ("all".to_string(), BitFlags::all()),
         ]);
         assert_eq!(multi_arr.to_elements(), vec![dynamic, all]);
     }
@@ -186,7 +189,7 @@ mod aif {
         let (restricted, dynamic, all, none) = example_elements();
         let multi = AifEncodedScope::try_from(vec![
             ("restricted".to_string(), u64::pow(2, 0)),
-            ("all".to_string(), AifRestMethodSet::all().bits),
+            ("all".to_string(), BitFlags::<AifRestMethod>::all().bits()),
             ("none".to_string(), 0),
         ])?;
         assert_eq!(multi.to_elements(), vec![restricted, all, none]);
@@ -218,7 +221,7 @@ mod aif {
     fn test_scope_elements_empty() -> Result<(), String> {
         // Note: Spec doesn't seem to mention anything about emptiness, so we assume it's allowed.
         assert!(AifEncodedScope::try_from(Vec::<(String, u64)>::new()).is_ok());
-        let empty = AifEncodedScope::from(Vec::<(String, AifRestMethodSet)>::new());
+        let empty = AifEncodedScope::from(Vec::<(String, BitFlags<AifRestMethod>)>::new());
         assert_eq!(empty.elements(), &vec![]);
         let mut serialized = Vec::<u8>::new();
         into_writer(&empty, &mut serialized).map_err(|x| x.to_string())?;
@@ -236,9 +239,9 @@ mod aif {
         let cbor = hex::decode("8382672F732F74656D700182662F612F6C65640582652F64746C7302")
             .map_err(|x| x.to_string())?;
         let expected: Scope = AifEncodedScope::from(vec![
-            ("/s/temp", AifRestMethodSet::GET),
-            ("/a/led", AifRestMethodSet::PUT | AifRestMethodSet::GET),
-            ("/dtls", AifRestMethodSet::POST),
+            ("/s/temp", make_bitflags!(AifRestMethod::{Get})),
+            ("/a/led", make_bitflags!(AifRestMethod::{Put | Get})),
+            ("/dtls", make_bitflags!(AifRestMethod::{Post})),
         ])
         .into();
         assert_eq!(
@@ -250,10 +253,12 @@ mod aif {
 }
 
 mod libdcaf {
-    use super::aif::example_elements;
-    use crate::error::InvalidAifEncodedScopeError;
-    use crate::{LibdcafEncodedScope, Scope};
     use ciborium::de::from_reader;
+
+    use crate::{LibdcafEncodedScope, Scope};
+    use crate::error::InvalidAifEncodedScopeError;
+
+    use super::aif::example_elements;
 
     #[test]
     fn test_scope_elements_normal() {
@@ -303,10 +308,11 @@ mod libdcaf {
 
 /// Tests for binary encoded scopes.
 mod binary {
+    use ciborium::value::Value;
+
     use crate::common::scope::BinaryEncodedScope;
     use crate::error::{InvalidBinaryEncodedScopeError, ScopeFromValueError};
     use crate::Scope;
-    use ciborium::value::Value;
 
     #[test]
     fn test_scope_elements_normal() -> Result<(), InvalidBinaryEncodedScopeError> {
