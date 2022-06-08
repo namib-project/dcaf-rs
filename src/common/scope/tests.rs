@@ -138,11 +138,11 @@ mod text {
 mod aif {
     use ciborium::de::from_reader;
     use ciborium::ser::into_writer;
-    use enumflags2::{BitFlags, make_bitflags};
+    use enumflags2::{make_bitflags, BitFlags};
 
-    use crate::{AifEncodedScope, Scope};
     use crate::common::scope::{AifEncodedScopeElement, AifRestMethod};
     use crate::error::InvalidAifEncodedScopeError;
+    use crate::{AifEncodedScope, Scope};
 
     pub(crate) fn example_elements() -> (
         AifEncodedScopeElement,
@@ -150,8 +150,7 @@ mod aif {
         AifEncodedScopeElement,
         AifEncodedScopeElement,
     ) {
-        let restricted =
-            AifEncodedScopeElement::new("restricted".to_string(), AifRestMethod::Get);
+        let restricted = AifEncodedScopeElement::new("restricted".to_string(), AifRestMethod::Get);
         let dynamic = AifEncodedScopeElement::new(
             "dynamic".to_string(),
             make_bitflags!(AifRestMethod::{DynamicGet | DynamicFetch}),
@@ -170,14 +169,13 @@ mod aif {
         let multiple = AifEncodedScope::new(vec![dynamic.clone(), all.clone()]);
         assert_eq!(multiple.elements(), &vec![dynamic.clone(), all.clone()]);
 
-        let single_arr =
-            AifEncodedScope::from(vec![("none".to_string(), BitFlags::empty())]);
+        let single_arr = AifEncodedScope::from(vec![("none".to_string(), BitFlags::empty())]);
         assert_eq!(single_arr.elements(), &vec![none]);
 
         let multi_arr = AifEncodedScope::from(vec![
             (
                 "dynamic".to_string(),
-                make_bitflags!(AifRestMethod::{DynamicGet | DynamicFetch})
+                make_bitflags!(AifRestMethod::{DynamicGet | DynamicFetch}),
             ),
             ("all".to_string(), BitFlags::all()),
         ]);
@@ -255,8 +253,8 @@ mod aif {
 mod libdcaf {
     use ciborium::de::from_reader;
 
-    use crate::{LibdcafEncodedScope, Scope};
     use crate::error::InvalidAifEncodedScopeError;
+    use crate::{LibdcafEncodedScope, Scope};
 
     use super::aif::example_elements;
 

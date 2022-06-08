@@ -9,12 +9,11 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-use enumflags2::{BitFlags, make_bitflags};
+use enumflags2::{make_bitflags, BitFlags};
 
-use crate::{AifEncodedScope, BinaryEncodedScope, LibdcafEncodedScope};
-/// Tests for CBOR serialization and deserialization of ACE-OAuth data models.
 use crate::common::scope::{AifRestMethod, TextEncodedScope};
 use crate::common::test_helper::expect_ser_de;
+use crate::{AifEncodedScope, BinaryEncodedScope, LibdcafEncodedScope};
 
 use super::*;
 
@@ -65,10 +64,7 @@ fn test_creation_hint_libdcaf_scope() -> Result<(), String> {
     let hint = AuthServerRequestCreationHintBuilder::default()
         .auth_server("coaps://as.example.com/token")
         .audience("coaps://rs.example.com")
-        .scope(LibdcafEncodedScope::new(
-            "/x/none",
-            BitFlags::empty(),
-        ))
+        .scope(LibdcafEncodedScope::new("/x/none", BitFlags::empty()))
         .client_nonce(hex::decode("e0a156bb3f").map_err(|x| x.to_string())?)
         .build()
         .map_err(|x| x.to_string())?;

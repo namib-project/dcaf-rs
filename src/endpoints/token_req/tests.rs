@@ -9,22 +9,22 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-/// Tests for CBOR serialization and deserialization of ACE-OAuth data models.
-use coset::{
-    CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder, iana,
-    ProtectedHeader,
-};
 use coset::cwt::Timestamp;
 use coset::iana::Algorithm;
-use enumflags2::{BitFlags, make_bitflags};
+use coset::{
+    iana, CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder,
+    ProtectedHeader,
+};
+use enumflags2::{make_bitflags, BitFlags};
 
-use crate::{AifEncodedScope, BinaryEncodedScope};
-use crate::common::scope::{AifEncodedScopeElement, AifRestMethod, LibdcafEncodedScope, TextEncodedScope};
+use crate::common::scope::{
+    AifEncodedScopeElement, AifRestMethod, LibdcafEncodedScope, TextEncodedScope,
+};
 use crate::common::test_helper::expect_ser_de;
 use crate::endpoints::token_req::AceProfile::CoapDtls;
+use crate::{AifEncodedScope, BinaryEncodedScope};
 
 use super::*;
-
 
 /// Example data taken from draft-ietf-ace-oauth-authz-46, Figure 5.
 #[test]
@@ -71,9 +71,7 @@ fn test_access_token_request_aif() -> Result<(), String> {
             ),
             AifEncodedScopeElement::new(
                 "dynamic".to_string(),
-                AifRestMethod::DynamicGet
-                    | AifRestMethod::DynamicPost
-                    | AifRestMethod::DynamicPut,
+                AifRestMethod::DynamicGet | AifRestMethod::DynamicPost | AifRestMethod::DynamicPut,
             ),
             AifEncodedScopeElement::new("unrestricted".to_string(), BitFlags::all()),
             AifEncodedScopeElement::new("useless".to_string(), BitFlags::empty()),
@@ -97,9 +95,7 @@ fn test_access_token_response_aif() -> Result<(), String> {
             ),
             AifEncodedScopeElement::new(
                 "dynamic".to_string(),
-                AifRestMethod::DynamicGet
-                    | AifRestMethod::DynamicPost
-                    | AifRestMethod::DynamicPut,
+                AifRestMethod::DynamicGet | AifRestMethod::DynamicPost | AifRestMethod::DynamicPut,
             ),
             AifEncodedScopeElement::new("unrestricted".to_string(), BitFlags::all()),
             AifEncodedScopeElement::new("useless".to_string(), BitFlags::empty()),
