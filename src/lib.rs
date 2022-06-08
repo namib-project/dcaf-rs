@@ -42,12 +42,12 @@
 //! # Usage
 //! ```toml
 //! [dependencies]
-//! dcaf = { version = "^0.2.0" }
+//! dcaf = { version = "^0.3.0" }
 //! ```
 //! Or, if you plan to use this crate in a `no_std` environment:
 //! ```toml
 //! [dependencies]
-//! dcaf = { version = "^0.2.0", default-features = false }
+//! dcaf = { version = "^0.3.0", default-features = false }
 //! ```
 //!
 //! # Example

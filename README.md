@@ -40,12 +40,12 @@ while `alloc` is still needed, this crate offers
 ## Usage
 ```toml
 [dependencies]
-dcaf = { version = "^0.2.0" }
+dcaf = { version = "^0.3.0" }
 ```
 Or, if you plan to use this crate in a `no_std` environment:
 ```toml
 [dependencies]
-dcaf = { version = "^0.2.0", default-features = false }
+dcaf = { version = "^0.3.0", default-features = false }
 ```
 
 ## Example
@@ -58,8 +58,8 @@ quickly introduce both of these here.
 [For example](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-7), say you (the client) want to
 request an access token from an Authorization Server. For this, you'd need to create an `AccessTokenRequest`, which has
 to include at least a
-`client_id`. We'll also specify an audience, a scope (using `TextEncodedScope`---note that binary-encoded scopes or AIF-encoded scopes would
-also work), as well as a
+`client_id`. We'll also specify an audience, a scope (using `TextEncodedScope`---note that binary-encoded scopes
+or AIF-encoded scopes would also work), as well as a
 `ProofOfPossessionKey` (the key the access token should be bound to) in the `req_cnf` field.
 
 Creating, serializing and then de-serializing such a structure would look like this:
@@ -117,7 +117,7 @@ Some types used across multiple scenarios include:
 
 - `Scope` (as described
   in [section 5.8.1 of the ACE-OAuth draft](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1))
-  , either as a `TextEncodedScope` or as a `BinaryEncodedScope`.
+  , either as a `TextEncodedScope`, a `BinaryEncodedScope` or an `AifEncodedScope`.
 - `ProofOfPossessionKey` as specified
   in [section 3.1 of RFC 8747](https://datatracker.ietf.org/doc/html/rfc8747#section-3.1). For example, this will be
   used in the access token's `cnf` claim.
