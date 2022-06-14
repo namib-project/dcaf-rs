@@ -11,14 +11,14 @@
 
 //! Contains error types used across this crate.
 
-use ciborium::value::Value;
 use core::any::type_name;
 use core::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::num::TryFromIntError;
-use strum_macros::IntoStaticStr;
 
+use ciborium::value::Value;
 use coset::{CoseError, Label};
+use strum_macros::IntoStaticStr;
 
 /// Error type used when the parameter of the type `T` couldn't be
 /// converted into [`expected_type`](WrongSourceTypeError::expected_type) because the received
@@ -210,7 +210,8 @@ impl Display for InvalidBinaryEncodedScopeError {
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 #[non_exhaustive]
 pub enum InvalidAifEncodedScopeError {
-    /// Scope's [AifRestMethodSet](crate::common::scope::AifRestMethodSet) was not a valid bitmask.
+    /// Scope's bitflags, representing an [AifRestMethodSet](crate::common::scope::AifRestMethodSet)
+    /// were not valid, i.e., did not represent a valid combination of REST methods.
     InvalidRestMethodSet,
 
     /// Scope contained a malformed array, i.e., didn't conform to the specification.
@@ -263,11 +264,10 @@ where
     /// that was already set has the name of the given `label`.
     #[must_use]
     pub fn existing_header_label(label: &Label) -> CoseCipherError<T> {
-        let existing_header_name;
-        match label {
-            Label::Int(i) => existing_header_name = i.to_string(),
-            Label::Text(s) => existing_header_name = s.to_string(),
-        }
+        let existing_header_name = match label {
+            Label::Int(i) => i.to_string(),
+            Label::Text(s) => s.to_string(),
+        };
         CoseCipherError::HeaderAlreadySet {
             existing_header_name,
         }
@@ -472,12 +472,13 @@ where
 
 #[cfg(feature = "std")]
 mod std_error {
+    use core::fmt::Debug;
+    use std::error::Error;
+
     use crate::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
     use crate::endpoints::token_req::AccessTokenRequestBuilderError;
     use crate::endpoints::token_req::AccessTokenResponseBuilderError;
     use crate::endpoints::token_req::ErrorResponseBuilderError;
-    use core::fmt::Debug;
-    use std::error::Error;
 
     use super::*;
 

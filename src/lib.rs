@@ -42,12 +42,12 @@
 //! # Usage
 //! ```toml
 //! [dependencies]
-//! dcaf = { version = "^0.2.0" }
+//! dcaf = { version = "^0.3.0" }
 //! ```
 //! Or, if you plan to use this crate in a `no_std` environment:
 //! ```toml
 //! [dependencies]
-//! dcaf = { version = "^0.2.0", default-features = false }
+//! dcaf = { version = "^0.3.0", default-features = false }
 //! ```
 //!
 //! # Example
@@ -141,7 +141,7 @@
 //! ## Common Data Types
 //! Some types used across multiple scenarios include:
 //! - [`Scope`] (as described in [section 5.8.1 of the ACE-OAuth draft](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1)),
-//!   either as a [`TextEncodedScope`] or as a [`BinaryEncodedScope`].
+//!   either as a [`TextEncodedScope`], a [`BinaryEncodedScope`] or an [`AifEncodedScope`].
 //! - [`ProofOfPossessionKey`] as specified in [section 3.1 of RFC 8747](https://datatracker.ietf.org/doc/html/rfc8747#section-3.1).
 //!   For example, this will be used in the access token's `cnf` claim.
 //! - While not really a data type, various constants representing values used in ACE-OAuth

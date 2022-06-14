@@ -95,7 +95,9 @@ coverage:
     - mv cobertura.xml target/coverage.xml
   artifacts:
     reports:
-      cobertura: target/coverage.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: target/coverage.xml
 
 
 lint:
