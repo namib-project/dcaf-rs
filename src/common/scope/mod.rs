@@ -103,6 +103,33 @@ use crate::common::cbor_values::ByteString;
 #[cfg(test)]
 mod tests;
 
+/// A set of [`AifRestMethod`]s, represented as bitflags.
+/// Intended to be used in [`AifEncodedScope`]s.
+///
+/// In order to create an instance of this type, simply do one of the following things:
+/// ```
+/// # use std::error::Error;
+/// # use enumflags2::make_bitflags;
+/// # use dcaf::common::scope::{AifRestMethod, AifRestMethodSet};
+/// // By bitwise operators:
+/// let multiple_or: AifRestMethodSet = AifRestMethod::Get | AifRestMethod::Put;
+/// assert!(multiple_or.contains(AifRestMethod::Get) && multiple_or.contains(AifRestMethod::Put));
+/// # assert_eq!(multiple_or.len(), 2);
+/// // By the `make_bitflags` macro, to be more compact:
+/// let multiple_macro: AifRestMethodSet = make_bitflags!(AifRestMethod::{Get | Put});
+/// assert!(multiple_macro.contains(AifRestMethod::Get | AifRestMethod::Put));
+/// # assert_eq!(multiple_macro.len(), 2);
+/// // Or by the methods defined on `AifRestMethodSet`:
+/// let single = AifRestMethodSet::try_from(AifRestMethod::Get)?;
+/// assert!(single.exactly_one().filter(|x| x == &AifRestMethod::Get).is_some());
+/// let empty = AifRestMethodSet::empty();
+/// assert!(empty.is_empty());
+/// let all = AifRestMethodSet::all();
+/// assert!(all.is_all());
+/// # Ok::<(), Box<dyn Error>>(())
+/// ```
+pub type AifRestMethodSet = BitFlags<AifRestMethod>;
+
 /// A scope encoded as a space-delimited list of strings, as defined in
 /// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3).
 ///
