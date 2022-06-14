@@ -12,20 +12,18 @@ with `AifRestMethod` (using [`enumflags2`]).
 
 ### Changed
 
-- The `AifRestMethodSet` (a set of REST methods) previously used
-  the [`bitflags`] crate. This has now been replaced by `AifRestMethod`, an enum
-  whose variants can be used as parts of `BitFlags`, a type introduced
-  by the [`enumflags2`] crate.
+- The `AifRestMethodSet` (a set of REST methods) previously using
+  the [`bitflags`] crate now uses the `BitFlags`
+  type introduced by the [`enumflags2`] crate. `AifRestMethod`,
+  a new enum whose variants can be used as parts of an
+  `AifRestMethodSet` has been added too.
   The reason for this is that this makes it possible to declare
   *single* REST methods in a type-safe manner.
   - Note that any existing usages of `AifRestMethodSet` now need to
-    be replaced with `AifRestMethod`.
+    be replaced with the new corresponding API calls.
   - Variant names are now using `PascalCase` instead of `UPPER_CASE`.
   - Use the type `AifRestMethod` for a single REST method and
-    `BitFlags<AifRestMethod>` for a set of REST methods.
-  - Methods like `AifRestMethodSet::all()` can now be invoked by
-    `BitFlags::all()`, while single elements can be used by e.g.,
-    `AifRestMethod::Get.into()` or `make_bitflags!(AifRestMethod::{Get})`.
+    `AifRestMethodSet` for a set of REST methods.
 - The `derive_builder` dependency has been updated to 0.11.2.
 
 ### Fixed

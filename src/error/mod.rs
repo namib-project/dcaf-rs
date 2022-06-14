@@ -210,8 +210,8 @@ impl Display for InvalidBinaryEncodedScopeError {
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 #[non_exhaustive]
 pub enum InvalidAifEncodedScopeError {
-    /// Scope's [BitFlags](enumflags2::BitFlags) of
-    /// [AifRestMethod](crate::common::scope::AifRestMethod)s was not a valid bitmask.
+    /// Scope's bitflags, representing an [AifRestMethodSet](crate::common::scope::AifRestMethodSet)
+    /// were not valid, i.e., did not represent a valid combination of REST methods.
     InvalidRestMethodSet,
 
     /// Scope contained a malformed array, i.e., didn't conform to the specification.

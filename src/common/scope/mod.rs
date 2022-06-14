@@ -19,8 +19,7 @@
 //! For example, you could first create a text-, binary-, or AIF-encoded scope:
 //! ```
 //! # use std::error::Error;
-//! # use enumflags2::BitFlags;
-//! # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod, BinaryEncodedScope, TextEncodedScope};
+//! # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod, AifRestMethodSet, BinaryEncodedScope, TextEncodedScope};
 //! # use dcaf::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError};
 //! # use dcaf::{AifEncodedScope, Scope};
 //! // Will be encoded with a space-separator.
@@ -34,11 +33,11 @@
 //!
 //! // Will be encoded as path and REST-method-set pairs.
 //! let aif_scope = AifEncodedScope::from(vec![
-//!    ("/s/temp", AifRestMethod::Get.into()), ("/none", BitFlags::empty())
+//!    ("/s/temp", AifRestMethod::Get.into()), ("/none", AifRestMethodSet::empty())
 //! ]);
 //! assert_eq!(aif_scope.elements(), &vec![
 //!    AifEncodedScopeElement::new("/s/temp", AifRestMethod::Get),
-//!    AifEncodedScopeElement::new("/none", BitFlags::empty())
+//!    AifEncodedScopeElement::new("/none", AifRestMethodSet::empty())
 //! ]);
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
@@ -71,12 +70,11 @@
 //! As well as with the AIF-encoded scope:
 //! ```
 //! # use std::error::Error;
-//! # use enumflags2::BitFlags;
-//! # use dcaf::common::scope::{AifEncodedScope, AifRestMethod};
+//! # use dcaf::common::scope::{AifEncodedScope, AifRestMethod, AifRestMethodSet};
 //! # use dcaf::{AuthServerRequestCreationHint, Scope};
 //! # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
 //! # let aif_scope = AifEncodedScope::from(vec![
-//! #    ("/s/temp", AifRestMethod::Get.into()), ("/none", BitFlags::empty())
+//! #    ("/s/temp", AifRestMethod::Get.into()), ("/none", AifRestMethodSet::empty())
 //! # ]);
 //! # let original_scope = aif_scope.clone();
 //! let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder().scope(Scope::from(aif_scope)).build()?;
@@ -200,7 +198,7 @@ impl Display for TextEncodedScope {
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
 pub struct BinaryEncodedScope(ByteString);
 
-/// REST (CoAP or HTTP) methods, intended for use in an [AifEncodedScopeElement].
+/// REST (CoAP or HTTP) methods, intended for use in an [`AifEncodedScopeElement`].
 ///
 /// In order to create a bitmask, simply use one of the following on an enum variant:
 /// - bitwise operators (e.g., `AifRestMethod::Get | AifRestMethod::Put`)
@@ -229,25 +227,23 @@ pub struct BinaryEncodedScope(ByteString);
 /// using the built-in methods from [`enumflags2`].
 /// Created bitmasks can then be used in an [AifEncodedScopeElement]:
 /// ```
-/// # use enumflags2::BitFlags;
 /// # use dcaf::AifEncodedScope;
-/// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod};
+/// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod, AifRestMethodSet};
 /// let get = AifEncodedScopeElement::new("restricted", AifRestMethod::Get);
 /// let multiple = AifEncodedScopeElement::new("less_restricted",
 ///                                            AifRestMethod::Get | AifRestMethod::Fetch);
 /// // GET equals 2^0, FETCH equals 2^4
 /// assert_eq!(multiple.permissions.bits(), 0b1 | 0b10000);
-/// let all = AifEncodedScopeElement::new("unrestricted", BitFlags::all());
+/// let all = AifEncodedScopeElement::new("unrestricted", AifRestMethodSet::all());
 /// ```
 /// These elements can in turn be used in an [AifEncodedScope] (or [LibdcafEncodedScope]):
 /// ```
-/// # use enumflags2::BitFlags;
 /// # use dcaf::AifEncodedScope;
-/// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod};
+/// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod, AifRestMethodSet};
 /// # let get = AifEncodedScopeElement::new("restricted", AifRestMethod::Get);
 /// # let multiple = AifEncodedScopeElement::new("less_restricted",
 /// #                                            AifRestMethod::Get | AifRestMethod::Fetch);
-/// # let all = AifEncodedScopeElement::new("unrestricted", BitFlags::all());
+/// # let all = AifEncodedScopeElement::new("unrestricted", AifRestMethodSet::all());
 /// let scope = AifEncodedScope::new(vec![get, multiple, all]);
 /// ```
 #[bitflags]
@@ -368,14 +364,13 @@ pub struct AifEncodedScopeElement {
 ///
 /// This would look like the following:
 /// ```
-/// # use enumflags2::BitFlags;
 /// # use dcaf::AifEncodedScope;
-/// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod};
+/// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod, AifRestMethodSet};
 /// let restricted = AifEncodedScopeElement::new("restricted", AifRestMethod::Get | AifRestMethod::Fetch);
-/// let unrestricted = AifEncodedScopeElement::new("unrestricted", BitFlags::all());
+/// let unrestricted = AifEncodedScopeElement::new("unrestricted", AifRestMethodSet::all());
 /// let scope = AifEncodedScope::new(vec![restricted, unrestricted]);
 /// # let restricted = AifEncodedScopeElement::new("restricted", AifRestMethod::Get | AifRestMethod::Fetch);
-/// # let unrestricted = AifEncodedScopeElement::new("unrestricted", BitFlags::all());
+/// # let unrestricted = AifEncodedScopeElement::new("unrestricted", AifRestMethodSet::all());
 /// assert_eq!(scope.elements(), &vec![restricted, unrestricted])
 /// ```
 ///
@@ -390,7 +385,7 @@ pub struct AifEncodedScopeElement {
 /// 17 (2<sup>0</sup> + 2<sup>4</sup>), and in `unrestricted` equals the sum of all these numbers.
 /// [`AifRestMethod`] does the work on this (including encoding and decoding bitmasks given as
 /// numbers), clients do not need to handle this themselves and can simply use its methods together
-/// with the methods provided by [`BitFlags`].
+/// with the methods provided by [`AifRestMethodSet`].
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
 pub struct AifEncodedScope(Vec<AifEncodedScopeElement>);
 
@@ -540,8 +535,8 @@ pub enum Scope {
 /// models which are represented as CBOR maps.
 mod conversion {
     use ciborium::value::{Integer, Value};
-    use serde::de::Error;
     use serde::{Deserializer, Serializer};
+    use serde::de::Error;
 
     use crate::error::{
         InvalidAifEncodedScopeError, InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError,
@@ -790,10 +785,9 @@ mod conversion {
         ///
         /// # Example
         /// ```
-        /// # use enumflags2::BitFlags;
         /// # use dcaf::AifEncodedScope;
-        /// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod};
-        /// let first = AifEncodedScopeElement::new("first", BitFlags::empty());
+        /// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod, AifRestMethodSet};
+        /// let first = AifEncodedScopeElement::new("first", AifRestMethodSet::empty());
         /// let second = AifEncodedScopeElement::new("second", AifRestMethod::Patch);
         /// // We only clone here for the assert call below. This is usually not required.
         /// let scope = AifEncodedScope::new(vec![first.clone(), second.clone()]);
@@ -808,10 +802,9 @@ mod conversion {
         ///
         /// # Example
         /// ```
-        /// # use enumflags2::BitFlags;
         /// # use dcaf::AifEncodedScope;
-        /// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod};
-        /// let first = AifEncodedScopeElement::new("first", BitFlags::empty());
+        /// # use dcaf::common::scope::{AifEncodedScopeElement, AifRestMethod, AifRestMethodSet};
+        /// let first = AifEncodedScopeElement::new("first", AifRestMethodSet::empty());
         /// let second = AifEncodedScopeElement::new("second", AifRestMethod::Patch);
         /// // We only clone here for the assert call below. This is usually not required.
         /// let scope = AifEncodedScope::new(vec![first.clone(), second.clone()]);
