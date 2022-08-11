@@ -42,12 +42,12 @@
 //! # Usage
 //! ```toml
 //! [dependencies]
-//! dcaf = { version = "^0.3.0" }
+//! dcaf = { version = "^0.3" }
 //! ```
 //! Or, if you plan to use this crate in a `no_std` environment:
 //! ```toml
 //! [dependencies]
-//! dcaf = { version = "^0.3.0", default-features = false }
+//! dcaf = { version = "^0.3", default-features = false }
 //! ```
 //!
 //! # Example
@@ -229,8 +229,8 @@ pub use endpoints::token_req::{
 };
 #[doc(inline)]
 pub use token::{
-    decrypt_access_token, encrypt_access_token, get_token_headers, sign_access_token,
-    verify_access_token, CoseCipherCommon, CoseEncrypt0Cipher, CoseMac0Cipher, CoseSign1Cipher,
+    CoseCipherCommon, CoseEncrypt0Cipher, CoseMac0Cipher, CoseSign1Cipher,
+    decrypt_access_token, encrypt_access_token, get_token_headers, sign_access_token, verify_access_token,
 };
 
 pub mod common;
