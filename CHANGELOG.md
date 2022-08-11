@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] --- 2022-08-11
+
+This release adds a derived `Deserialize` trait on `AifRestMethod`.
+
+### Added
+
+- The trait `Deserialize` is now implemented (as a derived trait)
+  on `AifRestMethod`.
+
+### Changed
+
+- Dependencies have been updated to their most recent version.
+
 ## [0.3.0] --- 2022-06-08
 
 This release mainly replaces `AifRestMethodSet` (using [`bitflags`])
@@ -83,6 +96,8 @@ For more extensive documentation, consult the
 [0.2.0]: https://github.com/namib-project/dcaf-rs/compare/v0.1.0...v0.2.0
 
 [0.3.0]: https://github.com/namib-project/dcaf-rs/compare/v0.2.0...v0.3.0
+
+[0.3.1]: https://github.com/namib-project/dcaf-rs/compare/v0.3.0...v0.3.1
 
 [AIF]: https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif
 

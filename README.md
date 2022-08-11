@@ -40,12 +40,12 @@ while `alloc` is still needed, this crate offers
 ## Usage
 ```toml
 [dependencies]
-dcaf = { version = "^0.3.0" }
+dcaf = { version = "^0.3" }
 ```
 Or, if you plan to use this crate in a `no_std` environment:
 ```toml
 [dependencies]
-dcaf = { version = "^0.3.0", default-features = false }
+dcaf = { version = "^0.3", default-features = false }
 ```
 
 ## Example

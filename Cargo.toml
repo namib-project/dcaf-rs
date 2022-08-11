@@ -1,7 +1,7 @@
 [package]
 name = "dcaf"
 description = "An implementation of the ACE-OAuth framework"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 authors = ["Falko Galperin <falko1@uni-bremen.de>"]
 rust-version = "1.58"
@@ -22,8 +22,8 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 ciborium = { version = "^0.2.0", default-features = false }
 ciborium-io = { version = "^0.2.0", default-features = false }
 coset = { version = "^0.3.2", default-features = false }
-serde_bytes = { version = "^0.11.5", default-features = false, features = ["alloc"] }
-erased-serde = { version = "^0.3.18", default-features = false, features = ["alloc"] }
+serde_bytes = { version = "^0.11.7", default-features = false, features = ["alloc"] }
+erased-serde = { version = "^0.3.22", default-features = false, features = ["alloc"] }
 derive_builder = { version = "^0.11.2", default-features = false }
 strum = { version = "^0.24", default-features = false, features = ["derive"] }
 strum_macros = { version = "^0.24", default-features = false }

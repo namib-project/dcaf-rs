@@ -247,7 +247,7 @@ pub struct BinaryEncodedScope(ByteString);
 /// let scope = AifEncodedScope::new(vec![get, multiple, all]);
 /// ```
 #[bitflags]
-#[derive(Serialize, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 #[repr(u64)]
 pub enum AifRestMethod {
     /// GET method as specified in [RFC 7252, section 5.8.1 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.1)

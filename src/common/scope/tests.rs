@@ -138,11 +138,11 @@ mod text {
 mod aif {
     use ciborium::de::from_reader;
     use ciborium::ser::into_writer;
-    use enumflags2::{make_bitflags, BitFlags};
+    use enumflags2::{BitFlags, make_bitflags};
 
-    use crate::common::scope::{AifEncodedScopeElement, AifRestMethod};
-    use crate::error::InvalidAifEncodedScopeError;
     use crate::{AifEncodedScope, Scope};
+    use crate::common::scope::{AifEncodedScopeElement, AifRestMethod, AifRestMethodSet};
+    use crate::error::InvalidAifEncodedScopeError;
 
     pub(crate) fn example_elements() -> (
         AifEncodedScopeElement,
@@ -158,6 +158,15 @@ mod aif {
         let all = AifEncodedScopeElement::new("all".to_string(), BitFlags::all());
         let none = AifEncodedScopeElement::new("none".to_string(), BitFlags::empty());
         (restricted, dynamic, all, none)
+    }
+
+    #[test]
+    fn test_aif_rest_method_serialize() {
+        for method in AifRestMethodSet::all() {
+            let mut serialized = Vec::<u8>::new();
+            assert!(into_writer(&method, &mut serialized).is_ok());
+            assert_eq!(method, from_reader::<AifRestMethod, &[u8]>(serialized.as_slice()).expect("couldn't deserialize"));
+        }
     }
 
     #[test]
@@ -253,8 +262,8 @@ mod aif {
 mod libdcaf {
     use ciborium::de::from_reader;
 
-    use crate::error::InvalidAifEncodedScopeError;
     use crate::{LibdcafEncodedScope, Scope};
+    use crate::error::InvalidAifEncodedScopeError;
 
     use super::aif::example_elements;
 
