@@ -20,6 +20,7 @@
 //! # use dcaf::{AccessTokenRequest, ToCborMap};
 //! # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
 //! # use crate::dcaf::constants::cbor_abbreviations::token::CLIENT_ID;
+//! # #[cfg(feature = "std")] {
 //! let request: AccessTokenRequest = AccessTokenRequest::builder().client_id("test").build()?;
 //! let mut serialized = Vec::new();
 //! request.serialize_into(&mut serialized)?;
@@ -30,6 +31,7 @@
 //! 0x64, // text(4)
 //! 0x74, 0x65, 0x73, 0x74 // "test"
 //! ]);
+//! # }
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //! If we then want to deserialize it again:
@@ -45,13 +47,17 @@
 //!
 //! [`AccessTokenRequest`]: crate::AccessTokenRequest
 
-use alloc::boxed::Box;
-use alloc::vec::Vec;
 use core::fmt::{Debug, Display, Formatter};
+
+#[cfg(feature = "std")]
 use std::any::type_name;
 
 use ciborium::de::from_reader;
 use ciborium::ser::into_writer;
+
+#[cfg(not(feature = "std"))]
+use {alloc::boxed::Box, alloc::format, alloc::vec::Vec, core::any::type_name};
+
 use ciborium::value::{Integer, Value};
 use ciborium_io::{Read, Write};
 use erased_serde::Serialize as ErasedSerialize;
@@ -362,6 +368,8 @@ mod private {
 /// Contains methods to convert `CborMap` structs (so actually, types implementing `ToCborMap`)
 /// into CBOR and back.
 mod conversion {
+    #[cfg(not(feature = "std"))]
+    use alloc::vec::Vec;
     use ciborium::value::Value;
     use serde::de::{Error, Unexpected};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};

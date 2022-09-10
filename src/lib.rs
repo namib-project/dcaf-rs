@@ -67,6 +67,7 @@
 //! # use std::error::Error;
 //! use dcaf::{AccessTokenRequest, ToCborMap, ProofOfPossessionKey, TextEncodedScope};
 //!
+//! # #[cfg(feature = "std")] {
 //! let request = AccessTokenRequest::builder()
 //!    .client_id("myclient")
 //!    .audience("valve242")
@@ -76,6 +77,7 @@
 //! let mut encoded = Vec::new();
 //! request.clone().serialize_into(&mut encoded)?;
 //! assert_eq!(AccessTokenRequest::deserialize_from(encoded.as_slice())?, request);
+//! # }
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //!
@@ -205,6 +207,7 @@
     clippy::wildcard_imports
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
+#[macro_use]
 extern crate alloc;
 extern crate core;
 #[macro_use]

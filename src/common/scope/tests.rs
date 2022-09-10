@@ -11,6 +11,9 @@
 
 /// Tests for text encoded scopes.
 mod text {
+    #[cfg(not(feature = "std"))]
+    use {alloc::vec, alloc::vec::Vec};
+
     use ciborium::value::Value;
 
     use crate::common::scope::TextEncodedScope;
@@ -136,6 +139,13 @@ mod text {
 }
 
 mod aif {
+    #[cfg(not(feature = "std"))]
+    use {
+        alloc::string::{String, ToString},
+        alloc::vec,
+        alloc::vec::Vec,
+    };
+
     use ciborium::de::from_reader;
     use ciborium::ser::into_writer;
     use enumflags2::{make_bitflags, BitFlags};
@@ -264,6 +274,9 @@ mod aif {
 }
 
 mod libdcaf {
+    #[cfg(not(feature = "std"))]
+    use {alloc::string::ToString, alloc::vec};
+
     use ciborium::de::from_reader;
 
     use crate::error::InvalidAifEncodedScopeError;
@@ -319,6 +332,9 @@ mod libdcaf {
 
 /// Tests for binary encoded scopes.
 mod binary {
+    #[cfg(not(feature = "std"))]
+    use alloc::vec;
+
     use ciborium::value::Value;
 
     use crate::common::scope::BinaryEncodedScope;

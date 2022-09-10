@@ -22,6 +22,13 @@ use core::fmt::Debug;
 use coset::iana::Algorithm;
 use coset::{Header, Label};
 
+#[cfg(not(feature = "std"))]
+use {
+    alloc::string::{String, ToString},
+    alloc::vec,
+    alloc::vec::Vec,
+};
+
 /// Helper function for tests which ensures that [`value`] serializes to the hexadecimal bytestring
 /// [expected_hex] and deserializes back to [`value`].
 ///

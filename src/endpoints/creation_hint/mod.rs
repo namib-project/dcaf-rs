@@ -17,7 +17,9 @@
 
 use crate::common::cbor_values::ByteString;
 use crate::Scope;
-use alloc::string::String;
+
+#[cfg(not(feature = "std"))]
+use {alloc::string::String, alloc::vec::Vec};
 
 #[cfg(test)]
 mod tests;
@@ -53,6 +55,7 @@ mod tests;
 /// # use dcaf::error::InvalidTextEncodedScopeError;
 /// // Scope could be built from TextEncodedScope too,
 /// // which also offers to take a space-separated string.
+/// # #[cfg(feature = "std")] {
 /// let scope = Scope::try_from(vec!["rTempC"])?;
 /// let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder()
 ///     .auth_server("coaps://as.example.com/token")
@@ -63,6 +66,7 @@ mod tests;
 /// let mut serialized = Vec::new();
 /// hint.clone().serialize_into(&mut serialized)?;
 /// assert_eq!(AuthServerRequestCreationHint::deserialize_from(serialized.as_slice())?, hint);
+/// # }
 /// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///
@@ -125,6 +129,10 @@ mod builder {
 /// models which are represented as CBOR maps.
 mod conversion {
     use crate::common::cbor_map::{cbor_map_vec, decode_scope, ToCborMap};
+
+    #[cfg(not(feature = "std"))]
+    use alloc::boxed::Box;
+
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
 

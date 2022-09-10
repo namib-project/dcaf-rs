@@ -18,8 +18,10 @@
 
 use crate::common::cbor_values::{ByteString, ProofOfPossessionKey};
 use crate::Scope;
-use alloc::string::String;
 use coset::AsCborValue;
+
+#[cfg(not(feature = "std"))]
+use {alloc::boxed::Box, alloc::string::String, alloc::vec::Vec};
 
 #[cfg(test)]
 mod tests;
@@ -119,6 +121,7 @@ pub enum GrantType {
 /// # use dcaf::{ToCborMap, AccessTokenRequest, Scope};
 /// # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
 /// # use dcaf::error::InvalidTextEncodedScopeError;
+/// # #[cfg(feature = "std")] {
 /// let request: AccessTokenRequest = AccessTokenRequest::builder()
 ///    .client_id("myclient")
 ///    .audience("tempSensor4711")
@@ -126,6 +129,7 @@ pub enum GrantType {
 /// let mut serialized = Vec::new();
 /// request.clone().serialize_into(&mut serialized)?;
 /// assert_eq!(AccessTokenRequest::deserialize_from(serialized.as_slice())?, request);
+/// # }
 /// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///
@@ -340,6 +344,7 @@ pub enum AceProfile {
 /// #         0x42, 0x71, 0x08]
 /// ).key_id(vec![0xDF, 0xD1, 0xAA, 0x97]).build();
 /// let expires_in: u32 = 3600;  // this needs to be done so Rust doesn't think of it as an i32
+/// # #[cfg(feature = "std")] {
 /// let response: AccessTokenResponse = AccessTokenResponse::builder()
 ///    .access_token(
 ///       // Omitted for brevity, this is a CWT whose `cnf` claim contains
@@ -354,6 +359,7 @@ pub enum AceProfile {
 /// let mut serialized = Vec::new();
 /// response.clone().serialize_into(&mut serialized)?;
 /// assert_eq!(AccessTokenResponse::deserialize_from(serialized.as_slice())?, response);
+/// # }
 /// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///
@@ -515,12 +521,14 @@ pub enum ErrorCode {
 /// # use ciborium_io::{Read, Write};
 /// # use dcaf::{ToCborMap, ErrorCode, ErrorResponse};
 /// # use dcaf::endpoints::token_req::ErrorResponseBuilderError;
+/// # #[cfg(feature = "std")] {
 /// let error: ErrorResponse = ErrorResponse::builder()
 ///     .error(ErrorCode::InvalidRequest)
 ///     .build()?;
 /// let mut serialized = Vec::new();
 /// error.clone().serialize_into(&mut serialized)?;
 /// assert_eq!(ErrorResponse::deserialize_from(serialized.as_slice())?, error);
+/// # }
 /// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///
@@ -621,6 +629,9 @@ mod conversion {
     use ciborium::value::Value;
     use coset::cwt::Timestamp;
     use erased_serde::Serialize as ErasedSerialize;
+
+    #[cfg(not(feature = "std"))]
+    use {alloc::borrow::ToOwned, alloc::string::ToString};
 
     use crate::endpoints::token_req::AceProfile::CoapDtls;
     use crate::error::TryFromCborMapError;

@@ -11,10 +11,17 @@
 
 //! Contains error types used across this crate.
 
+#[cfg(feature = "std")]
+use {std::marker::PhantomData, std::num::TryFromIntError};
+
+#[cfg(not(feature = "std"))]
+use {
+    alloc::format, alloc::string::String, alloc::string::ToString, core::num::TryFromIntError,
+    derive_builder::export::core::marker::PhantomData,
+};
+
 use core::any::type_name;
 use core::fmt::{Display, Formatter};
-use std::marker::PhantomData;
-use std::num::TryFromIntError;
 
 use ciborium::value::Value;
 use coset::{CoseError, Label};
