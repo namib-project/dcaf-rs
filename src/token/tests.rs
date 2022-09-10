@@ -16,6 +16,9 @@ use coset::cwt::ClaimsSetBuilder;
 use coset::iana::{Algorithm, CwtClaimName};
 use coset::{AsCborValue, CoseKey, CoseKeyBuilder, CoseMac0Builder, HeaderBuilder};
 
+#[cfg(not(feature = "std"))]
+use alloc::vec;
+
 use super::*;
 
 fn example_key() -> CoseKey {
@@ -254,6 +257,8 @@ fn test_sign_verify() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipherCo
         Some(unprotected_header.clone()),
         Some(protected_header.clone()),
     )?;
+
+    #[cfg(feature = "std")]
     println!("{:x?}", &signed);
     let (unprotected, protected) =
         get_token_headers(&signed).ok_or(AccessTokenError::UnknownCoseStructure)?;

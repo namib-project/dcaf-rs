@@ -9,6 +9,9 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
+#[cfg(not(feature = "std"))]
+use alloc::string::ToString;
+
 use enumflags2::{make_bitflags, BitFlags};
 
 use crate::common::scope::{AifRestMethod, TextEncodedScope};

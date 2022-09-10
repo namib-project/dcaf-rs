@@ -26,10 +26,12 @@
 //! # Ok::<(), AccessTokenResponseBuilderError>(())
 //! ```
 
-use alloc::vec::Vec;
 use core::fmt::{Debug, Display, Formatter};
 use core::ops::Deref;
 use strum_macros::IntoStaticStr;
+
+#[cfg(not(feature = "std"))]
+use {alloc::boxed::Box, alloc::format, alloc::vec, alloc::vec::Vec};
 
 use coset::{CoseEncrypt0, CoseKey};
 

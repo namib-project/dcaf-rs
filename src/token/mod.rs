@@ -83,6 +83,9 @@
 //! # Ok::<(), AccessTokenError<String>>(())
 //! ```
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 use crate::common::cbor_values::ByteString;
 use core::fmt::{Debug, Display};
 use coset::cwt::ClaimsSet;

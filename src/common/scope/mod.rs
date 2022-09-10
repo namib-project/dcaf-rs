@@ -89,7 +89,9 @@
 //! [`draft-ietf-ace-oauth-authz`, section 5.8.1](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1-2.4).
 //! AIF is defined in [`draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3).
 
-use alloc::string::String;
+#[cfg(not(feature = "std"))]
+use {alloc::string::String, alloc::string::ToString, alloc::vec, alloc::vec::Vec};
+
 use core::fmt::{Display, Formatter};
 
 use enumflags2::{bitflags, BitFlags};

@@ -18,8 +18,10 @@
 
 use crate::common::cbor_values::{ByteString, ProofOfPossessionKey};
 use crate::Scope;
-use alloc::string::String;
 use coset::AsCborValue;
+
+#[cfg(not(feature = "std"))]
+use {alloc::boxed::Box, alloc::string::String, alloc::vec::Vec};
 
 #[cfg(test)]
 mod tests;
@@ -621,6 +623,9 @@ mod conversion {
     use ciborium::value::Value;
     use coset::cwt::Timestamp;
     use erased_serde::Serialize as ErasedSerialize;
+
+    #[cfg(not(feature = "std"))]
+    use {alloc::borrow::ToOwned, alloc::string::ToString};
 
     use crate::endpoints::token_req::AceProfile::CoapDtls;
     use crate::error::TryFromCborMapError;

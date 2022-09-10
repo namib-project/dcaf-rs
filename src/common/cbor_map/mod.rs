@@ -45,13 +45,17 @@
 //!
 //! [`AccessTokenRequest`]: crate::AccessTokenRequest
 
-use alloc::boxed::Box;
-use alloc::vec::Vec;
 use core::fmt::{Debug, Display, Formatter};
+
+#[cfg(feature = "std")]
 use std::any::type_name;
 
 use ciborium::de::from_reader;
 use ciborium::ser::into_writer;
+
+#[cfg(not(feature = "std"))]
+use {alloc::boxed::Box, alloc::format, alloc::vec::Vec, core::any::type_name};
+
 use ciborium::value::{Integer, Value};
 use ciborium_io::{Read, Write};
 use erased_serde::Serialize as ErasedSerialize;
@@ -362,6 +366,7 @@ mod private {
 /// Contains methods to convert `CborMap` structs (so actually, types implementing `ToCborMap`)
 /// into CBOR and back.
 mod conversion {
+    use alloc::vec::Vec;
     use ciborium::value::Value;
     use serde::de::{Error, Unexpected};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};

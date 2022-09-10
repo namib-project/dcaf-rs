@@ -9,6 +9,9 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
+#[cfg(not(feature = "std"))]
+use {alloc::string::ToString, alloc::vec};
+
 use coset::cwt::Timestamp;
 use coset::iana::Algorithm;
 use coset::{
