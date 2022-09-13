@@ -321,7 +321,7 @@ mod libdcaf {
     fn test_scope_element_empty() {
         // Emptiness isn't allowed here.
         let serialized = vec![0x80]; // empty CBOR array
-                                     // That means that this *must not* resolve to a libdcaf scope
+        // That means that this *must not* resolve to a libdcaf scope
         assert!(from_reader::<Scope, &[u8]>(serialized.as_slice())
             .ok()
             .map(LibdcafEncodedScope::try_from)
