@@ -366,6 +366,7 @@ mod private {
 /// Contains methods to convert `CborMap` structs (so actually, types implementing `ToCborMap`)
 /// into CBOR and back.
 mod conversion {
+    #[cfg(not(feature = "std"))]
     use alloc::vec::Vec;
     use ciborium::value::Value;
     use serde::de::{Error, Unexpected};
