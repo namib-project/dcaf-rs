@@ -295,12 +295,10 @@ where
 {
     match T::try_from(number) {
         Ok(i) => Ok(i),
-        Err(_) => {
-            return Err(TryFromCborMapError::from_message(format!(
-                "{name} must be a valid {}",
-                type_name::<T>()
-            )));
-        }
+        Err(_) => Err(TryFromCborMapError::from_message(format!(
+            "{name} must be a valid {}",
+            type_name::<T>()
+        ))),
     }
 }
 
