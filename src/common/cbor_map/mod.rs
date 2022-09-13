@@ -47,11 +47,11 @@
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use ciborium::de::from_reader;
-use ciborium::ser::into_writer;
 use core::fmt::{Debug, Display, Formatter};
 use std::any::type_name;
 
+use ciborium::de::from_reader;
+use ciborium::ser::into_writer;
 use ciborium::value::{Integer, Value};
 use ciborium_io::{Read, Write};
 use erased_serde::Serialize as ErasedSerialize;
@@ -67,7 +67,7 @@ use crate::error::{TryFromCborMapError, ValueIsNotIntegerError};
 ///
 /// # Example
 /// The following code:
-/// ```
+/// ```ignore
 /// let map = cbor_map_vec! {
 ///     0 => Some("Test"),
 ///     1 => Some(42)
