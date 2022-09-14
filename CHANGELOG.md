@@ -116,7 +116,7 @@ For more extensive documentation, consult the
 
 [0.3.1]: https://github.com/namib-project/dcaf-rs/compare/v0.3.0...v0.3.1
 
-[Unreleased]: https://github.com/olivierlacan/keep-a-changelog/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/namib-project/dcaf-rs/compare/v0.3.1...HEAD
 
 [AIF]: https://www.rfc-editor.org/rfc/rfc9237.html
 
