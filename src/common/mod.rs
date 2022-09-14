@@ -12,8 +12,7 @@
 //! Common types used throughout the crate.
 //!
 //! # Layout
-//! - [`constants`] contains various constants defined in the standards and drafts related to
-//!   ACE-OAuth.
+//! - [`constants`] contains various constants defined in the standards related to ACE-OAuth.
 //! - [`cbor_map`] contains the [`ToCborMap`](crate::common::cbor_map::ToCborMap) trait with which
 //!   data types from this crate can be (de)serialized.
 //! - [`cbor_values`] contains various helper values for CBOR structures.

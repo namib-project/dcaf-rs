@@ -15,25 +15,26 @@ use {alloc::string::ToString, alloc::vec};
 use coset::cwt::Timestamp;
 use coset::iana::Algorithm;
 use coset::{
-    iana, CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder,
+    CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder, iana,
     ProtectedHeader,
 };
-use enumflags2::{make_bitflags, BitFlags};
+use coset::cwt::Timestamp;
+use coset::iana::Algorithm;
+use enumflags2::{BitFlags, make_bitflags};
 
+use crate::{AifEncodedScope, BinaryEncodedScope};
 use crate::common::scope::{
     AifEncodedScopeElement, AifRestMethod, LibdcafEncodedScope, TextEncodedScope,
 };
 use crate::common::test_helper::expect_ser_de;
 use crate::endpoints::token_req::AceProfile::CoapDtls;
-use crate::{AifEncodedScope, BinaryEncodedScope};
 
 use super::*;
-
 
 mod request {
     use super::*;
 
-    /// Example data taken from draft-ietf-ace-oauth-authz-46, Figure 5.
+    /// Example data taken from RFC 9200, Figure 4.
     #[test]
     fn test_access_token_request_symmetric() -> Result<(), String> {
         let request = AccessTokenRequestBuilder::default()
@@ -106,7 +107,7 @@ mod request {
                       "A3017820636F6170733A2F2F3132372E302E302E313A373734342F617574686F72697A650571636F6170733A2F2F6C6F63616C686F737409826A7265737472696374656401")
     }
 
-    /// Example data taken from draft-ietf-ace-oauth-authz-46, Figure 6.
+    /// Example data taken from RFC 9200, Figure 5.
     #[test]
     fn test_access_token_request_asymmetric() -> Result<(), String> {
         let key = CoseKeyBuilder::new_ec2_pub_key(
@@ -132,7 +133,7 @@ mod request {
         expect_ser_de(request, None, "A204A101A501020241112001215820BAC5B11CAD8F99F9C72B05CF4B9E26D244DC189F745228255A219A86D6A09EFF22582020138BF82DC1B6D562BE0FA54AB7804A3A64B6D72CCFED6B6FB6ED28BBFC117E1818686D79636C69656E74")
     }
 
-    /// Example data taken from draft-ietf-ace-oauth-authz-46, Figure 7.
+    /// Example data taken from RFC 9200, Figure 6.
     #[test]
     fn test_access_token_request_reference() -> Result<(), String> {
         let request = AccessTokenRequestBuilder::default()

@@ -28,12 +28,12 @@
 
 use core::fmt::{Debug, Display, Formatter};
 use core::ops::Deref;
-use strum_macros::IntoStaticStr;
 
 #[cfg(not(feature = "std"))]
 use {alloc::boxed::Box, alloc::format, alloc::vec, alloc::vec::Vec};
 
 use coset::{CoseEncrypt0, CoseKey};
+use strum_macros::IntoStaticStr;
 
 /// A type intended to be used as a CBOR bytestring, represented as a vector of bytes.
 pub type ByteString = Vec<u8>;
@@ -51,7 +51,7 @@ where
 /// [RFC 8747, section 3.1](https://datatracker.ietf.org/doc/html/rfc8747#section-3.1).
 ///
 /// Can either be a COSE key, an encrypted COSE key, or simply a key ID.
-/// As described in [`draft-ietf-ace-oauth-params-16`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-oauth-params-16),
+/// As described in [RFC 9201](https://www.rfc-editor.org/rfc/rfc9201),
 /// PoP keys are used for the `req_cnf` parameter in [`AccessTokenRequest`](crate::AccessTokenRequest),
 /// as well as for the `cnf` and `rs_cnf` parameters in [`AccessTokenResponse`](crate::AccessTokenResponse).
 ///
@@ -141,13 +141,13 @@ where
 
 /// Contains various `From`, `TryFrom` and other conversion methods for types of the parent module.
 mod conversion {
-    use crate::common::cbor_map::ToCborMap;
     use ciborium::value::Value;
     use coset::{AsCborValue, CoseEncrypt0, CoseKey};
     use erased_serde::Serialize as ErasedSerialize;
-    use serde::de::Error;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde::de::Error;
 
+    use crate::common::cbor_map::ToCborMap;
     use crate::error::{TryFromCborMapError, WrongSourceTypeError};
 
     use super::*;

@@ -11,9 +11,11 @@
 
 //! Contains the data model for
 //! [Authorization Server Request Creation Hints](self::AuthServerRequestCreationHint),
-//! as described in [`draft-ietf-ace-oauth-authz-46`, section 5.3](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#name-as-request-creation-hints).
+//! as described in [RFC 9200, section 5.3](https://www.rfc-editor.org/rfc/rfc9200#name-as-request-creation-hints).
 //!
 //! See the documentation of [`AuthServerRequestCreationHint`] for details and an example.
+
+use alloc::string::String;
 
 use crate::common::cbor_values::ByteString;
 use crate::Scope;
@@ -27,13 +29,13 @@ mod tests;
 /// This is sent by an RS as a response to an Unauthorized Resource Request Message
 /// to help the sender of the Unauthorized Resource Request Message acquire a valid access token.
 ///
-/// For more information, see [section 5.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3).
+/// For more information, see [section 5.3 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.3).
 ///
 /// Use the [`AuthServerRequestCreationHintBuilder`] (which you can access using the
 /// [`builder()`](AuthServerRequestCreationHint::builder) method) to create an instance of this struct.
 ///
 /// # Example
-/// Figure 3 of [`draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-3)
+/// Figure 3 of [RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#figure-3)
 /// gives us an example of a Request Creation Hint payload, given in CBOR diagnostic notation[^cbor]:
 /// ```text
 /// {
@@ -96,7 +98,7 @@ pub struct AuthServerRequestCreationHint {
     /// See the documentation of [`Scope`] for details.
     pub scope: Option<Scope>,
 
-    /// A client nonce as described in [section 5.3.1 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.3.1).
+    /// A client nonce as described in [section 5.3.1 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.3.1).
     pub client_nonce: Option<Vec<u8>>,
 }
 
@@ -136,6 +138,7 @@ mod conversion {
     use ciborium::value::Value;
     use erased_serde::Serialize as ErasedSerialize;
 
+    use crate::common::cbor_map::{cbor_map_vec, decode_scope, ToCborMap};
     use crate::common::constants::cbor_abbreviations::creation_hint;
     use crate::error::TryFromCborMapError;
 

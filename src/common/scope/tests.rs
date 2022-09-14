@@ -148,11 +148,11 @@ mod aif {
 
     use ciborium::de::from_reader;
     use ciborium::ser::into_writer;
-    use enumflags2::{make_bitflags, BitFlags};
+    use enumflags2::{BitFlags, make_bitflags};
 
+    use crate::{AifEncodedScope, Scope};
     use crate::common::scope::{AifEncodedScopeElement, AifRestMethod, AifRestMethodSet};
     use crate::error::InvalidAifEncodedScopeError;
-    use crate::{AifEncodedScope, Scope};
 
     pub(crate) fn example_elements() -> (
         AifEncodedScopeElement,
@@ -256,7 +256,7 @@ mod aif {
 
     #[test]
     fn test_scope_encoding() -> Result<(), String> {
-        // This tests the encoding of the scope using the example given in Figure 5 of the AIF draft.
+        // This tests the encoding of the scope using the example given in Figure 5 of the AIF RFC.
         let cbor = hex::decode("8382672F732F74656D700182662F612F6C65640582652F64746C7302")
             .map_err(|x| x.to_string())?;
         let expected: Scope = AifEncodedScope::from(vec![
@@ -279,8 +279,8 @@ mod libdcaf {
 
     use ciborium::de::from_reader;
 
-    use crate::error::InvalidAifEncodedScopeError;
     use crate::{LibdcafEncodedScope, Scope};
+    use crate::error::InvalidAifEncodedScopeError;
 
     use super::aif::example_elements;
 

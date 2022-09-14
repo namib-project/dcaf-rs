@@ -178,7 +178,7 @@ impl Display for InvalidTextEncodedScopeError {
 }
 
 /// Error type used when a [`BinaryEncodedScope`](crate::common::scope::BinaryEncodedScope)
-/// does not conform to the specification given in RFC 6749 and `draft-ietf-ace-oauth-authz`.
+/// does not conform to the specification given in RFC 6749 and RFC 9200.
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum InvalidBinaryEncodedScopeError {
     /// Scope starts with a separator, which is contained in the field here.
@@ -210,7 +210,7 @@ impl Display for InvalidBinaryEncodedScopeError {
 
 /// Error type used when an [`AifEncodedScope`](crate::common::scope::AifEncodedScope)
 /// does not conform to the specification given in [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) and
-/// [`draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif).
+/// [RFC 9237](https://www.rfc-editor.org/rfc/rfc9237).
 ///
 /// This is also used when a [`LibdcafEncodedScope`](crate::common::scope::LibdcafEncodedScope)
 /// does not conform to the format specified in its documentation.

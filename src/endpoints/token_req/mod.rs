@@ -10,7 +10,7 @@
  */
 
 //! Contains the data models for structures related to access token requests and responses,
-//! as described in [`draft-ietf-ace-oauth-authz-46`, section 5.8](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8).
+//! as described in [RFC 9200, section 5.8](https://www.rfc-editor.org/rfc/rfc9200#section-5.8).
 //!
 //! The most important members of this module are [`AccessTokenRequest`], [`AccessTokenResponse`],
 //! and [`ErrorResponse`]. Look at their documentation for usage examples.
@@ -27,7 +27,7 @@ use {alloc::boxed::Box, alloc::string::String, alloc::vec::Vec};
 mod tests;
 
 /// Type of the resource owner's authorization used by the client to obtain an access token.
-/// For more information, see [section 1.3 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+/// For more information, see [section 1.3 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749).
 ///
 /// Grant types are used in the [`AccessTokenRequest`].
 ///
@@ -44,7 +44,7 @@ mod tests;
 /// # Ok::<(), AccessTokenRequestBuilderError>(())
 /// ```
 /// It's also possible to use your own value for a custom grant type, as defined in
-/// [section 8.5 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.5):
+/// [section 8.5 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-8.5):
 /// ```
 /// # use dcaf::{AccessTokenRequest, GrantType};
 /// # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
@@ -64,13 +64,13 @@ pub enum GrantType {
     /// Note that the authorization server should take special care when
     /// enabling this grant type and only allow it when other flows are not viable.
     ///
-    /// See [section 4.3 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-4.3)
+    /// See [section 4.3 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749#section-4.3)
     /// for details.
     Password,
 
     /// Redirection-based flow optimized for confidential clients.
     ///
-    /// See [section 4.1 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-4.1)
+    /// See [section 4.1 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749#section-4.1)
     /// for details.
     AuthorizationCode,
 
@@ -78,7 +78,7 @@ pub enum GrantType {
     ///
     /// Must only be used for confidential clients.
     ///
-    /// See [section 4.4 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-4.4)
+    /// See [section 4.4 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749#section-4.4)
     /// for details.
     ClientCredentials,
 
@@ -87,25 +87,25 @@ pub enum GrantType {
     /// When using this, it's necessary that [`refresh_token`](AccessTokenResponse::refresh_token)
     /// is specified in the [`AccessTokenResponse`].
     ///
-    /// See [section 6 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-6)
+    /// See [section 6 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749#section-6)
     /// for details.
     RefreshToken,
 
     /// Another authorization grant not listed here.
     ///
-    /// See [section 8.5 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.5)
+    /// See [section 8.5 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-8.5)
     /// for corresponding IANA registries.
     Other(i32),
 }
 
-/// Request for an access token, sent from the client, as defined in [section 5.8.1 of
-/// `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1).
+/// Request for an access token, sent from the client, as defined in
+/// [section 5.8.1 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.1).
 ///
 /// Use the [`AccessTokenRequestBuilder`] (which you can access using the
 /// [`AccessTokenRequest::builder()`] method) to create an instance of this struct.
 ///
 /// # Example
-/// Figure 5 of [`draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-5)
+/// Figure 5 of [RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#figure-4)
 /// gives us an example of an access token request, given in CBOR diagnostic notation[^cbor]:
 /// ```text
 /// {
@@ -146,7 +146,7 @@ pub struct AccessTokenRequest {
     // TODO: Certain grant types have certain required fields. These should be verified in the
     //       builder's `validate` method (only if the grant type is given! Otherwise, check spec.)
     /// The client identifier as described in section 2.2 of
-    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749).
     #[builder(default)]
     pub client_id: Option<String>,
 
@@ -171,7 +171,7 @@ pub struct AccessTokenRequest {
     pub client_nonce: Option<ByteString>,
 
     /// Scope of the access request as described by section 3.3 of
-    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html).
+    /// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749).
     ///
     /// See also the documentation of [`Scope`] for details.
     #[builder(default)]
@@ -194,14 +194,14 @@ pub struct AccessTokenRequest {
     /// for access token requests.
     /// Instead, it is usually encoded as a claim in the access token itself.
     ///
-    /// Defined in [section 3.1.1 of RFC 8392](https://www.rfc-editor.org/rfc/rfc8392.html#section-3.1.1)
-    /// and [Figure 16 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-16).
+    /// Defined in [section 3.1.1 of RFC 8392](https://www.rfc-editor.org/rfc/rfc8392#section-3.1.1)
+    /// and [Table 6 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#table-6).
     #[builder(default)]
     pub issuer: Option<String>,
 }
 
 /// The type of the token issued as described in section 7.1 of
-/// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1).
+/// [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749#section-7.1).
 ///
 /// Token types are used in the [`AccessTokenResponse`].
 ///
@@ -221,7 +221,7 @@ pub struct AccessTokenRequest {
 /// # Ok::<(), AccessTokenResponseBuilderError>(())
 /// ```
 /// It's also possible to use your own value for a custom token type, as defined in
-/// [section 8.7 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.7):
+/// [section 8.7 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-8.7):
 /// ```
 /// # use dcaf::{AccessTokenResponse, GrantType, TokenType};
 /// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
@@ -239,28 +239,27 @@ pub enum TokenType {
     Bearer,
 
     /// Proof-of-possession token type, as specified in
-    /// [`draft-ietf-ace-oauth-params-16`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-params-16.html).
+    /// [RFC 9201](https://www.rfc-editor.org/rfc/rfc9201).
     ProofOfPossession,
 
     /// An unspecified token type along with its representation in CBOR.
     ///
-    /// See [section 8.7 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.7)
+    /// See [section 8.7 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-8.7)
     /// for details.
     Other(i32),
 }
 
-/// Profiles for ACE-OAuth as specified in [section 5.8.4.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.4.3).
+/// Profiles for ACE-OAuth as specified in [section 5.8.4.3 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.4.3).
 ///
 /// ACE-OAuth profiles are used in the [`AccessTokenResponse`] if the client previously sent
 /// an [`AccessTokenRequest`] with the `ace_profile` field set.
 ///
-/// There are (to my awareness) at the moment two profiles for ACE-OAuth:
-/// - The DTLS profile, specified in [`draft-ietf-ace-dtls-authorize`](https://www.ietf.org/archive/id/draft-ietf-ace-dtls-authorize-18.html).
-/// - The OSCORE profile, defined in [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.html).
-///   - Note that this is an expired Internet-Draft which does not have a specified CBOR
-///     representation yet. Hence, this is not offered as an option in this enum.
-///     If you wish to use it anyway, you need to specify a user-defined CBOR integer for it
-///     using the [`Other`](AceProfile::Other) variant.
+/// There are at the moment two profiles for ACE-OAuth which are not drafts:
+/// - The DTLS profile, specified in [RFC 9202](https://www.rfc-editor.org/rfc/rfc9202).
+/// - The OSCORE profile, defined in [RFC 9203](https://www.rfc-editor.org/rfc/rfc9203).
+///
+/// If you wish to use a different profile, you need to specify a user-defined CBOR integer for it
+/// using the [`Other`](AceProfile::Other) variant.
 ///
 /// # Example
 /// For example, if you wish to indicate in your response that the DTLS profile is used:
@@ -276,7 +275,7 @@ pub enum TokenType {
 /// # Ok::<(), AccessTokenResponseBuilderError>(())
 /// ```
 /// It's also possible to use your own value for a custom profile, as defined in
-/// [section 8.8 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.8):
+/// [section 8.8 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-8.8):
 /// ```
 /// # use dcaf::{AccessTokenResponse, AceProfile};
 /// # use dcaf::endpoints::token_req::AccessTokenResponseBuilderError;
@@ -291,7 +290,7 @@ pub enum TokenType {
 #[non_exhaustive]
 pub enum AceProfile {
     /// Profile for ACE-OAuth using Datagram Transport Layer Security, specified in
-    /// [`draft-ietf-ace-dtls-authorize`](https://www.ietf.org/archive/id/draft-ietf-ace-dtls-authorize-18.html).
+    /// [RFC 9202](https://www.rfc-editor.org/rfc/rfc9202).
     CoapDtls,
 
     // The below is commented out because no CBOR value has been specified yet for this profile.
@@ -300,19 +299,19 @@ pub enum AceProfile {
     // CoapOscore,
     /// An unspecified ACE-OAuth profile along with its representation in CBOR.
     ///
-    /// See [section 8.8 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.8)
+    /// See [section 8.8 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-8.8)
     /// for details.
     Other(i32),
 }
 
 /// Response to an [`AccessTokenRequest`] containing the Access Token among additional information,
-/// as defined in [section 5.8.2 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.2).
+/// as defined in [section 5.8.2 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.2).
 ///
 /// Use the [`AccessTokenResponseBuilder`] (which you can access using the
 /// [`AccessTokenResponse::builder()`] method) to create an instance of this struct.
 ///
 /// # Example
-/// Figure 9 of [`draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-9)
+/// Figure 7 of [RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#figure-7)
 /// gives us an example of an access token response, given in CBOR diagnostic notation[^cbor]:
 /// ```text
 /// {
@@ -384,15 +383,15 @@ pub struct AccessTokenResponse {
     pub expires_in: Option<u32>,
 
     /// The scope of the access token as described by
-    /// section 3.3 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-3.3).
+    /// section 3.3 of [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749#section-3.3).
     ///
     /// See the documentation of [`Scope`] for details.
     #[builder(default)]
     pub scope: Option<Scope>,
 
     /// The type of the token issued as described in [section 7.1 of
-    /// RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1) and [section 5.8.4.2
-    /// of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-5.8.4.2).
+    /// RFC 6749](https://www.rfc-editor.org/rfc/rfc6749#section-7.1) and [section 5.8.4.2
+    /// of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.4.2).
     ///
     /// See the documentation of [`TokenType`] for details.
     #[builder(default)]
@@ -400,7 +399,7 @@ pub struct AccessTokenResponse {
 
     /// The refresh token, which can be used to obtain new access tokens using the same
     /// authorization grant as described in [section 6 of
-    /// RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-6).
+    /// RFC 6749](https://www.rfc-editor.org/rfc/rfc6749#section-6).
     #[builder(default)]
     pub refresh_token: Option<ByteString>,
 
@@ -427,15 +426,15 @@ pub struct AccessTokenResponse {
     /// for access token responses.
     /// It is instead usually encoded as a claim in the access token itself.
     ///
-    /// Defined in [section 3.1.6 of RFC 8392](https://www.rfc-editor.org/rfc/rfc8392.html#section-3.1.6)
-    /// and [Figure 16 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#figure-16).
+    /// Defined in [section 3.1.6 of RFC 8392](https://www.rfc-editor.org/rfc/rfc8392#section-3.1.6)
+    /// and [table 6 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#table-6).
     #[builder(default)]
     pub issued_at: Option<coset::cwt::Timestamp>,
 }
 
 /// Error code specifying what went wrong for a token request, as specified in
-/// [section 5.2 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-5.2) and
-/// [section 5.8.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.3).
+/// [section 5.2 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749#section-5.2) and
+/// [section 5.8.3 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.3).
 ///
 /// An error code is used in the [`ErrorResponse`].
 ///
@@ -450,7 +449,7 @@ pub struct AccessTokenResponse {
 /// # Ok::<(), ErrorResponseBuilderError>(())
 /// ```
 /// It's also possible to use your own value for a custom error code, as defined in
-/// [section 8.4 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.4):
+/// [section 8.4 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-8.4):
 /// ```
 /// # use dcaf::{ErrorResponse, AceProfile, ErrorCode};
 /// # use dcaf::endpoints::token_req::ErrorResponseBuilderError;
@@ -494,20 +493,20 @@ pub enum ErrorCode {
 
     /// An unspecified error code along with its representation in CBOR.
     ///
-    /// See [section 8.4 of `draft-ietf-ace-oauth-authz-46`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-8.4)
+    /// See [section 8.4 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-8.4)
     /// for details.
     Other(i32),
 }
 
 /// Details about an error which occurred for an access token request.
 ///
-/// For more information, see [section 5.8.3 of `draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.3).
+/// For more information, see [section 5.8.3 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.3).
 ///
 /// Use the [`ErrorResponseBuilder`] (which you can access using the
 /// [`ErrorResponse::builder()`] method) to create an instance of this struct.
 ///
 /// # Example
-/// For example, let us use the example from [section 5.2 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-5.2):
+/// For example, let us use the example from [section 5.2 of RFC 6749](https://www.rfc-editor.org/rfc/rfc6749#section-5.2):
 /// ```text
 /// {
 ///       "error":"invalid_request"
