@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+This release mainly deals with the newly released RFCs and fixes `no_std` support.
+
+### Added
+
+- The `CoapOscore` profile has been added as an `AceProfile`.
+
+### Changed
+
+- The documentation has been updated to refer to the recently released RFCs instead of the now outdated internet drafts.
+
+### Fixed
+
+- The crate now properly compiles in `no_std` environments, and no tests are failing. This fixes #2.
+  (Contributed by @JKRhb in #3.)
+
 ## [0.3.1] --- 2022-08-11
 
 This release adds a derived `Deserialize` trait on `AifRestMethod`.
@@ -50,7 +67,7 @@ This release focuses on introducing [AIF] and [libdcaf]-support.
 ### Added
 
 - Support for scopes using the
-  [Authorization Information Format (AIF) for ACE](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif).
+  [Authorization Information Format (AIF) for ACE](https://www.rfc-editor.org/rfc/rfc9237.html).
   For this purpose, the following types have been added:
   - `AifEncodedScope`, representing an AIF-encoded scope (surprise)
   - `AifEncodedScopeElement`, a single element in an AIF-encoded scope
@@ -99,7 +116,9 @@ For more extensive documentation, consult the
 
 [0.3.1]: https://github.com/namib-project/dcaf-rs/compare/v0.3.0...v0.3.1
 
-[AIF]: https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif
+[Unreleased]: https://github.com/olivierlacan/keep-a-changelog/compare/v0.3.1...HEAD
+
+[AIF]: https://www.rfc-editor.org/rfc/rfc9237.html
 
 [libdcaf]: https://gitlab.informatik.uni-bremen.de/DCAF/dcaf
 
