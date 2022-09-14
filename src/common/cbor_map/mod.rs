@@ -20,6 +20,7 @@
 //! # use dcaf::{AccessTokenRequest, ToCborMap};
 //! # use dcaf::endpoints::token_req::AccessTokenRequestBuilderError;
 //! # use crate::dcaf::constants::cbor_abbreviations::token::CLIENT_ID;
+//! # #[cfg(feature = "std")] {
 //! let request: AccessTokenRequest = AccessTokenRequest::builder().client_id("test").build()?;
 //! let mut serialized = Vec::new();
 //! request.serialize_into(&mut serialized)?;
@@ -30,6 +31,7 @@
 //! 0x64, // text(4)
 //! 0x74, 0x65, 0x73, 0x74 // "test"
 //! ]);
+//! # }
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //! If we then want to deserialize it again:
