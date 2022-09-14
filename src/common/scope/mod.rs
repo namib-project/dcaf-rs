@@ -23,6 +23,7 @@
 //! # use dcaf::error::{InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError};
 //! # use dcaf::{AifEncodedScope, Scope};
 //! // Will be encoded with a space-separator.
+//! # #[cfg(feature = "std")] {
 //! let text_scope = TextEncodedScope::try_from(vec!["first_client", "second_client"])?;
 //! assert_eq!(text_scope.to_string(), "first_client second_client");
 //! assert!(text_scope.elements().eq(vec!["first_client", "second_client"]));
@@ -30,6 +31,7 @@
 //! // Separator is only specified upon `elements` call.
 //! let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice())?;
 //! assert!(binary_scope.elements(Some(0))?.eq(&vec![&vec![1, 2], &vec![3, 4]]));
+//! # }
 //!
 //! // Will be encoded as path and REST-method-set pairs.
 //! let aif_scope = AifEncodedScope::from(vec![
@@ -48,11 +50,13 @@
 //! # use dcaf::common::scope::{BinaryEncodedScope, TextEncodedScope};
 //! # use dcaf::{AuthServerRequestCreationHint, Scope};
 //! # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
+//! # #[cfg(feature = "std")] {
 //! # let text_scope = TextEncodedScope::try_from(vec!["first_client", "second_client"])?;
 //! # let original_scope = text_scope.clone();
 //! # let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice())?;
 //! let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder().scope(Scope::from(text_scope)).build()?;
 //! # assert_eq!(hint.scope, Some(Scope::from(original_scope)));
+//! # }
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //! This works with the binary encoded scope too, of course:
@@ -61,10 +65,12 @@
 //! # use dcaf::common::scope::{BinaryEncodedScope, TextEncodedScope};
 //! # use dcaf::{AuthServerRequestCreationHint, Scope};
 //! # use dcaf::endpoints::creation_hint::AuthServerRequestCreationHintBuilderError;
+//! # #[cfg(feature = "std")] {
 //! # let binary_scope = BinaryEncodedScope::try_from(vec![1, 2, 0, 3, 4].as_slice())?;
 //! # let original_scope = binary_scope.clone();
 //! let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder().scope(Scope::from(binary_scope)).build()?;
 //! # assert_eq!(hint.scope, Some(Scope::from(original_scope)));
+//! # }
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //! As well as with the AIF-encoded scope:
@@ -77,8 +83,10 @@
 //! #    ("/s/temp", AifRestMethod::Get.into()), ("/none", AifRestMethodSet::empty())
 //! # ]);
 //! # let original_scope = aif_scope.clone();
+//! # #[cfg(feature = "std")] {
 //! let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder().scope(Scope::from(aif_scope)).build()?;
 //! # assert_eq!(hint.scope, Some(Scope::from(original_scope)));
+//! # }
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //!
@@ -449,9 +457,11 @@ pub struct LibdcafEncodedScope(AifEncodedScopeElement);
 /// # use std::error::Error;
 /// # use dcaf::common::scope::{BinaryEncodedScope, Scope, TextEncodedScope, AifEncodedScope, AifRestMethod};
 /// # use dcaf::error::{InvalidTextEncodedScopeError, InvalidBinaryEncodedScopeError};
+/// # #[cfg(feature = "std")] {
 /// let text_scope = Scope::from(TextEncodedScope::try_from("dcaf rs")?);
 /// let binary_scope = Scope::from(BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice())?);
 /// let aif_scope = Scope::from(AifEncodedScope::from(vec![("/tmp", AifRestMethod::Get.into())]));
+/// # }
 /// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///

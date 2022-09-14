@@ -55,6 +55,7 @@ mod tests;
 /// # use dcaf::error::InvalidTextEncodedScopeError;
 /// // Scope could be built from TextEncodedScope too,
 /// // which also offers to take a space-separated string.
+/// # #[cfg(feature = "std")] {
 /// let scope = Scope::try_from(vec!["rTempC"])?;
 /// let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder()
 ///     .auth_server("coaps://as.example.com/token")
@@ -65,6 +66,7 @@ mod tests;
 /// let mut serialized = Vec::new();
 /// hint.clone().serialize_into(&mut serialized)?;
 /// assert_eq!(AuthServerRequestCreationHint::deserialize_from(serialized.as_slice())?, hint);
+/// # }
 /// # Ok::<(), Box<dyn Error>>(())
 /// ```
 ///
