@@ -148,11 +148,11 @@ mod aif {
 
     use ciborium::de::from_reader;
     use ciborium::ser::into_writer;
-    use enumflags2::{BitFlags, make_bitflags};
+    use enumflags2::{make_bitflags, BitFlags};
 
-    use crate::{AifEncodedScope, Scope};
     use crate::common::scope::{AifEncodedScopeElement, AifRestMethod, AifRestMethodSet};
     use crate::error::InvalidAifEncodedScopeError;
+    use crate::{AifEncodedScope, Scope};
 
     pub(crate) fn example_elements() -> (
         AifEncodedScopeElement,
@@ -279,8 +279,8 @@ mod libdcaf {
 
     use ciborium::de::from_reader;
 
-    use crate::{LibdcafEncodedScope, Scope};
     use crate::error::InvalidAifEncodedScopeError;
+    use crate::{LibdcafEncodedScope, Scope};
 
     use super::aif::example_elements;
 
@@ -321,7 +321,7 @@ mod libdcaf {
     fn test_scope_element_empty() {
         // Emptiness isn't allowed here.
         let serialized = vec![0x80]; // empty CBOR array
-        // That means that this *must not* resolve to a libdcaf scope
+                                     // That means that this *must not* resolve to a libdcaf scope
         assert!(from_reader::<Scope, &[u8]>(serialized.as_slice())
             .ok()
             .map(LibdcafEncodedScope::try_from)

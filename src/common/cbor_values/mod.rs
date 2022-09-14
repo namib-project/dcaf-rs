@@ -144,8 +144,8 @@ mod conversion {
     use ciborium::value::Value;
     use coset::{AsCborValue, CoseEncrypt0, CoseKey};
     use erased_serde::Serialize as ErasedSerialize;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     use crate::common::cbor_map::ToCborMap;
     use crate::error::{TryFromCborMapError, WrongSourceTypeError};

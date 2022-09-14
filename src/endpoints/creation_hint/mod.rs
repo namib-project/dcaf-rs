@@ -15,8 +15,6 @@
 //!
 //! See the documentation of [`AuthServerRequestCreationHint`] for details and an example.
 
-use alloc::string::String;
-
 use crate::common::cbor_values::ByteString;
 use crate::Scope;
 
@@ -130,8 +128,6 @@ mod builder {
 /// another part is implementing the [`ToCborMap`](crate::ToCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
-    use crate::common::cbor_map::{cbor_map_vec, decode_scope, ToCborMap};
-
     #[cfg(not(feature = "std"))]
     use alloc::boxed::Box;
 

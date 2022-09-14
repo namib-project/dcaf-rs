@@ -232,8 +232,8 @@ pub use endpoints::token_req::{
 };
 #[doc(inline)]
 pub use token::{
-    CoseCipherCommon, CoseEncrypt0Cipher, CoseMac0Cipher, CoseSign1Cipher,
-    decrypt_access_token, encrypt_access_token, get_token_headers, sign_access_token, verify_access_token,
+    decrypt_access_token, encrypt_access_token, get_token_headers, sign_access_token,
+    verify_access_token, CoseCipherCommon, CoseEncrypt0Cipher, CoseMac0Cipher, CoseSign1Cipher,
 };
 
 pub mod common;

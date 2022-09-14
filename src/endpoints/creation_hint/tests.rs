@@ -12,11 +12,11 @@
 #[cfg(not(feature = "std"))]
 use alloc::string::ToString;
 
-use enumflags2::{BitFlags, make_bitflags};
+use enumflags2::{make_bitflags, BitFlags};
 
-use crate::{AifEncodedScope, BinaryEncodedScope, LibdcafEncodedScope};
 use crate::common::scope::{AifRestMethod, TextEncodedScope};
 use crate::common::test_helper::expect_ser_de;
+use crate::{AifEncodedScope, BinaryEncodedScope, LibdcafEncodedScope};
 
 use super::*;
 

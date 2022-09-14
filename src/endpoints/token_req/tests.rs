@@ -15,19 +15,17 @@ use {alloc::string::ToString, alloc::vec};
 use coset::cwt::Timestamp;
 use coset::iana::Algorithm;
 use coset::{
-    CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder, iana,
+    iana, CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseKeyBuilder, HeaderBuilder,
     ProtectedHeader,
 };
-use coset::cwt::Timestamp;
-use coset::iana::Algorithm;
-use enumflags2::{BitFlags, make_bitflags};
+use enumflags2::{make_bitflags, BitFlags};
 
-use crate::{AifEncodedScope, BinaryEncodedScope};
 use crate::common::scope::{
     AifEncodedScopeElement, AifRestMethod, LibdcafEncodedScope, TextEncodedScope,
 };
 use crate::common::test_helper::expect_ser_de;
 use crate::endpoints::token_req::AceProfile::{CoapDtls, CoapOscore};
+use crate::{AifEncodedScope, BinaryEncodedScope};
 
 use super::*;
 
@@ -55,7 +53,8 @@ mod request {
             .client_id("myclient")
             .audience("tempSensor4711")
             .scope(
-                BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice()).map_err(|x| x.to_string())?,
+                BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice())
+                    .map_err(|x| x.to_string())?,
             )
             .build()
             .map_err(|x| x.to_string())?;
@@ -79,7 +78,9 @@ mod request {
                 ),
                 AifEncodedScopeElement::new(
                     "dynamic".to_string(),
-                    AifRestMethod::DynamicGet | AifRestMethod::DynamicPost | AifRestMethod::DynamicPut,
+                    AifRestMethod::DynamicGet
+                        | AifRestMethod::DynamicPost
+                        | AifRestMethod::DynamicPut,
                 ),
                 AifEncodedScopeElement::new("unrestricted".to_string(), BitFlags::all()),
                 AifEncodedScopeElement::new("useless".to_string(), BitFlags::empty()),
@@ -123,8 +124,8 @@ mod request {
                 0xbb, 0xfc, 0x11, 0x7e,
             ],
         )
-            .key_id(vec![0x11])
-            .build();
+        .key_id(vec![0x11])
+        .build();
         let request = AccessTokenRequestBuilder::default()
             .client_id("myclient")
             .req_cnf(key)
@@ -206,7 +207,8 @@ mod request {
             .redirect_uri("coaps://server.example.com")
             .grant_type(GrantType::ClientCredentials)
             .scope(
-                BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice()).map_err(|x| x.to_string())?,
+                BinaryEncodedScope::try_from(vec![0xDC, 0xAF].as_slice())
+                    .map_err(|x| x.to_string())?,
             )
             .ace_profile()
             .client_nonce(vec![0, 1, 2, 3, 4])
@@ -214,8 +216,6 @@ mod request {
             .map_err(|x| x.to_string())?;
         expect_ser_de(request, None, "A60942DCAF1818686D79636C69656E74181B781A636F6170733A2F2F7365727665722E6578616D706C652E636F6D1821021826F61827450001020304")
     }
-
-
 }
 
 mod response {
@@ -233,7 +233,9 @@ mod response {
                 ),
                 AifEncodedScopeElement::new(
                     "dynamic".to_string(),
-                    AifRestMethod::DynamicGet | AifRestMethod::DynamicPost | AifRestMethod::DynamicPut,
+                    AifRestMethod::DynamicGet
+                        | AifRestMethod::DynamicPost
+                        | AifRestMethod::DynamicPut,
                 ),
                 AifEncodedScopeElement::new("unrestricted".to_string(), BitFlags::all()),
                 AifEncodedScopeElement::new("useless".to_string(), BitFlags::empty()),
@@ -273,11 +275,11 @@ mod response {
     #[test]
     fn test_access_token_response() -> Result<(), String> {
         let key = CoseKeyBuilder::new_symmetric_key(vec![
-            0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c, 0x42,
-            0x71, 0x08,
+            0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c,
+            0x42, 0x71, 0x08,
         ])
-            .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
-            .build();
+        .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
+        .build();
         // We need to specify this here because otherwise it'd be typed as an i32.
         let expires_in: u32 = 3600;
         let response = AccessTokenResponseBuilder::default()
@@ -293,11 +295,11 @@ mod response {
     #[test]
     fn test_access_token_response_oscore() -> Result<(), String> {
         let key = CoseKeyBuilder::new_symmetric_key(vec![
-            0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c, 0x42,
-            0x71, 0x08,
+            0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c,
+            0x42, 0x71, 0x08,
         ])
-            .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
-            .build();
+        .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
+        .build();
         // We need to specify this here because otherwise it'd be typed as an i32.
         let expires_in: u32 = 3600;
         let response = AccessTokenResponseBuilder::default()
@@ -336,4 +338,3 @@ mod error {
         expect_ser_de(error, None, "A3181E1901A2181F7824492063616E27742068656C7020796F752C2049276D206A757374206120746561706F742E18207468747470733A2F2F687474702E6361742F343138")
     }
 }
-

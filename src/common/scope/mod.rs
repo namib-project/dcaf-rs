@@ -547,8 +547,8 @@ pub enum Scope {
 /// models which are represented as CBOR maps.
 mod conversion {
     use ciborium::value::{Integer, Value};
-    use serde::{Deserializer, Serializer};
     use serde::de::Error;
+    use serde::{Deserializer, Serializer};
 
     use crate::error::{
         InvalidAifEncodedScopeError, InvalidBinaryEncodedScopeError, InvalidTextEncodedScopeError,

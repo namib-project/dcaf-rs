@@ -16,13 +16,10 @@
 //! and [`ErrorResponse`]. Look at their documentation for usage examples.
 //! Other members are mainly used as part of the aforementioned structures.
 
-use alloc::string::String;
-
 use coset::AsCborValue;
 
 use crate::common::cbor_values::{ByteString, ProofOfPossessionKey};
 use crate::Scope;
-use coset::AsCborValue;
 
 #[cfg(not(feature = "std"))]
 use {alloc::boxed::Box, alloc::string::String, alloc::vec::Vec};
@@ -633,9 +630,6 @@ mod conversion {
     use crate::constants::cbor_abbreviations::{
         ace_profile, error, grant_types, introspection, token, token_types,
     };
-    use ciborium::value::Value;
-    use coset::cwt::Timestamp;
-    use erased_serde::Serialize as ErasedSerialize;
 
     #[cfg(not(feature = "std"))]
     use {alloc::borrow::ToOwned, alloc::string::ToString};
