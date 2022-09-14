@@ -20,7 +20,7 @@ use crate::{AifEncodedScope, BinaryEncodedScope, LibdcafEncodedScope};
 
 use super::*;
 
-/// Example data taken from draft-ietf-ace-oauth-authz-46, Figure 3 and 4.
+/// Example data taken from RFC 9200, Figure 2 and 3.
 #[test]
 fn test_creation_hint_text_scope() -> Result<(), String> {
     let hint = AuthServerRequestCreationHintBuilder::default()

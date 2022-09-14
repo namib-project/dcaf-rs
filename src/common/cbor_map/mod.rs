@@ -48,19 +48,17 @@
 //! [`AccessTokenRequest`]: crate::AccessTokenRequest
 
 use core::fmt::{Debug, Display, Formatter};
-
 #[cfg(feature = "std")]
 use std::any::type_name;
 
 use ciborium::de::from_reader;
 use ciborium::ser::into_writer;
-
-#[cfg(not(feature = "std"))]
-use {alloc::boxed::Box, alloc::format, alloc::vec::Vec, core::any::type_name};
-
 use ciborium::value::{Integer, Value};
 use ciborium_io::{Read, Write};
 use erased_serde::Serialize as ErasedSerialize;
+
+#[cfg(not(feature = "std"))]
+use {alloc::boxed::Box, alloc::format, alloc::vec::Vec, core::any::type_name};
 
 use crate::common::scope::Scope;
 use crate::error::{TryFromCborMapError, ValueIsNotIntegerError};
@@ -370,6 +368,7 @@ mod private {
 mod conversion {
     #[cfg(not(feature = "std"))]
     use alloc::vec::Vec;
+
     use ciborium::value::Value;
     use serde::de::{Error, Unexpected};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};

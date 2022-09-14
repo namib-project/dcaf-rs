@@ -12,7 +12,7 @@
 //! Contains CBOR-serializable data types for the endpoints of ACE-OAuth.
 //!
 //! These endpoints are described in section 5 of
-//! [`draft-ietf-ace-oauth-authz`](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html).
+//! [RFC 9200](https://www.rfc-editor.org/rfc/rfc9200).
 //!
 //! Support for the introspection endpoint is planned.
 //!

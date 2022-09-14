@@ -256,7 +256,7 @@ mod aif {
 
     #[test]
     fn test_scope_encoding() -> Result<(), String> {
-        // This tests the encoding of the scope using the example given in Figure 5 of the AIF draft.
+        // This tests the encoding of the scope using the example given in Figure 5 of the AIF RFC.
         let cbor = hex::decode("8382672F732F74656D700182662F612F6C65640582652F64746C7302")
             .map_err(|x| x.to_string())?;
         let expected: Scope = AifEncodedScope::from(vec![

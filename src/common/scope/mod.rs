@@ -92,10 +92,10 @@
 //!
 //! # Sources
 //! For the original OAuth 2.0 standard, scopes are defined in
-//! [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3),
+//! [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749#section-1.3),
 //! while for ACE-OAuth, they're specified in
-//! [`draft-ietf-ace-oauth-authz`, section 5.8.1](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1-2.4).
-//! AIF is defined in [`draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3).
+//! [RFC 9200, section 5.8.1](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.1-2.4).
+//! AIF is defined in [RFC 9237](https://www.rfc-editor.org/rfc/rfc9237).
 
 #[cfg(not(feature = "std"))]
 use {alloc::string::String, alloc::string::ToString, alloc::vec, alloc::vec::Vec};
@@ -139,7 +139,7 @@ mod tests;
 pub type AifRestMethodSet = BitFlags<AifRestMethod>;
 
 /// A scope encoded as a space-delimited list of strings, as defined in
-/// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3).
+/// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749#section-1.3).
 ///
 /// Note that the syntax specified in the RFC has to be followed:
 /// ```text
@@ -217,20 +217,20 @@ pub struct BinaryEncodedScope(ByteString);
 ///
 /// Note that in addition to the usual CoAP and HTTP REST methods
 /// (see "Relevant Documents" below),
-/// methods for [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3)
+/// methods for [Dynamic Resource Creation](https://www.rfc-editor.org/rfc/rfc9237#section-2.3)
 /// are also provided.
 ///
 /// This uses the [`enumflags2`] crate to make it easy to work with resulting bitmasks.
 ///
 /// # Relevant Documents
 /// - Definition of `REST-method-set` data model for use in AIF:
-///   Figure 4 of [`draft-ietf-ace-aif`, section 3](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3)
+///   Figure 4 of [RFC 9237](https://www.rfc-editor.org/rfc/rfc9237#figure-4)
 /// - Specification of HTTP methods GET, POST, PUT, DELETE: [RFC 7231, section 4.3](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3)
 /// - Specification of HTTP PATCH method: [RFC 5789](https://datatracker.ietf.org/doc/html/rfc5789)
 /// - Specification of CoAP methods GET, POST, PUT, DELETE: [RFC 7252, section 5.8](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8),
 /// - Specification of CoAP methods FETCH, PATCH, AND iPATCH: [RFC 8132](https://datatracker.ietf.org/doc/html/rfc8132)
 /// - Specification of Dynamic CoAP methods:
-///   Figure 4 of [`draft-ietf-ace-aif`, section 2.3](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3)
+///   [RFC 9237, section 2.3](https://www.rfc-editor.org/rfc/rfc9237#section-2.3)
 ///
 /// # Example
 /// You can easily combine multiple fields using the bitwise OR operator, as well as
@@ -293,38 +293,38 @@ pub enum AifRestMethod {
 
     /// GET method as specified in [RFC 7252, section 5.8.1 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.1)
     /// and [RFC 7231, section 4.3.1 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.1),
-    /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
+    /// intended for use in [Dynamic Resource Creation](https://www.rfc-editor.org/rfc/rfc9237#section-2.3).
     DynamicGet = u64::pow(2, 32),
 
     /// POST method as specified in [RFC 7252, section 5.8.2 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.2)
     /// and [RFC 7231, section 4.3.3 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.3),
-    /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
+    /// intended for use in [Dynamic Resource Creation](https://www.rfc-editor.org/rfc/rfc9237#section-2.3).
     DynamicPost = u64::pow(2, 33),
 
     /// PUT method as specified in [RFC 7252, section 5.8.3 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.3)
     /// and [RFC 7231, section 4.3.4 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.4),
-    /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
+    /// intended for use in [Dynamic Resource Creation](https://www.rfc-editor.org/rfc/rfc9237#section-2.3).
     DynamicPut = u64::pow(2, 34),
 
     /// DELETE method as specified in [RFC 7252, section 5.8.4 (CoAP)](https://datatracker.ietf.org/doc/html/rfc7252#section-5.8.4)
     /// and [RFC 7231, section 4.3.5 (HTTP)](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.5),
-    /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
+    /// intended for use in [Dynamic Resource Creation](https://www.rfc-editor.org/rfc/rfc9237#section-2.3).
     DynamicDelete = u64::pow(2, 35),
 
     /// FETCH method as specified in [RFC 8132, section 2 (CoAP)](https://datatracker.ietf.org/doc/html/rfc8132#section-2),
-    /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
+    /// intended for use in [Dynamic Resource Creation](https://www.rfc-editor.org/rfc/rfc9237#section-2.3).
     ///
     /// Not available for HTTP.
     DynamicFetch = u64::pow(2, 36),
 
     /// PATCH method as specified in [RFC 8132, section 3 (CoAP)](https://datatracker.ietf.org/doc/html/rfc8132#section-3),
-    /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
+    /// intended for use in [Dynamic Resource Creation](https://www.rfc-editor.org/rfc/rfc9237#section-2.3).
     ///
     /// Not available for HTTP.
     DynamicPatch = u64::pow(2, 37),
 
     /// iPATCH method as specified in [RFC 8132, section 3 (CoAP)](https://datatracker.ietf.org/doc/html/rfc8132#section-3),
-    /// intended for use in [Dynamic Resource Creation](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3).
+    /// intended for use in [Dynamic Resource Creation](https://www.rfc-editor.org/rfc/rfc9237#section-2.3).
     ///
     /// Not available for HTTP.
     DynamicIPatch = u64::pow(2, 38),
@@ -341,7 +341,7 @@ pub struct AifEncodedScopeElement {
     /// Identifier for the object of this scope element,
     /// given as a URI of a resource on a CoAP server.
     ///
-    /// Refer to [section 2 of `draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2)
+    /// Refer to [section 2 of RFC 9237](https://www.rfc-editor.org/rfc/rfc9237#section-2)
     /// for specification details.
     pub path: String,
 
@@ -349,16 +349,16 @@ pub struct AifEncodedScopeElement {
     /// of this scope element, given as a set of REST (CoAP or HTTP) methods.
     ///
     /// More specifically, this is a bitmask---see [`AifRestMethod`] for further explanation.
-    /// Refer to [section 2 of `draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2)
+    /// Refer to [section 2 of RFC 9237](https://www.rfc-editor.org/rfc/rfc9237#section-2)
     /// for specification details.
     pub permissions: BitFlags<AifRestMethod>,
 }
 
 /// A scope encoded using the
-/// [Authorization Information Format (AIF) for ACE](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif).
+/// [Authorization Information Format (AIF) for ACE](https://www.rfc-editor.org/rfc/rfc9237).
 ///
 /// More specifically, this uses the specific instantiation of AIF intended for REST resources
-/// which are identified by URI paths, as described in [`draft-ietf-ace-aif`, section 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.1).
+/// which are identified by URI paths, as described in [RFC 9237, section 2.1](https://www.rfc-editor.org/rfc/rfc9237#section-2.1).
 /// An AIF-encoded scope consists of [`AifEncodedScopeElement`]s, each describing a URI path
 /// (the object of the scope) and a set of REST methods (the permissions of the scope).
 ///
@@ -389,7 +389,7 @@ pub struct AifEncodedScopeElement {
 /// ```json
 /// [["restricted", 17], ["unrestricted", 545460846719]]
 /// ```
-/// As specified in [`draft-ietf-ace-aif`, section 3](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3),
+/// As specified in [RFC 9237, section 3](https://www.rfc-editor.org/rfc/rfc9237#section-3),
 /// `GET` to `iPATCH` are encoded from 2<sup>0</sup> to 2<sup>6</sup>, while the dynamic variants
 /// go from 2<sup>32</sup> to 2<sup>38</sup>. This is why in `restricted`, the number equals
 /// 17 (2<sup>0</sup> + 2<sup>4</sup>), and in `unrestricted` equals the sum of all these numbers.
@@ -399,7 +399,7 @@ pub struct AifEncodedScopeElement {
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
 pub struct AifEncodedScope(Vec<AifEncodedScopeElement>);
 
-/// A scope encoded using the [Authorization Information Format (AIF) for ACE](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif)
+/// A scope encoded using the [Authorization Information Format (AIF) for ACE](https://www.rfc-editor.org/rfc/rfc9237)
 /// as in [`AifEncodedScope`], but only consisting of a single [`AifEncodedScopeElement`]
 /// instead of an array of them.
 ///
@@ -442,7 +442,7 @@ pub struct AifEncodedScope(Vec<AifEncodedScopeElement>);
 pub struct LibdcafEncodedScope(AifEncodedScopeElement);
 
 /// Scope of an access token as specified in
-/// [`draft-ietf-ace-oauth-authz`, section 5.8.1](https://www.ietf.org/archive/id/draft-ietf-ace-oauth-authz-46.html#section-5.8.1-2.4).
+/// [RFC 9200, section 5.8.1](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.1-2.4).
 ///
 /// May be used both for [AccessTokenRequest](crate::AccessTokenRequest)s and
 /// [AccessTokenResponse](crate::AccessTokenResponse)s.
@@ -470,7 +470,7 @@ pub struct LibdcafEncodedScope(AifEncodedScopeElement);
 #[derive(Debug, PartialEq, Eq, Clone, Hash, IntoStaticStr)]
 pub enum Scope {
     /// Scope encoded using Text, as specified in
-    /// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3).
+    /// [RFC 6749, section 1.3](https://www.rfc-editor.org/rfc/rfc6749#section-1.3).
     ///
     /// For details, see the documentation of [`TextEncodedScope`].
     ///
@@ -505,7 +505,7 @@ pub enum Scope {
     /// ```
     BinaryEncoded(BinaryEncodedScope),
 
-    /// Scope encoded using the [Authorization Information Format (AIF) for ACE](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif).
+    /// Scope encoded using the [Authorization Information Format (AIF) for ACE](https://www.rfc-editor.org/rfc/rfc9237).
     ///
     /// For details, see the documentation of [`AifEncodedScope`].
     ///
@@ -706,7 +706,7 @@ mod conversion {
         /// Creates a new [`AifEncodedScopeElement`] over the given `path` and `permissions`.
         ///
         /// # Example
-        /// Let's take the example given in Table 2 of [the draft](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-2.3):
+        /// Let's take the example given in Table 2 of [the RFC](https://www.rfc-editor.org/rfc/rfc9237#table-2):
         /// ```text
         ///   +================+===================================+
         ///   | URI-local-part | Permission Set                    |
@@ -739,12 +739,12 @@ mod conversion {
         /// Tries to create a new [`AifEncodedScopeElement`] from the given `path` and `permissions`.
         ///
         /// `permissions` must be a valid bitmask of REST methods, as defined in
-        /// [section 3 of `draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3).
+        /// [section 3 of RFC 9237](https://www.rfc-editor.org/rfc/rfc9237#section-3).
         ///
         /// # Errors
         /// If the given `permissions` do not correspond to a valid set of [`AifRestMethod`]s
         /// as defined in
-        /// [section 3 of `draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3).
+        /// [section 3 of RFC 9237](https://www.rfc-editor.org/rfc/rfc9237#section-3).
         ///
         /// # Example
         /// For example, say we want to encode `["/a/led", 5]`, where the 5 corresponds to
@@ -893,7 +893,7 @@ mod conversion {
         /// Tries to create a new libdcaf-encoded scope from the given `path` and `permissions`.
         ///
         /// The given `permissions` must be a valid bitmask of the allowed REST methods,
-        /// as defined in [section 3 of `draft-ietf-ace-aif`](https://datatracker.ietf.org/doc/html/draft-ietf-ace-aif#section-3).
+        /// as defined in [section 3 of RFC 9237](https://www.rfc-editor.org/rfc/rfc9237#section-3).
         ///
         /// # Errors
         /// Refer to [`AifEncodedScopeElement::try_from_bits`].
