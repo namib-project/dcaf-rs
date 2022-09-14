@@ -16,6 +16,10 @@
 //! and [`ErrorResponse`]. Look at their documentation for usage examples.
 //! Other members are mainly used as part of the aforementioned structures.
 
+use alloc::string::String;
+
+use coset::AsCborValue;
+
 use crate::common::cbor_values::{ByteString, ProofOfPossessionKey};
 use crate::Scope;
 use coset::AsCborValue;
@@ -293,10 +297,10 @@ pub enum AceProfile {
     /// [RFC 9202](https://www.rfc-editor.org/rfc/rfc9202).
     CoapDtls,
 
-    // The below is commented out because no CBOR value has been specified yet for this profile.
-    // /// Profile for ACE-OAuth using OSCORE, specified in
-    // /// [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.html).
-    // CoapOscore,
+    /// Profile for ACE-OAuth using OSCORE, specified in
+    /// [RFC 9203](https://www.rfc-editor.org/rfc/rfc9203).
+    CoapOscore,
+
     /// An unspecified ACE-OAuth profile along with its representation in CBOR.
     ///
     /// See [section 8.8 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-8.8)
@@ -618,6 +622,10 @@ mod builder {
 }
 
 mod conversion {
+    use ciborium::value::Value;
+    use coset::cwt::Timestamp;
+    use erased_serde::Serialize as ErasedSerialize;
+
     use crate::common::cbor_map::{
         cbor_map_vec, decode_int_map, decode_number, decode_scope, ToCborMap,
     };
@@ -632,7 +640,7 @@ mod conversion {
     #[cfg(not(feature = "std"))]
     use {alloc::borrow::ToOwned, alloc::string::ToString};
 
-    use crate::endpoints::token_req::AceProfile::CoapDtls;
+    use crate::endpoints::token_req::AceProfile::{CoapDtls, CoapOscore};
     use crate::error::TryFromCborMapError;
 
     use super::*;
@@ -685,6 +693,7 @@ mod conversion {
         fn from(value: i32) -> Self {
             match value {
                 ace_profile::COAP_DTLS => CoapDtls,
+                ace_profile::COAP_OSCORE => CoapOscore,
                 x => AceProfile::Other(x),
             }
         }
@@ -694,6 +703,7 @@ mod conversion {
         fn from(profile: AceProfile) -> Self {
             match profile {
                 CoapDtls => ace_profile::COAP_DTLS,
+                CoapOscore => ace_profile::COAP_OSCORE,
                 AceProfile::Other(x) => x,
             }
         }

@@ -27,7 +27,7 @@ use crate::common::scope::{
     AifEncodedScopeElement, AifRestMethod, LibdcafEncodedScope, TextEncodedScope,
 };
 use crate::common::test_helper::expect_ser_de;
-use crate::endpoints::token_req::AceProfile::CoapDtls;
+use crate::endpoints::token_req::AceProfile::{CoapDtls, CoapOscore};
 
 use super::*;
 
@@ -288,6 +288,26 @@ mod response {
             .build()
             .map_err(|x| x.to_string())?;
         expect_ser_de(response, None, "A401474A5015DF68642802190E1008A101A301040246849B5786457C2051849B5786457C1491BE3A76DCEA6C427108182601")
+    }
+
+    #[test]
+    fn test_access_token_response_oscore() -> Result<(), String> {
+        let key = CoseKeyBuilder::new_symmetric_key(vec![
+            0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c, 0x42,
+            0x71, 0x08,
+        ])
+            .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
+            .build();
+        // We need to specify this here because otherwise it'd be typed as an i32.
+        let expires_in: u32 = 3600;
+        let response = AccessTokenResponseBuilder::default()
+            .access_token(hex::decode("4a5015df686428").map_err(|x| x.to_string())?)
+            .ace_profile(CoapOscore)
+            .expires_in(expires_in)
+            .cnf(key)
+            .build()
+            .map_err(|x| x.to_string())?;
+        expect_ser_de(response, None, "A401474A5015DF68642802190E1008A101A301040246849B5786457C2051849B5786457C1491BE3A76DCEA6C427108182602")
     }
 }
 

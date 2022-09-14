@@ -168,10 +168,9 @@ pub mod cbor_abbreviations {
         /// [RFC 9202](https://www.rfc-editor.org/rfc/rfc9202).
         pub const COAP_DTLS: i32 = 1;
 
-        // The below is commented out because no CBOR value has been set in the specification yet.
-        // /// OSCORE profile specified in
-        // /// [`draft-ietf-ace-oscore-profile`](https://www.ietf.org/archive/id/draft-ietf-ace-oscore-profile-19.txt).
-        // // pub const COAP_OSCORE: i32;
+        /// OSCORE profile specified in
+        /// [RFC 9203](https://www.rfc-editor.org/rfc/rfc9203).
+        pub const COAP_OSCORE: i32 = 2;
     }
 
     /// Constants for CBOR abbreviations in error codes,
