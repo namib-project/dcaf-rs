@@ -9,9 +9,6 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-#[cfg(not(feature = "std"))]
-use {alloc::string::ToString, alloc::vec};
-
 use coset::cwt::Timestamp;
 use coset::iana::Algorithm;
 use coset::{
@@ -20,12 +17,16 @@ use coset::{
 };
 use enumflags2::{make_bitflags, BitFlags};
 
+#[cfg(not(feature = "std"))]
+use {alloc::string::ToString, alloc::vec};
+
 use crate::common::scope::{
     AifEncodedScopeElement, AifRestMethod, LibdcafEncodedScope, TextEncodedScope,
 };
 use crate::common::test_helper::expect_ser_de;
 use crate::endpoints::token_req::AceProfile::{CoapDtls, CoapOscore};
-use crate::{AifEncodedScope, BinaryEncodedScope};
+use crate::ProofOfPossessionKey::KeyId;
+use crate::{AifEncodedScope, BinaryEncodedScope, ToCborMap};
 
 use super::*;
 
@@ -262,17 +263,6 @@ mod response {
     }
 
     #[test]
-    fn test_access_token_response_fraction_libdcaf() -> Result<(), String> {
-        let response = AccessTokenResponse::builder()
-            .access_token(vec![0xDC, 0xAF])
-            .scope(LibdcafEncodedScope::new("empty", BitFlags::empty()))
-            .issued_at(Timestamp::FractionalSeconds(1.5))
-            .build()
-            .map_err(|x| x.to_string())?;
-        expect_ser_de(response, None, "A30142DCAF06F93E00098265656D70747900")
-    }
-
-    #[test]
     fn test_access_token_response() -> Result<(), String> {
         let key = CoseKeyBuilder::new_symmetric_key(vec![
             0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c, 0x14, 0x91, 0xbe, 0x3a, 0x76, 0xdc, 0xea, 0x6c,
@@ -280,6 +270,7 @@ mod response {
         ])
         .key_id(vec![0x84, 0x9b, 0x57, 0x86, 0x45, 0x7c])
         .build();
+        let rs_key = KeyId(vec![0xDC, 0xAF]);
         // We need to specify this here because otherwise it'd be typed as an i32.
         let expires_in: u32 = 3600;
         let response = AccessTokenResponseBuilder::default()
@@ -287,9 +278,22 @@ mod response {
             .ace_profile(CoapDtls)
             .expires_in(expires_in)
             .cnf(key)
+            .rs_cnf(rs_key)
+            .refresh_token(vec![0x3f, 0xc3, 0x90, 0x19, 0xac, 0x8a])
             .build()
             .map_err(|x| x.to_string())?;
-        expect_ser_de(response, None, "A401474A5015DF68642802190E1008A101A301040246849B5786457C2051849B5786457C1491BE3A76DCEA6C427108182601")
+        expect_ser_de(response, None, "A601474A5015DF68642802190E1008A101A301040246849B5786457C2051849B5786457C1491BE3A76DCEA6C4271081825463FC39019AC8A1826011829A10342DCAF")
+    }
+
+    #[test]
+    fn test_access_token_response_invalid() {
+        let missing_token = hex::decode(
+            "A302190E1008A101A301040246849B5786457C2051849B5786457C1491BE3A76DCEA6C427108182601",
+        )
+        .expect("invalid hex");
+        assert!(AccessTokenResponse::deserialize_from(missing_token.as_slice()).is_err());
+        let _unknown_field = hex::decode("A501474A5015DF68642802190E1008A101A301040246849B5786457C2051849B5786457C1491BE3A76DCEA6C42710818260119029A433F3F3F");
+        assert!(AccessTokenResponse::deserialize_from(missing_token.as_slice()).is_err());
     }
 
     #[test]
@@ -337,4 +341,14 @@ mod error {
             .map_err(|x| x.to_string())?;
         expect_ser_de(error, None, "A3181E1901A2181F7824492063616E27742068656C7020796F752C2049276D206A757374206120746561706F742E18207468747470733A2F2F687474702E6361742F343138")
     }
+}
+
+#[test]
+fn test_error_response_invalid() {
+    let empty = hex::decode("A0").expect("invalid hex");
+    assert!(ErrorResponse::deserialize_from(empty.as_slice()).is_err());
+    let missing_fields = hex::decode("A2181F7824492063616E27742068656C7020796F752C2049276D206A757374206120746561706F742E18207468747470733A2F2F687474702E6361742F343138").expect("invalid hex");
+    assert!(ErrorResponse::deserialize_from(missing_fields.as_slice()).is_err());
+    let extra_fields = hex::decode("A4181E1901A2181F7824492063616E27742068656C7020796F752C2049276D206A757374206120746561706F742E18207468747470733A2F2F687474702E6361742F343138182F6477686174").expect("invalid hex");
+    assert!(ErrorResponse::deserialize_from(extra_fields.as_slice()).is_err());
 }

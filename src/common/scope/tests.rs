@@ -12,13 +12,15 @@
 /// Tests for text encoded scopes.
 mod text {
     #[cfg(not(feature = "std"))]
-    use {alloc::vec, alloc::vec::Vec};
+    use alloc::{string::ToString, vec, vec::Vec};
+    use core::marker::PhantomData;
 
     use ciborium::value::Value;
 
-    use crate::common::scope::TextEncodedScope;
+    use crate::common::cbor_map::decode_scope;
+    use crate::common::scope::{AifRestMethodSet, TextEncodedScope};
     use crate::error::{InvalidTextEncodedScopeError, ScopeFromValueError};
-    use crate::Scope;
+    use crate::{AifEncodedScope, Scope};
 
     #[test]
     fn test_scope_element_normal() -> Result<(), InvalidTextEncodedScopeError> {
@@ -64,7 +66,10 @@ mod text {
         ];
 
         for input in empty_arrays {
-            assert!(TextEncodedScope::try_from(input).is_err());
+            assert!(!TextEncodedScope::try_from(input)
+                .expect_err("must be error")
+                .to_string()
+                .is_empty());
         }
     }
 
@@ -81,7 +86,10 @@ mod text {
             "   spaces   wherever  you    look   ",
         ];
         for input in invalid_inputs {
-            assert!(TextEncodedScope::try_from(input).is_err());
+            assert!(!TextEncodedScope::try_from(input)
+                .expect_err("must be error")
+                .to_string()
+                .is_empty());
         }
     }
 
@@ -98,7 +106,10 @@ mod text {
             "within\\word",
         ];
         for input in invalid_inputs {
-            assert!(TextEncodedScope::try_from(input).is_err());
+            assert!(!TextEncodedScope::try_from(input)
+                .expect_err("must be error")
+                .to_string()
+                .is_empty());
         }
 
         let invalid_arrays = vec![
@@ -123,7 +134,10 @@ mod text {
             vec!["normal", "in\\word"],
         ];
         for input in invalid_arrays {
-            assert!(TextEncodedScope::try_from(input).is_err());
+            assert!(!TextEncodedScope::try_from(input)
+                .expect_err("must be error")
+                .to_string()
+                .is_empty());
         }
     }
 
@@ -136,9 +150,32 @@ mod text {
         assert_eq!(Scope::try_from(value)?, scope);
         Ok(())
     }
+
+    #[test]
+    fn test_convert_invalid_value_to_scope() {
+        assert!(decode_scope(Value::Bool(false)).is_err());
+    }
+
+    #[test]
+    fn test_scope_invalid_try_from() {
+        let scope = Scope::from(AifEncodedScope::from(vec![(
+            "empty".to_string(),
+            AifRestMethodSet::empty(),
+        )]));
+        let error = TextEncodedScope::try_from(scope).expect_err("expected error");
+        assert_eq!(error.actual_type, "AifEncoded");
+        assert_eq!(error.expected_type, "TextEncoded");
+        assert_eq!(error.general_type, PhantomData::<Scope>::default());
+    }
 }
 
 mod aif {
+    use core::marker::PhantomData;
+
+    use ciborium::de::from_reader;
+    use ciborium::ser::into_writer;
+    use enumflags2::{make_bitflags, BitFlags};
+
     #[cfg(not(feature = "std"))]
     use {
         alloc::string::{String, ToString},
@@ -146,13 +183,9 @@ mod aif {
         alloc::vec::Vec,
     };
 
-    use ciborium::de::from_reader;
-    use ciborium::ser::into_writer;
-    use enumflags2::{make_bitflags, BitFlags};
-
     use crate::common::scope::{AifEncodedScopeElement, AifRestMethod, AifRestMethodSet};
     use crate::error::InvalidAifEncodedScopeError;
-    use crate::{AifEncodedScope, Scope};
+    use crate::{AifEncodedScope, LibdcafEncodedScope, Scope};
 
     pub(crate) fn example_elements() -> (
         AifEncodedScopeElement,
@@ -234,7 +267,12 @@ mod aif {
             0xFFFF_FFFF_FFFF_FFFF, // maximum
         ];
         for invalid in invalids {
-            assert!(AifEncodedScope::try_from(vec![("whatever".to_string(), invalid)]).is_err());
+            assert!(
+                !AifEncodedScope::try_from(vec![("whatever".to_string(), invalid)])
+                    .expect_err("must be error")
+                    .to_string()
+                    .is_empty()
+            );
         }
     }
 
@@ -271,15 +309,26 @@ mod aif {
         );
         Ok(())
     }
+
+    #[test]
+    fn test_scope_invalid_try_from() {
+        let scope = Scope::from(LibdcafEncodedScope::new("empty", AifRestMethodSet::empty()));
+        let error = AifEncodedScope::try_from(scope).expect_err("expected error");
+        assert_eq!(error.actual_type, "LibdcafEncoded");
+        assert_eq!(error.expected_type, "AifEncoded");
+        assert_eq!(error.general_type, PhantomData::<Scope>::default());
+    }
 }
 
 mod libdcaf {
-    #[cfg(not(feature = "std"))]
-    use {alloc::string::ToString, alloc::vec};
+    use core::marker::PhantomData;
 
     use ciborium::de::from_reader;
 
-    use crate::error::InvalidAifEncodedScopeError;
+    #[cfg(not(feature = "std"))]
+    use {alloc::string::ToString, alloc::vec};
+
+    use crate::error::{InvalidAifEncodedScopeError, ScopeFromValueError};
     use crate::{LibdcafEncodedScope, Scope};
 
     use super::aif::example_elements;
@@ -313,7 +362,12 @@ mod libdcaf {
             0xFFFF_FFFF_FFFF_FFFF, // maximum
         ];
         for invalid in invalids {
-            assert!(LibdcafEncodedScope::try_from_bits("whatever".to_string(), invalid).is_err());
+            assert!(
+                !LibdcafEncodedScope::try_from_bits("whatever".to_string(), invalid)
+                    .expect_err("must be error")
+                    .to_string()
+                    .is_empty()
+            );
         }
     }
 
@@ -328,14 +382,25 @@ mod libdcaf {
             .and_then(Result::ok)
             .is_none());
     }
+
+    #[test]
+    fn test_scope_invalid_try_from() -> Result<(), ScopeFromValueError> {
+        let scope = Scope::try_from(vec![0xDC, 0xAF].as_slice())?;
+        let error = LibdcafEncodedScope::try_from(scope).expect_err("expected error");
+        assert_eq!(error.actual_type, "BinaryEncoded");
+        assert_eq!(error.expected_type, "LibdcafEncoded");
+        assert_eq!(error.general_type, PhantomData::<Scope>::default());
+        Ok(())
+    }
 }
 
 /// Tests for binary encoded scopes.
 mod binary {
     #[cfg(not(feature = "std"))]
-    use alloc::vec;
+    use alloc::{boxed::Box, string::ToString, vec};
+    use core::marker::PhantomData;
 
-    use ciborium::value::Value;
+    use ciborium::value::{Integer, Value};
 
     use crate::common::scope::BinaryEncodedScope;
     use crate::error::{InvalidBinaryEncodedScopeError, ScopeFromValueError};
@@ -379,9 +444,11 @@ mod binary {
         // Assuming 0 is separator
         let empty_vecs = vec![vec![0], vec![0, 0], vec![0, 0, 0]];
         for vec in empty_vecs {
-            assert!(BinaryEncodedScope::try_from(vec.as_slice())?
+            assert!(!BinaryEncodedScope::try_from(vec.as_slice())?
                 .elements(Some(0))
-                .is_err());
+                .expect_err("must be error")
+                .to_string()
+                .is_empty());
             // If the separator is something else, the result should just contain the vec
             // as a single element.
             assert!(BinaryEncodedScope::try_from(vec.as_slice())?
@@ -410,9 +477,11 @@ mod binary {
             vec![0, 0, 0xDC, 0, 0, 0xAF, 0, 0],
         ];
         for vec in invalid {
-            assert!(BinaryEncodedScope::try_from(vec.as_slice())?
+            assert!(!BinaryEncodedScope::try_from(vec.as_slice())?
                 .elements(Some(0))
-                .is_err());
+                .expect_err("must be error")
+                .to_string()
+                .is_empty());
             // If the separator is something else, the result should just contain the vec
             // as a single element.
             assert!(BinaryEncodedScope::try_from(vec.as_slice())?
@@ -432,6 +501,31 @@ mod binary {
             vec![0xDC, 0xAF].as_slice()
         );
         assert_eq!(Scope::try_from(value)?, scope);
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_invalid_try_from() -> Result<(), ScopeFromValueError> {
+        let scope = Scope::try_from(vec!["first", "second"])?;
+        let error = BinaryEncodedScope::try_from(scope).expect_err("expected error");
+        assert_eq!(error.actual_type, "TextEncoded");
+        assert_eq!(error.expected_type, "BinaryEncoded");
+        assert_eq!(error.general_type, PhantomData::<Scope>::default());
+
+        let invalid_values = vec![
+            Value::Bool(true),
+            Value::Integer(Integer::from(u8::MIN)),
+            Value::Float(0.5),
+            Value::Null,
+            Value::Tag(0, Box::new(Value::Null)),
+            Value::Map(vec![]),
+        ];
+        for value in invalid_values {
+            assert!(!Scope::try_from(value)
+                .expect_err("must be error")
+                .to_string()
+                .is_empty());
+        }
         Ok(())
     }
 }

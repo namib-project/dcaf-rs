@@ -29,11 +29,14 @@
 use core::fmt::{Debug, Display, Formatter};
 use core::ops::Deref;
 
+use coset::{CoseEncrypt0, CoseKey};
+use strum_macros::IntoStaticStr;
+
 #[cfg(not(feature = "std"))]
 use {alloc::boxed::Box, alloc::format, alloc::vec, alloc::vec::Vec};
 
-use coset::{CoseEncrypt0, CoseKey};
-use strum_macros::IntoStaticStr;
+#[cfg(test)]
+mod tests;
 
 /// A type intended to be used as a CBOR bytestring, represented as a vector of bytes.
 pub type ByteString = Vec<u8>;
@@ -269,7 +272,9 @@ mod conversion {
     impl TryFrom<ProofOfPossessionKey> for CoseKey {
         type Error = WrongSourceTypeError<ProofOfPossessionKey>;
 
-        fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
+        fn try_from(
+            value: ProofOfPossessionKey,
+        ) -> Result<Self, WrongSourceTypeError<ProofOfPossessionKey>> {
             if let ProofOfPossessionKey::PlainCoseKey(key) = value {
                 Ok(key)
             } else {
@@ -281,7 +286,9 @@ mod conversion {
     impl TryFrom<ProofOfPossessionKey> for CoseEncrypt0 {
         type Error = WrongSourceTypeError<ProofOfPossessionKey>;
 
-        fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
+        fn try_from(
+            value: ProofOfPossessionKey,
+        ) -> Result<Self, WrongSourceTypeError<ProofOfPossessionKey>> {
             if let ProofOfPossessionKey::EncryptedCoseKey(key) = value {
                 Ok(key)
             } else {
@@ -293,7 +300,9 @@ mod conversion {
     impl TryFrom<ProofOfPossessionKey> for KeyId {
         type Error = WrongSourceTypeError<ProofOfPossessionKey>;
 
-        fn try_from(value: ProofOfPossessionKey) -> Result<Self, Self::Error> {
+        fn try_from(
+            value: ProofOfPossessionKey,
+        ) -> Result<Self, WrongSourceTypeError<ProofOfPossessionKey>> {
             if let ProofOfPossessionKey::KeyId(kid) = value {
                 Ok(kid)
             } else {

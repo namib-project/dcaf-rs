@@ -9,15 +9,16 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-use crate::common::test_helper::FakeCrypto;
-use crate::error::CoseCipherError;
+#[cfg(not(feature = "std"))]
+use alloc::vec;
+
 use ciborium::value::Value;
 use coset::cwt::ClaimsSetBuilder;
 use coset::iana::{Algorithm, CwtClaimName};
 use coset::{AsCborValue, CoseKey, CoseKeyBuilder, CoseMac0Builder, HeaderBuilder};
 
-#[cfg(not(feature = "std"))]
-use alloc::vec;
+use crate::common::test_helper::FakeCrypto;
+use crate::error::CoseCipherError;
 
 use super::*;
 
@@ -209,7 +210,6 @@ fn test_encrypt_decrypt_invalid_header(
         Some(unprotected_invalid),
         Some(protected_header),
     );
-    assert!(encrypted.is_err());
     assert!(encrypted.err().map_or(false, |x| {
         if let AccessTokenError::CoseCipherError(CoseCipherError::HeaderAlreadySet {
             existing_header_name,

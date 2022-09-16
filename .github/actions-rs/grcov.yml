@@ -1,4 +1,7 @@
 ignore:
   - "../*"
   - "/*"
+  - "*/test_helper.rs"
 source-dir: .
+excl-line: "#\\[derive\\("
+excl-start: "mod tests \\{"
