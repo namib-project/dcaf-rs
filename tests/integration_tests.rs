@@ -9,11 +9,15 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
+use std::fmt::Debug;
+
 use ciborium::value::Value;
-use coset::cwt::{ClaimsSetBuilder, Timestamp};
-use coset::iana::EllipticCurve::P_256;
-use coset::iana::{Algorithm, CwtClaimName};
 use coset::{CoseKeyBuilder, Header, HeaderBuilder, Label};
+use coset::cwt::{ClaimsSetBuilder, Timestamp};
+use coset::iana::{Algorithm, CwtClaimName};
+use coset::iana::EllipticCurve::P_256;
+
+use dcaf::{CoseSign1Cipher, sign_access_token};
 use dcaf::common::cbor_map::ToCborMap;
 use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
 use dcaf::common::scope::TextEncodedScope;
@@ -24,8 +28,6 @@ use dcaf::endpoints::token_req::{
 };
 use dcaf::error::CoseCipherError;
 use dcaf::token::CoseCipherCommon;
-use dcaf::{sign_access_token, CoseSign1Cipher};
-use std::fmt::Debug;
 
 fn example_headers() -> (Header, Header) {
     let unprotected_header = HeaderBuilder::new()
@@ -47,7 +49,7 @@ pub(crate) struct FakeCrypto {}
 impl CoseCipherCommon for FakeCrypto {
     type Error = String;
 
-    fn header(
+    fn set_headers(
         &self,
         unprotected_header: &mut Header,
         protected_header: &mut Header,
