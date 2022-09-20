@@ -98,7 +98,7 @@
 //! # impl CoseCipherCommon for FakeCipher {
 //! #     type Error = String;
 //! #
-//! #     fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
+//! #     fn set_headers(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
 //! #         Ok(())
 //! #     }
 //! # }
@@ -232,8 +232,8 @@ pub use endpoints::token_req::{
 };
 #[doc(inline)]
 pub use token::{
-    decrypt_access_token, encrypt_access_token, get_token_headers, sign_access_token,
-    verify_access_token, CoseCipherCommon, CoseEncrypt0Cipher, CoseMac0Cipher, CoseSign1Cipher,
+    CoseEncryptCipher, CoseMacCipher, CoseSignCipher,
+    decrypt_access_token, encrypt_access_token, get_token_headers, sign_access_token, verify_access_token,
 };
 
 pub mod common;

@@ -11,21 +11,20 @@
 
 //! Contains error types used across this crate.
 
-#[cfg(feature = "std")]
-use {std::marker::PhantomData, std::num::TryFromIntError};
-
-#[cfg(not(feature = "std"))]
-use {
-    alloc::format, alloc::string::String, alloc::string::ToString, core::num::TryFromIntError,
-    derive_builder::export::core::marker::PhantomData,
-};
-
 use core::any::type_name;
 use core::fmt::{Display, Formatter};
 
 use ciborium::value::Value;
 use coset::{CoseError, Label};
 use strum_macros::IntoStaticStr;
+
+#[cfg(feature = "std")]
+use {std::marker::PhantomData, std::num::TryFromIntError};
+#[cfg(not(feature = "std"))]
+use {
+    alloc::format, alloc::string::String, alloc::string::ToString, core::num::TryFromIntError,
+    derive_builder::export::core::marker::PhantomData,
+};
 
 /// Error type used when the parameter of the type `T` couldn't be
 /// converted into [`expected_type`](WrongSourceTypeError::expected_type) because the received
@@ -440,6 +439,14 @@ where
     /// [`CoseEncrypt0`](coset::CoseEncrypt0), [`CoseSign1`](coset::CoseSign1),
     /// nor [`CoseMac0`](coset::CoseMac0).
     UnknownCoseStructure,
+    /// No matching key was found in the list of COSE_Recipient structures.
+    /// This means that the given Key Encryption Key could not be used to decrypt any of the
+    /// recipients, which means no Content Encryption Key could be extracted.
+    NoMatchingKey,
+    /// Multiple matching keys were found in the list of COSE_Recipient structures.
+    /// This means that the given Key Encryption Key could be used to decrypt multiple of the
+    /// recipients, which means the token is malformed.
+    MultipleMatchingKeys
 }
 
 impl<T> Display for AccessTokenError<T>
@@ -454,6 +461,8 @@ where
                 f,
                 "input is either invalid or none of CoseEncrypt0, CoseSign1 nor CoseMac0"
             ),
+            AccessTokenError::NoMatchingKey => write!(f, "given KEK doesn't match any recipient"),
+            AccessTokenError::MultipleMatchingKeys => write!(f, "given KEK matches multiple recipients")
         }
     }
 }
