@@ -88,8 +88,8 @@ use alloc::vec::Vec;
 use core::fmt::{Debug, Display};
 
 use ciborium::value::Value;
-use coset::cwt::ClaimsSet;
 use coset::{AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder, CoseEncryptBuilder, CoseKey, CoseMac0, CoseRecipient, CoseRecipientBuilder, CoseSign, CoseSign1, CoseSign1Builder, CoseSignatureBuilder, CoseSignBuilder, EncryptionContext, Header, HeaderBuilder, ProtectedHeader};
+use coset::cwt::ClaimsSet;
 use rand::{CryptoRng, RngCore};
 
 use crate::common::cbor_values::ByteString;
@@ -97,6 +97,10 @@ use crate::error::{AccessTokenError, CoseCipherError};
 
 #[cfg(test)]
 mod tests;
+
+pub trait ToCoseKey {
+    fn to_cose_key(&self) -> CoseKey;
+}
 
 macro_rules! add_common_cipher_functionality {
     [$a:ty] => {
@@ -215,8 +219,8 @@ macro_rules! add_common_cipher_functionality {
 /// # Ok::<(), CoseCipherError<String>>(())
 /// ```
 pub trait CoseEncryptCipher {
-    type EncryptKey: AsRef<CoseKey> + Into<Vec<u8>>;
-    type DecryptKey: AsRef<CoseKey> + TryFrom<Vec<u8>>;
+    type EncryptKey: ToCoseKey + Into<Vec<u8>>;
+    type DecryptKey: ToCoseKey + TryFrom<Vec<u8>>;
     /// Encrypts the given `plaintext` and `aad`, returning the result.
     ///
     /// For an example, view the documentation of [`CoseEncrypt0Cipher`].
@@ -294,8 +298,8 @@ pub trait MultipleEncryptCipher: CoseEncryptCipher {
 /// assert!(signer.verify_signature(&signature, &vec![0xDE, 0xAD]).is_err());
 /// ```
 pub trait CoseSignCipher {
-    type SignKey: AsRef<CoseKey>;
-    type VerifyKey: AsRef<CoseKey>;
+    type SignKey: ToCoseKey;
+    type VerifyKey: ToCoseKey;
 
     /// Cryptographically signs the given `target` value and returns the signature.
     ///
@@ -366,8 +370,8 @@ pub trait MultipleSignCipher: CoseSignCipher {}
 /// assert!(tagger.verify_tag(&tag, &vec![0xDE, 0xAD]).is_err());
 /// ```
 pub trait CoseMacCipher {
-    type ComputeKey: AsRef<CoseKey>;
-    type VerifyKey: AsRef<CoseKey>;
+    type ComputeKey: ToCoseKey;
+    type VerifyKey: ToCoseKey;
 
     /// Generates a MAC tag for the given `target` and returns it.
     ///
@@ -529,7 +533,7 @@ where
             external_aad.unwrap_or(&[0; 0]),
             |payload, aad| T::encrypt(&key, payload, aad, &protected, &unprotected),
         );
-    let serialized_key = key.into();
+    let serialized_key: Vec<u8> = key.into();
     for rec_key in keys {
         let (rec_unprotected, rec_protected) = prepare_headers!(rec_key, None, None, &mut rng, T)?;
         builder = builder.add_recipient(CoseRecipientBuilder::new().protected(rec_protected.clone()).unprotected(rec_unprotected.clone()).create_ciphertext(
@@ -684,13 +688,13 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
     match value {
         Some(Value::Array(x)) => {
             let mut iter = x.into_iter();
+            let protected = iter
+                .next()
+                .map(ProtectedHeader::from_cbor_bstr)
+                .and_then(Result::ok);
             let unprotected = iter
                 .next()
                 .map(Header::from_cbor_value)
-                .and_then(Result::ok);
-            let protected = iter
-                .next()
-                .map(ProtectedHeader::from_cbor_value)
                 .and_then(Result::ok);
             if let (Some(u), Some(p)) = (unprotected, protected) {
                 Some((u, p))
@@ -804,7 +808,7 @@ where
 pub fn decrypt_access_token<T>(
     key: &T::DecryptKey,
     token: &ByteString,
-    aad: Option<&[u8]>,
+    external_aad: Option<&[u8]>,
 ) -> Result<ClaimsSet, AccessTokenError<T::Error>>
 where
     T: CoseEncryptCipher,
@@ -815,7 +819,7 @@ where
         get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
     // TODO: Verify protected header
     let result = encrypt
-        .decrypt(aad.unwrap_or(&[0; 0]), |ciphertext, aad| {
+        .decrypt(external_aad.unwrap_or(&[0; 0]), |ciphertext, aad| {
             T::decrypt(key, ciphertext, aad, &unprotected, &protected)
         })
         .map_err(AccessTokenError::from_cose_cipher_error)?;
@@ -839,7 +843,9 @@ where
     let (unprotected, protected) =
         get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
     let aad = external_aad.unwrap_or(&[0; 0]);
-    let kek_id = kek.as_ref().key_id.as_slice();
+    // FIXME: below line does not compile
+    let cose_kek: CoseKey = kek.to_cose_key();
+    let kek_id = cose_kek.key_id.as_slice();
     // One of the recipient structures should contain CEK encrypted with our KEK.
     let recipients = encrypt
         .recipients
@@ -849,7 +855,7 @@ where
         r.decrypt(EncryptionContext::EncRecipient, aad, |ciphertext, aad| {
             K::decrypt(kek, ciphertext, aad, &r.unprotected, &r.protected)
         })
-        .ok()
+            .ok()
     });
     // Our CEK must be contained exactly once.
     if let Some(content_key) = content_keys.next() {
