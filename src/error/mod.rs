@@ -299,6 +299,29 @@ where
     pub fn other_error(other: T) -> CoseCipherError<T> {
         CoseCipherError::Other(other)
     }
+
+    // TODO: Maybe there's a better way to do the below, parts of this are redundant and duplicated.
+    pub(crate) fn from_kek_error<C: Display>(error: CoseCipherError<T>) -> CoseCipherError<MultipleCoseError<T, C>> {
+        match error {
+            CoseCipherError::Other(x) => CoseCipherError::Other(MultipleCoseError::KekError(x)),
+            CoseCipherError::HeaderAlreadySet { existing_header_name } => CoseCipherError::HeaderAlreadySet {
+                existing_header_name
+            },
+            CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
+            CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure
+        }
+    }
+
+    pub(crate) fn from_cek_error<K: Display>(error: CoseCipherError<T>) -> CoseCipherError<MultipleCoseError<K, T>> {
+        match error {
+            CoseCipherError::Other(x) => CoseCipherError::Other(MultipleCoseError::CekError(x)),
+            CoseCipherError::HeaderAlreadySet { existing_header_name } => CoseCipherError::HeaderAlreadySet {
+                existing_header_name
+            },
+            CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
+            CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure
+        }
+    }
 }
 
 impl<T> Display for CoseCipherError<T>
@@ -316,6 +339,21 @@ where
             CoseCipherError::VerificationFailure => write!(f, "data verification failed"),
             CoseCipherError::DecryptionFailure => write!(f, "decryption failed"),
             CoseCipherError::Other(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum MultipleCoseError<K, C> where K: Display, C: Display {
+    KekError(K),
+    CekError(C)
+}
+
+impl<K, C> Display for MultipleCoseError<K, C> where K: Display, C: Display {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            MultipleCoseError::KekError(k) => k.fmt(f),
+            MultipleCoseError::CekError(c) => c.fmt(f)
         }
     }
 }
@@ -467,22 +505,44 @@ where
     }
 }
 
-impl<T> AccessTokenError<T>
-where
-    T: Display,
-{
-    /// Creates a new [`AccessTokenError`] of variant [`CoseError`](AccessTokenError::CoseError)
-    /// with the given `error`.
+impl<T> From<CoseCipherError<T>> for AccessTokenError<T> where T: Display {
     #[must_use]
-    pub fn from_cose_error(error: CoseError) -> AccessTokenError<T> {
+    fn from(error: CoseCipherError<T>) -> Self {
+        AccessTokenError::CoseCipherError(error)
+    }
+}
+
+impl<T> From<CoseError> for AccessTokenError<T> where T: Display {
+    #[must_use]
+    fn from(error: CoseError) -> Self {
         AccessTokenError::CoseError(error)
     }
+}
 
-    /// Creates a new [`AccessTokenError`] of variant
-    /// [`CoseCipherError`](AccessTokenError::CoseCipherError) with the given `error`.
-    #[must_use]
-    pub fn from_cose_cipher_error(error: CoseCipherError<T>) -> AccessTokenError<T> {
-        AccessTokenError::CoseCipherError(error)
+impl<T> AccessTokenError<T>
+where
+    T: Display {
+
+    // TODO: Again, as in CoseCipherError, maybe there's a better way to do the below.
+
+    pub(crate) fn from_kek_error<C: Display>(error: AccessTokenError<T>) -> AccessTokenError<MultipleCoseError<T, C>> {
+        match error {
+            AccessTokenError::CoseCipherError(x) => AccessTokenError::CoseCipherError(CoseCipherError::from_kek_error(x)),
+            AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
+            AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
+            AccessTokenError::NoMatchingKey => AccessTokenError::NoMatchingKey,
+            AccessTokenError::MultipleMatchingKeys => AccessTokenError::MultipleMatchingKeys,
+        }
+    }
+
+    pub(crate) fn from_cek_error<K: Display>(error: AccessTokenError<T>) -> AccessTokenError<MultipleCoseError<K, T>> {
+        match error {
+            AccessTokenError::CoseCipherError(x) => AccessTokenError::CoseCipherError(CoseCipherError::from_cek_error(x)),
+            AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
+            AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
+            AccessTokenError::NoMatchingKey => AccessTokenError::NoMatchingKey,
+            AccessTokenError::MultipleMatchingKeys => AccessTokenError::MultipleMatchingKeys,
+        }
     }
 }
 

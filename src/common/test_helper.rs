@@ -13,12 +13,12 @@
 //! Not intended to be used outside of this crate.
 
 use core::convert::identity;
-use core::fmt::Debug;
+use core::fmt::{Debug, Display};
 
 use ciborium::value::Value;
 use coset::{CoseKey, CoseKeyBuilder, Header, Label, ProtectedHeader};
 use coset::iana::Algorithm;
-use rand::{CryptoRng, RngCore};
+use rand::{CryptoRng, Error, RngCore};
 
 #[cfg(not(feature = "std"))]
 use {
@@ -29,8 +29,8 @@ use {
 
 use crate::{CoseEncryptCipher, CoseMacCipher, CoseSignCipher};
 use crate::common::cbor_map::ToCborMap;
-use crate::error::CoseCipherError;
-use crate::token::{MultipleEncryptCipher, MultipleSignCipher};
+use crate::error::{AccessTokenError, CoseCipherError, MultipleCoseError};
+use crate::token::{MultipleEncryptCipher, MultipleSignCipher, ToCoseKey};
 
 /// Helper function for tests which ensures that [`value`] serializes to the hexadecimal bytestring
 /// [expected_hex] and deserializes back to [`value`].
@@ -89,7 +89,11 @@ where
 pub(crate) struct FakeCrypto {}
 
 impl FakeCrypto {
-    fn set_headers_common<RNG: RngCore + CryptoRng>(key: &[u8; 5], unprotected_header: &mut Header, protected_header: &mut Header, rng: RNG) -> Result<(), CoseCipherError<String>> {
+    fn set_headers_common(
+        key: &FakeKey,
+        unprotected_header: &mut Header,
+        protected_header: &mut Header,
+    ) -> Result<(), CoseCipherError<String>> {
         // We have to later verify these headers really are used.
         if let Some(label) = unprotected_header
             .rest
@@ -101,32 +105,47 @@ impl FakeCrypto {
         if protected_header.alg != None {
             return Err(CoseCipherError::existing_header("alg"));
         }
+        if !protected_header.key_id.is_empty() {
+            return Err(CoseCipherError::existing_header("key_id"));
+        }
         unprotected_header.rest.push((Label::Int(47), Value::Null));
         protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));
+        protected_header.key_id = key.kid.to_vec();
         Ok(())
     }
 }
 
-struct Key([u8; 5]);
+#[derive(Clone)]
+pub(crate) struct FakeKey {
+    key: [u8; 5],
+    kid: [u8; 2],
+}
 
-impl AsRef<CoseKey> for Key {
-    fn as_ref(&self) -> &CoseKey {
-        &CoseKeyBuilder::new_symmetric_key(self.0.to_vec()).build()
+impl ToCoseKey for FakeKey {
+    fn to_cose_key(&self) -> CoseKey {
+        CoseKeyBuilder::new_symmetric_key(self.key.to_vec())
+            .key_id(self.kid.to_vec())
+            .build()
     }
 }
 
-impl TryFrom<Vec<u8>> for Key {
+impl TryFrom<Vec<u8>> for FakeKey {
     type Error = String;
 
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+    // Should be 5 bytes of key + 2 bytes of kid
+    fn try_from(mut value: Vec<u8>) -> Result<Self, Self::Error> {
+        let kid_value = value.split_off(5);
         let key: [u8; 5] = value.try_into().map_err(|_| "Invalid input size")?;
-        Ok(Key(key))
+        let kid: [u8; 2] = kid_value.try_into().map_err(|_| "Invalid input size")?;
+        Ok(FakeKey { key, kid })
     }
 }
 
-impl From<Key> for Vec<u8> {
-    fn from(k: Key) -> Self {
-        k.0.to_vec()
+impl From<FakeKey> for Vec<u8> {
+    fn from(k: FakeKey) -> Self {
+        let mut key = k.key.to_vec();
+        key.append(&mut k.kid.to_vec());
+        key
     }
 }
 
@@ -134,40 +153,60 @@ impl From<Key> for Vec<u8> {
 /// "real" cryptography.
 /// This is purely to be used for testing and obviously offers no security at all.
 impl CoseEncryptCipher for FakeCrypto {
-    type EncryptKey = Key;
+    type EncryptKey = FakeKey;
     type DecryptKey = Self::EncryptKey;
     type Error = String;
 
-    fn encrypt(key: &Self::EncryptKey, plaintext: &[u8], aad: &[u8], protected_header: &Header, unprotected_header: &Header) -> Vec<u8> {
-        // We put the key before and the AAD behind the data.
+    fn encrypt(
+        key: &Self::EncryptKey,
+        plaintext: &[u8],
+        aad: &[u8],
+        protected_header: &Header,
+        unprotected_header: &Header,
+    ) -> Vec<u8> {
+        // We put the key and the AAD before the data.
         // Again, this obviously isn't secure in any sane definition of the word.
-        let mut result: Vec<u8> = vec![];
-        result.append(&mut key.0.to_vec());
-        result.append(&mut plaintext.to_vec());
+        let mut result: Vec<u8> = key.key.to_vec();
         result.append(&mut aad.to_vec());
+        result.append(&mut plaintext.to_vec());
         result
     }
 
-    fn decrypt(key: &Self::DecryptKey, ciphertext: &[u8], aad: &[u8], unprotected_header: &Header, protected_header: &ProtectedHeader) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+    fn decrypt(
+        key: &Self::DecryptKey,
+        ciphertext: &[u8],
+        aad: &[u8],
+        unprotected_header: &Header,
+        protected_header: &ProtectedHeader,
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         // Now we just split off the AAD and key we previously put at the end of the data.
         // We return an error if it does not match.
-        if ciphertext.len() < (aad.len() + key.0.len()) {
+        if key.kid.to_vec() != protected_header.header.key_id {
+            // Mismatching key
+            return Err(CoseCipherError::DecryptionFailure);
+        }
+        if ciphertext.len() < (aad.len() + key.key.len()) {
             return Err(CoseCipherError::Other(
                 "Encrypted data has invalid length!".to_string(),
             ));
         }
         let mut result: Vec<u8> = ciphertext.to_vec();
-        let aad_result = result.split_off(ciphertext.len() + key.0.len());
-        let plaintext = result.split_off(key.0.len());
-        if aad == aad_result && key.0 == result.as_slice() {
+        let plaintext = result.split_off(aad.len() + key.key.len());
+        let aad_result = result.split_off(key.key.len());
+        if aad == aad_result && key.key == result.as_slice() {
             Ok(plaintext)
         } else {
-            Err(CoseCipherError::Other("AADs don't match!".to_string()))
+            Err(CoseCipherError::DecryptionFailure)
         }
     }
 
-    fn set_headers<RNG: RngCore + CryptoRng>(key: &Self::EncryptKey, unprotected_header: &mut Header, protected_header: &mut Header, rng: RNG) -> Result<(), CoseCipherError<Self::Error>> {
-        Self::set_headers_common(&key.0, unprotected_header, protected_header, rng)
+    fn set_headers<RNG: RngCore + CryptoRng>(
+        key: &Self::EncryptKey,
+        unprotected_header: &mut Header,
+        protected_header: &mut Header,
+        rng: RNG,
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        Self::set_headers_common(key, unprotected_header, protected_header)
     }
 }
 
@@ -175,27 +214,52 @@ impl CoseEncryptCipher for FakeCrypto {
 /// "real" cryptography.
 /// This is purely to be used for testing and obviously offers no security at all.
 impl CoseSignCipher for FakeCrypto {
-    type SignKey = Key;
+    type SignKey = FakeKey;
     type VerifyKey = Self::SignKey;
     type Error = String;
 
-    fn sign(key: &Self::SignKey, target: &[u8], unprotected_header: &Header, protected_header: &Header) -> Vec<u8> {
+    fn sign(
+        key: &Self::SignKey,
+        target: &[u8],
+        unprotected_header: &Header,
+        protected_header: &Header,
+    ) -> Vec<u8> {
         // We simply append the key behind the data.
         let mut signature = target.to_vec();
-        signature.append(&mut key.0.to_vec());
+        signature.append(&mut key.key.to_vec());
         signature
     }
 
-    fn verify(key: &Self::VerifyKey, signature: &[u8], signed_data: &[u8], unprotected_header: &Header, protected_header: &ProtectedHeader, unprotected_signature_header: Option<&Header>, protected_signature_header: Option<&ProtectedHeader>) -> Result<(), CoseCipherError<Self::Error>> {
-        if signature == Self::sign(key, signed_data, unprotected_header, &protected_header.header) {
+    fn verify(
+        key: &Self::VerifyKey,
+        signature: &[u8],
+        signed_data: &[u8],
+        unprotected_header: &Header,
+        protected_header: &ProtectedHeader,
+        unprotected_signature_header: Option<&Header>,
+        protected_signature_header: Option<&ProtectedHeader>,
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        let matching_kid = if let Some(protected) = protected_signature_header {
+            protected.header.key_id == key.kid
+        } else {
+            protected_header.header.key_id == key.kid
+        };
+        let signed_again = Self::sign(key, signed_data, unprotected_header, &protected_header.header);
+        if matching_kid && signed_again == signature
+        {
             Ok(())
         } else {
             Err(CoseCipherError::VerificationFailure)
         }
     }
 
-    fn set_headers<RNG: RngCore + CryptoRng>(key: &Self::SignKey, unprotected_header: &mut Header, protected_header: &mut Header, rng: RNG) -> Result<(), CoseCipherError<Self::Error>> {
-        Self::set_headers_common(&key.0, unprotected_header, protected_header, rng)
+    fn set_headers<RNG: RngCore + CryptoRng>(
+        key: &Self::SignKey,
+        unprotected_header: &mut Header,
+        protected_header: &mut Header,
+        rng: RNG,
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        Self::set_headers_common(&key, unprotected_header, protected_header)
     }
 }
 
@@ -203,36 +267,109 @@ impl CoseSignCipher for FakeCrypto {
 /// "real" cryptography.
 /// This is purely to be used for testing and obviously offers no security at all.
 impl CoseMacCipher for FakeCrypto {
-    type ComputeKey = Key;
+    type ComputeKey = FakeKey;
     type VerifyKey = Self::ComputeKey;
     type Error = String;
 
-    fn compute(key: &Self::ComputeKey, target: &[u8], unprotected_header: &Header, protected_header: &Header) -> Vec<u8> {
+    fn compute(
+        key: &Self::ComputeKey,
+        target: &[u8],
+        unprotected_header: &Header,
+        protected_header: &Header,
+    ) -> Vec<u8> {
         // We simply append the key behind the data.
         let mut tag = target.to_vec();
-        tag.append(&mut key.0.to_vec());
+        tag.append(&mut key.key.to_vec());
         tag
     }
 
-    fn verify(key: &Self::VerifyKey, tag: &[u8], maced_data: &[u8], unprotected_header: &Header, protected_header: &ProtectedHeader) -> Result<(), CoseCipherError<Self::Error>> {
-        if tag == Self::compute(key, maced_data, unprotected_header, &protected_header.header) {
+    fn verify(
+        key: &Self::VerifyKey,
+        tag: &[u8],
+        maced_data: &[u8],
+        unprotected_header: &Header,
+        protected_header: &ProtectedHeader,
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        if protected_header.header.key_id == key.kid
+            && tag
+            == Self::compute(
+            key,
+            maced_data,
+            unprotected_header,
+            &protected_header.header,
+        )
+        {
             Ok(())
         } else {
             Err(CoseCipherError::VerificationFailure)
         }
     }
 
-    fn set_headers<RNG: RngCore + CryptoRng>(key: &Self::ComputeKey, unprotected_header: &mut Header, protected_header: &mut Header, rng: RNG) -> Result<(), CoseCipherError<Self::Error>> {
-        Self::set_headers_common(&key.0, unprotected_header, protected_header, rng)
+    fn set_headers<RNG: RngCore + CryptoRng>(
+        key: &Self::ComputeKey,
+        unprotected_header: &mut Header,
+        protected_header: &mut Header,
+        rng: RNG,
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        Self::set_headers_common(&key, unprotected_header, protected_header)
     }
 }
 
 impl MultipleEncryptCipher for FakeCrypto {
     fn generate_cek<RNG: RngCore + CryptoRng>(rng: &mut RNG) -> Self::EncryptKey {
         let mut key = [0; 5];
+        let mut kid = [0; 2];
         rng.fill_bytes(&mut key);
-        Key(key)
+        rng.fill_bytes(&mut kid);
+        FakeKey { key, kid }
     }
 }
 
 impl MultipleSignCipher for FakeCrypto {}
+
+#[derive(Clone, Copy)]
+pub(crate) struct FakeRng;
+
+impl RngCore for FakeRng {
+    fn next_u32(&mut self) -> u32 {
+        0
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        0
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        dest.fill(0)
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
+        Ok(dest.fill(0))
+    }
+}
+
+impl CryptoRng for FakeRng {}
+
+// Makes the tests easier later on, as we use String as the error type in there.
+impl<C, K> From<CoseCipherError<MultipleCoseError<C, K>>> for CoseCipherError<String> where C: Display, K: Display {
+    fn from(x: CoseCipherError<MultipleCoseError<C, K>>) -> Self {
+        match x {
+            CoseCipherError::HeaderAlreadySet { existing_header_name } => CoseCipherError::HeaderAlreadySet { existing_header_name },
+            CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
+            CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
+            CoseCipherError::Other(x) => CoseCipherError::Other(x.to_string())
+        }
+    }
+}
+
+impl<C, K> From<AccessTokenError<MultipleCoseError<C, K>>> for AccessTokenError<String> where C: Display, K: Display {
+    fn from(x: AccessTokenError<MultipleCoseError<C, K>>) -> Self {
+        match x {
+            AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
+            AccessTokenError::CoseCipherError(x) => AccessTokenError::CoseCipherError(CoseCipherError::from(x)),
+            AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
+            AccessTokenError::NoMatchingKey => AccessTokenError::NoMatchingKey,
+            AccessTokenError::MultipleMatchingKeys => AccessTokenError::MultipleMatchingKeys
+        }
+    }
+}

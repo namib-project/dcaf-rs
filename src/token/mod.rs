@@ -85,7 +85,7 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use core::fmt::{Debug, Display};
+use core::fmt::{Debug, Display, Formatter, Pointer};
 
 use ciborium::value::Value;
 use coset::{AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder, CoseEncryptBuilder, CoseKey, CoseMac0, CoseRecipient, CoseRecipientBuilder, CoseSign, CoseSign1, CoseSign1Builder, CoseSignatureBuilder, CoseSignBuilder, EncryptionContext, Header, HeaderBuilder, ProtectedHeader};
@@ -93,7 +93,7 @@ use coset::cwt::ClaimsSet;
 use rand::{CryptoRng, RngCore};
 
 use crate::common::cbor_values::ByteString;
-use crate::error::{AccessTokenError, CoseCipherError};
+use crate::error::{AccessTokenError, CoseCipherError, MultipleCoseError};
 
 #[cfg(test)]
 mod tests;
@@ -410,7 +410,6 @@ macro_rules! prepare_headers {
         let mut unprotected = $unprotected.unwrap_or_else(|| HeaderBuilder::new().build());
         let mut protected = $protected.unwrap_or_else(|| HeaderBuilder::new().build());
         if let Err(e) = <$t>::set_headers($key, &mut unprotected, &mut protected, $rng)
-            .map_err(AccessTokenError::from_cose_cipher_error)
         {
             Err(e)
         } else {
@@ -494,13 +493,13 @@ where
         .unprotected(unprotected.clone())
         .protected(protected.clone())
         .create_ciphertext(
-            &claims.to_vec().map_err(AccessTokenError::from_cose_error)?[..],
+            &claims.to_vec()?[..],
             external_aad.unwrap_or(&[0; 0]),
             |payload, aad| T::encrypt(&key, payload, aad, &unprotected, &protected),
         )
         .build()
         .to_vec()
-        .map_err(AccessTokenError::from_cose_error)
+        .map_err(AccessTokenError::from)
 }
 
 /// Encrypts the given `claims` with the given headers and `aad` using `cipher` for cryptography,
@@ -529,7 +528,7 @@ where
         .unprotected(unprotected.clone())
         .protected(protected.clone())
         .create_ciphertext(
-            &claims.to_vec().map_err(AccessTokenError::from_cose_error)?[..],
+            &claims.to_vec()?[..],
             external_aad.unwrap_or(&[0; 0]),
             |payload, aad| T::encrypt(&key, payload, aad, &protected, &unprotected),
         );
@@ -543,7 +542,7 @@ where
     }
     builder.build()
         .to_vec()
-        .map_err(AccessTokenError::from_cose_error)
+        .map_err(AccessTokenError::from)
 }
 
 /// Signs the given `claims` with the given headers and `aad` using `cipher` for cryptography,
@@ -611,13 +610,13 @@ where
     CoseSign1Builder::new()
         .unprotected(unprotected.clone())
         .protected(protected.clone())
-        .payload(claims.to_vec().map_err(AccessTokenError::from_cose_error)?)
+        .payload(claims.to_vec()?)
         .create_signature(external_aad.unwrap_or(&[0; 0]), |x| {
             T::sign(key, x, &unprotected, &protected)
         })
         .build()
         .to_vec()
-        .map_err(AccessTokenError::from_cose_error)
+        .map_err(AccessTokenError::from)
 }
 
 /// TODO.
@@ -639,7 +638,7 @@ pub fn sign_access_token_multiple<T, RNG>(
     let mut builder = CoseSignBuilder::new()
         .unprotected(unprotected.clone())
         .protected(protected.clone())
-        .payload(claims.to_vec().map_err(AccessTokenError::from_cose_error)?);
+        .payload(claims.to_vec().map_err(AccessTokenError::from)?);
 
     for key in keys {
         let (rec_unprotected, rec_protected) = prepare_headers!(key, None, None, &mut rng, T)?;
@@ -651,7 +650,7 @@ pub fn sign_access_token_multiple<T, RNG>(
 
     builder.build()
         .to_vec()
-        .map_err(AccessTokenError::from_cose_error)
+        .map_err(AccessTokenError::from)
 }
 
 /// Returns the headers of the given signed ([`CoseSign1`]), MAC tagged ([`CoseMac0`]),
@@ -742,7 +741,7 @@ where
             None,
         )
     })
-    .map_err(AccessTokenError::from_cose_cipher_error)
+    .map_err(AccessTokenError::from)
 }
 
 /// TODO.
@@ -752,7 +751,6 @@ where
 /// TODO.
 pub fn verify_access_token_multiple<T>(
     key: &T::VerifyKey,
-    kid: &[u8],
     token: &ByteString,
     aad: Option<&[u8]>,
 ) -> Result<(), AccessTokenError<T::Error>>
@@ -760,6 +758,7 @@ where
     T: CoseSignCipher,
 {
     let sign = CoseSign::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
+    let kid = key.to_cose_key().key_id;
     let (unprotected, protected) =
         get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
     let matching = sign
@@ -768,9 +767,11 @@ where
         .enumerate()
         .filter(|(_, s)| s.unprotected.key_id == kid || s.protected.header.key_id == kid)
         .map(|(i, _)| i);
+    let mut matching_kid = false;
     // We iterate over each signature whose kid matches until it completes successfully.
     // TODO: However: https://www.rfc-editor.org/rfc/rfc9052.html#section-4.1-3
     for index in matching {
+        matching_kid = true;
         // TODO: Verify protected headers
         if let Ok(()) =
             sign.verify_signature(index, aad.unwrap_or(&[0; 0]), |signature, signed_data| {
@@ -788,9 +789,13 @@ where
             return Ok(());
         }
     }
-    Err(AccessTokenError::from_cose_cipher_error(
-        CoseCipherError::VerificationFailure,
-    ))
+    if matching_kid {
+        Err(AccessTokenError::from(
+            CoseCipherError::VerificationFailure,
+        ))
+    } else {
+        Err(AccessTokenError::NoMatchingKey)
+    }
 }
 
 /// Decrypts the given `token` and `aad` using `cipher` for cryptography,
@@ -814,16 +819,15 @@ where
     T: CoseEncryptCipher,
 {
     let encrypt =
-        CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from_cose_error)?;
+        CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
     let (unprotected, protected) =
         get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
     // TODO: Verify protected header
     let result = encrypt
         .decrypt(external_aad.unwrap_or(&[0; 0]), |ciphertext, aad| {
             T::decrypt(key, ciphertext, aad, &unprotected, &protected)
-        })
-        .map_err(AccessTokenError::from_cose_cipher_error)?;
-    ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from_cose_error)
+        })?;
+    ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from)
 }
 
 /// TODO.
@@ -833,17 +837,16 @@ pub fn decrypt_access_token_multiple<K, C>(
     kek: &K::DecryptKey,
     token: &ByteString,
     external_aad: Option<&[u8]>,
-) -> Result<ClaimsSet, AccessTokenError<C::Error>>
+) -> Result<ClaimsSet, AccessTokenError<MultipleCoseError<K::Error, C::Error>>>
 where
     K: CoseEncryptCipher,
     C: CoseEncryptCipher,
 {
     let encrypt =
-        CoseEncrypt::from_slice(token.as_slice()).map_err(AccessTokenError::from_cose_error)?;
+        CoseEncrypt::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
     let (unprotected, protected) =
         get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
     let aad = external_aad.unwrap_or(&[0; 0]);
-    // FIXME: below line does not compile
     let cose_kek: CoseKey = kek.to_cose_key();
     let kek_id = cose_kek.key_id.as_slice();
     // One of the recipient structures should contain CEK encrypted with our KEK.
@@ -851,25 +854,25 @@ where
         .recipients
         .iter()
         .filter(|x| x.unprotected.key_id == kek_id || x.protected.header.key_id == kek_id);
-    let mut content_keys = recipients.filter_map(|r| {
-        r.decrypt(EncryptionContext::EncRecipient, aad, |ciphertext, aad| {
+    let mut content_keys = recipients.map(|r| {
+        r.decrypt(EncryptionContext::EncRecipient, &[0; 0], |ciphertext, aad| {
             K::decrypt(kek, ciphertext, aad, &r.unprotected, &r.protected)
         })
-            .ok()
     });
     // Our CEK must be contained exactly once.
-    if let Some(content_key) = content_keys.next() {
+    if let Some(content_key_result) = content_keys.next() {
         if content_keys.next().is_none() {
+            let content_key = content_key_result.map_err(CoseCipherError::from_kek_error)?;
             let target_key = C::DecryptKey::try_from(content_key).map_err(|_| {
-                AccessTokenError::from_cose_cipher_error(CoseCipherError::DecryptionFailure)
+                CoseCipherError::DecryptionFailure
             })?;
             // TODO: Verify protected header
             let result = encrypt
                 .decrypt(aad, |ciphertext, aad| {
                     C::decrypt(&target_key, ciphertext, aad, &unprotected, &protected)
                 })
-                .map_err(AccessTokenError::from_cose_cipher_error)?;
-            ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from_cose_error)
+                .map_err(CoseCipherError::from_cek_error)?;
+            ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from)
         } else {
             // TODO: Implement strict mode, where this is prohibited, otherwise allow it
             Err(AccessTokenError::MultipleMatchingKeys)

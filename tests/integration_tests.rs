@@ -9,15 +9,14 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-use std::fmt::Debug;
-
 use ciborium::value::Value;
-use coset::{CoseKeyBuilder, Header, HeaderBuilder, Label};
+use coset::{CborSerializable, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, iana, KeyType, Label, ProtectedHeader};
 use coset::cwt::{ClaimsSetBuilder, Timestamp};
 use coset::iana::{Algorithm, CwtClaimName};
 use coset::iana::EllipticCurve::P_256;
+use rand::{CryptoRng, Error, RngCore};
 
-use dcaf::{CoseSign1Cipher, sign_access_token};
+use dcaf::{CoseSignCipher, sign_access_token};
 use dcaf::common::cbor_map::ToCborMap;
 use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
 use dcaf::common::scope::TextEncodedScope;
@@ -27,7 +26,78 @@ use dcaf::endpoints::token_req::{
     TokenType,
 };
 use dcaf::error::CoseCipherError;
-use dcaf::token::CoseCipherCommon;
+use dcaf::token::ToCoseKey;
+
+#[derive(Clone)]
+pub(crate) struct EC2P256Key {
+    x: Vec<u8>,
+    y: Vec<u8>,
+}
+
+impl ToCoseKey for EC2P256Key {
+    fn to_cose_key(&self) -> CoseKey {
+        CoseKeyBuilder::new_ec2_pub_key(
+            P_256,
+            self.x.to_vec(),
+            self.y.to_vec(),
+        )
+            .build()
+    }
+}
+
+impl TryFrom<Vec<u8>> for EC2P256Key {
+    type Error = String;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        let key = CoseKey::from_slice(value.as_slice()).map_err(|x| x.to_string())?;
+        assert_eq!(key.kty, KeyType::Assigned(iana::KeyType::EC2));
+        assert_eq!(get_param(Label::Int(iana::Ec2KeyParameter::Crv as i64), &key.params), Some(Value::from(P_256 as u64)));
+
+        if let Some(Value::Bytes(x)) = get_param(Label::Int(iana::Ec2KeyParameter::X as i64), &key.params) {
+            if let Some(Value::Bytes(y)) = get_param(Label::Int(iana::Ec2KeyParameter::Y as i64), &key.params) {
+                return Ok(EC2P256Key {
+                    x,
+                    y,
+                })
+            }
+        }
+        return Err("x and y must be present in key as bytes".to_string());
+
+        fn get_param(label: Label, params: &Vec<(Label, Value)>) -> Option<Value> {
+            let mut iter = params.iter().filter(|x| x.0 == label);
+            iter.map(|x| x.1.clone()).next()
+        }
+    }
+}
+
+impl From<EC2P256Key> for Vec<u8> {
+    fn from(k: EC2P256Key) -> Self {
+        k.to_cose_key().to_vec().expect("couldn't serialize key")
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct FakeRng;
+
+impl RngCore for FakeRng {
+    fn next_u32(&mut self) -> u32 {
+        0
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        0
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        dest.fill(0)
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
+        Ok(dest.fill(0))
+    }
+}
+
+impl CryptoRng for FakeRng {}
 
 fn example_headers() -> (Header, Header) {
     let unprotected_header = HeaderBuilder::new()
@@ -40,19 +110,61 @@ fn example_headers() -> (Header, Header) {
 }
 
 fn example_aad() -> Vec<u8> {
-    vec![0x01, 0x02, 0x03, 0x04, 0x05]
+    vec![0x10, 0x12, 0x13, 0x14, 0x15]
 }
 
 #[derive(Copy, Clone)]
 pub(crate) struct FakeCrypto {}
 
-impl CoseCipherCommon for FakeCrypto {
+/// Implements basic operations from the [`CoseSign1Cipher`] trait without actually using any
+/// "real" cryptography.
+/// This is purely to be used for testing and obviously offers no security at all.
+impl CoseSignCipher for FakeCrypto {
+    type SignKey = EC2P256Key;
+    type VerifyKey = Self::SignKey;
     type Error = String;
 
-    fn set_headers(
-        &self,
+    fn sign(
+        key: &Self::SignKey,
+        target: &[u8],
+        unprotected_header: &Header,
+        protected_header: &Header,
+    ) -> Vec<u8> {
+        // We simply append the key behind the data.
+        let mut signature = target.to_vec();
+        signature.append(&mut key.x.to_vec());
+        signature.append(&mut key.y.to_vec());
+        signature
+    }
+
+    fn verify(
+        key: &Self::VerifyKey,
+        signature: &[u8],
+        signed_data: &[u8],
+        unprotected_header: &Header,
+        protected_header: &ProtectedHeader,
+        unprotected_signature_header: Option<&Header>,
+        protected_signature_header: Option<&ProtectedHeader>,
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        if signature
+            == Self::sign(
+            key,
+            signed_data,
+            unprotected_header,
+            &protected_header.header,
+        )
+        {
+            Ok(())
+        } else {
+            Err(CoseCipherError::VerificationFailure)
+        }
+    }
+
+    fn set_headers<RNG: RngCore + CryptoRng>(
+        key: &Self::SignKey,
         unprotected_header: &mut Header,
         protected_header: &mut Header,
+        rng: RNG,
     ) -> Result<(), CoseCipherError<Self::Error>> {
         // We have to later verify these headers really are used.
         if let Some(label) = unprotected_header
@@ -68,27 +180,6 @@ impl CoseCipherCommon for FakeCrypto {
         unprotected_header.rest.push((Label::Int(47), Value::Null));
         protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));
         Ok(())
-    }
-}
-
-/// Implements basic operations from the [`CoseSign1Cipher`] trait without actually using any
-/// "real" cryptography.
-/// This is purely to be used for testing and obviously offers no security at all.
-impl CoseSign1Cipher for FakeCrypto {
-    fn generate_signature(&mut self, data: &[u8]) -> Vec<u8> {
-        data.to_vec()
-    }
-
-    fn verify_signature(
-        &mut self,
-        sig: &[u8],
-        data: &[u8],
-    ) -> Result<(), CoseCipherError<Self::Error>> {
-        if sig != self.generate_signature(data) {
-            Err(CoseCipherError::VerificationFailure)
-        } else {
-            Ok(())
-        }
     }
 }
 
@@ -111,14 +202,13 @@ fn test_scenario() -> Result<(), String> {
     let scope = TextEncodedScope::try_from("first second").map_err(|x| x.to_string())?;
     assert!(scope.elements().eq(["first", "second"]));
     // Taken from RFC 8747, section 3.2.
-    let key = CoseKeyBuilder::new_ec2_pub_key(
-        P_256,
-        hex::decode("d7cc072de2205bdc1537a543d53c60a6acb62eccd890c7fa27c9e354089bbe13")
+    let key = EC2P256Key {
+        x: hex::decode("d7cc072de2205bdc1537a543d53c60a6acb62eccd890c7fa27c9e354089bbe13")
             .map_err(|x| x.to_string())?,
-        hex::decode("f95e1d4b851a2cc80fff87d8e23f22afb725d535e515d020731e79a3b4e47120")
+        y: hex::decode("f95e1d4b851a2cc80fff87d8e23f22afb725d535e515d020731e79a3b4e47120")
             .map_err(|x| x.to_string())?,
-    )
-    .build();
+    };
+
     let (unprotected_headers, protected_headers) = example_headers();
     let mut crypto = FakeCrypto {};
     let aad = example_aad();
@@ -139,27 +229,28 @@ fn test_scenario() -> Result<(), String> {
         .client_nonce(nonce)
         .ace_profile()
         .client_id(client_id)
-        .req_cnf(key.clone())
+        .req_cnf(PlainCoseKey(key.to_cose_key()))
         .build()
         .map_err(|x| x.to_string())?;
     let result = pseudo_send_receive(request.clone())?;
 
     assert_eq!(request, result);
     let expires_in: u32 = 3600;
-    let token = sign_access_token(
+    let rng = FakeRng;
+    let token = sign_access_token::<FakeCrypto, FakeRng>(
+        &key,
         ClaimsSetBuilder::new()
             .audience(resource_server.to_string())
             .issuer(auth_server.to_string())
             .issued_at(Timestamp::WholeSeconds(47))
-            .claim(CwtClaimName::Cnf, PlainCoseKey(key).to_ciborium_value())
+            .claim(CwtClaimName::Cnf, PlainCoseKey(key.to_cose_key()).to_ciborium_value())
             .build(),
         // TODO: Proper headers
-        &mut crypto,
         Some(aad.as_slice()),
         Some(unprotected_headers),
         Some(protected_headers),
-    )
-    .map_err(|x| x.to_string())?;
+        rng,
+    ).map_err(|x| x.to_string())?;
     let response = AccessTokenResponse::builder()
         .access_token(token)
         .ace_profile(AceProfile::CoapDtls)
@@ -183,8 +274,8 @@ fn test_scenario() -> Result<(), String> {
 }
 
 fn pseudo_send_receive<T>(input: T) -> Result<T, String>
-where
-    T: ToCborMap + Debug + PartialEq + Clone,
+    where
+        T: ToCborMap + PartialEq + Clone,
 {
     let mut serialized: Vec<u8> = Vec::new();
     input
