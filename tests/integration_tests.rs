@@ -10,13 +10,15 @@
  */
 
 use ciborium::value::Value;
-use coset::{CborSerializable, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, iana, KeyType, Label, ProtectedHeader};
 use coset::cwt::{ClaimsSetBuilder, Timestamp};
-use coset::iana::{Algorithm, CwtClaimName};
 use coset::iana::EllipticCurve::P_256;
+use coset::iana::{Algorithm, CwtClaimName};
+use coset::{
+    iana, CborSerializable, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, KeyType, Label,
+    ProtectedHeader,
+};
 use rand::{CryptoRng, Error, RngCore};
 
-use dcaf::{CoseSignCipher, sign_access_token, verify_access_token};
 use dcaf::common::cbor_map::ToCborMap;
 use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
 use dcaf::common::scope::TextEncodedScope;
@@ -26,7 +28,8 @@ use dcaf::endpoints::token_req::{
     TokenType,
 };
 use dcaf::error::CoseCipherError;
-use dcaf::token::{ToCoseKey, verify_access_token_multiple};
+use dcaf::token::{verify_access_token_multiple, ToCoseKey};
+use dcaf::{sign_access_token, verify_access_token, CoseSignCipher};
 
 #[derive(Clone)]
 pub(crate) struct EC2P256Key {
@@ -36,12 +39,7 @@ pub(crate) struct EC2P256Key {
 
 impl ToCoseKey for EC2P256Key {
     fn to_cose_key(&self) -> CoseKey {
-        CoseKeyBuilder::new_ec2_pub_key(
-            P_256,
-            self.x.to_vec(),
-            self.y.to_vec(),
-        )
-            .build()
+        CoseKeyBuilder::new_ec2_pub_key(P_256, self.x.to_vec(), self.y.to_vec()).build()
     }
 }
 
@@ -51,14 +49,18 @@ impl TryFrom<Vec<u8>> for EC2P256Key {
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         let key = CoseKey::from_slice(value.as_slice()).map_err(|x| x.to_string())?;
         assert_eq!(key.kty, KeyType::Assigned(iana::KeyType::EC2));
-        assert_eq!(get_param(Label::Int(iana::Ec2KeyParameter::Crv as i64), &key.params), Some(Value::from(P_256 as u64)));
+        assert_eq!(
+            get_param(Label::Int(iana::Ec2KeyParameter::Crv as i64), &key.params),
+            Some(Value::from(P_256 as u64))
+        );
 
-        if let Some(Value::Bytes(x)) = get_param(Label::Int(iana::Ec2KeyParameter::X as i64), &key.params) {
-            if let Some(Value::Bytes(y)) = get_param(Label::Int(iana::Ec2KeyParameter::Y as i64), &key.params) {
-                return Ok(EC2P256Key {
-                    x,
-                    y,
-                })
+        if let Some(Value::Bytes(x)) =
+            get_param(Label::Int(iana::Ec2KeyParameter::X as i64), &key.params)
+        {
+            if let Some(Value::Bytes(y)) =
+                get_param(Label::Int(iana::Ec2KeyParameter::Y as i64), &key.params)
+            {
+                return Ok(EC2P256Key { x, y });
             }
         }
         return Err("x and y must be present in key as bytes".to_string());
@@ -148,11 +150,11 @@ impl CoseSignCipher for FakeCrypto {
     ) -> Result<(), CoseCipherError<Self::Error>> {
         if signature
             == Self::sign(
-            key,
-            signed_data,
-            unprotected_header,
-            &protected_header.header,
-        )
+                key,
+                signed_data,
+                unprotected_header,
+                &protected_header.header,
+            )
         {
             Ok(())
         } else {
@@ -243,14 +245,18 @@ fn test_scenario() -> Result<(), String> {
             .audience(resource_server.to_string())
             .issuer(auth_server.to_string())
             .issued_at(Timestamp::WholeSeconds(47))
-            .claim(CwtClaimName::Cnf, PlainCoseKey(key.to_cose_key()).to_ciborium_value())
+            .claim(
+                CwtClaimName::Cnf,
+                PlainCoseKey(key.to_cose_key()).to_ciborium_value(),
+            )
             .build(),
         // TODO: Proper headers
         Some(aad.as_slice()),
         Some(unprotected_headers),
         Some(protected_headers),
         rng,
-    ).map_err(|x| x.to_string())?;
+    )
+    .map_err(|x| x.to_string())?;
     let response = AccessTokenResponse::builder()
         .access_token(token)
         .ace_profile(AceProfile::CoapDtls)
@@ -262,7 +268,8 @@ fn test_scenario() -> Result<(), String> {
     let result = pseudo_send_receive(response.clone())?;
     assert_eq!(response, result);
 
-    verify_access_token::<FakeCrypto>(&key, &response.access_token, Some(aad.as_slice())).map_err(|x| x.to_string())?;
+    verify_access_token::<FakeCrypto>(&key, &response.access_token, Some(aad.as_slice()))
+        .map_err(|x| x.to_string())?;
 
     let error = ErrorResponse::builder()
         .error(ErrorCode::InvalidRequest)
@@ -276,8 +283,8 @@ fn test_scenario() -> Result<(), String> {
 }
 
 fn pseudo_send_receive<T>(input: T) -> Result<T, String>
-    where
-        T: ToCborMap + PartialEq + Clone,
+where
+    T: ToCborMap + PartialEq + Clone,
 {
     let mut serialized: Vec<u8> = Vec::new();
     input

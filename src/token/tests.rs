@@ -10,12 +10,15 @@
  */
 
 #[cfg(not(feature = "std"))]
-use alloc::vec;
+use alloc::{
+    string::{String, ToString},
+    vec,
+};
 
 use ciborium::value::Value;
-use coset::{AsCborValue, CoseKey, CoseKeyBuilder, CoseMac0Builder, HeaderBuilder};
 use coset::cwt::ClaimsSetBuilder;
 use coset::iana::{Algorithm, CoapContentFormat, CwtClaimName};
+use coset::{AsCborValue, CoseKey, CoseKeyBuilder, CoseMac0Builder, HeaderBuilder};
 
 use crate::common::test_helper::{FakeCrypto, FakeKey, FakeRng};
 use crate::error::CoseCipherError;
@@ -38,7 +41,9 @@ fn example_headers() -> (Header, Header) {
             0x63, 0x68, 0x98, 0x99, 0x4F, 0xF0, 0xEC, 0x7B, 0xFC, 0xF6, 0xD3, 0xF9, 0x5B,
         ])
         .build();
-    let protected_header = HeaderBuilder::new().content_format(CoapContentFormat::Cbor).build();
+    let protected_header = HeaderBuilder::new()
+        .content_format(CoapContentFormat::Cbor)
+        .build();
     (unprotected_header, protected_header)
 }
 
@@ -58,10 +63,7 @@ fn example_claims(
     key: CoseKey,
 ) -> Result<ClaimsSet, AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
     Ok(ClaimsSetBuilder::new()
-        .claim(
-            CwtClaimName::Cnf,
-            key.to_cbor_value()?,
-        )
+        .claim(CwtClaimName::Cnf, key.to_cbor_value()?)
         .build())
 }
 
@@ -168,14 +170,15 @@ fn test_get_headers_invalid() {
 }
 
 #[test]
-fn test_encrypt_decrypt() -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
+fn test_encrypt_decrypt() -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>>
+{
     let key = example_key_one();
     let (unprotected_header, protected_header) = example_headers();
     let claims = example_claims(key.to_cose_key())?;
     let aad = example_aad();
     let rng = FakeRng;
     let encrypted = encrypt_access_token::<FakeCrypto, FakeRng>(
-        key.clone(),
+        &key,
         claims.clone(),
         Some(&aad),
         Some(unprotected_header.clone()),
@@ -193,25 +196,29 @@ fn test_encrypt_decrypt() -> Result<(), AccessTokenError<<FakeCrypto as CoseEncr
 }
 
 #[test]
-fn test_encrypt_decrypt_multiple() -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
+fn test_encrypt_decrypt_multiple(
+) -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
     const AUDIENCE: &str = "example_aud";
     let (unprotected_header, protected_header) = example_headers();
     let key1 = example_key_one();
     let key2 = example_key_two();
     let invalid_key1 = FakeKey::try_from(vec![0, 0, 0, 0, 0, 0, 0]).expect("invalid test key");
-    let invalid_key2 = FakeKey::try_from(vec![0, 0, 0, 0, 0, 0xDC, 0xAF]).expect("invalid test key");
+    let invalid_key2 =
+        FakeKey::try_from(vec![0, 0, 0, 0, 0, 0xDC, 0xAF]).expect("invalid test key");
     let rng = FakeRng;
     let aad = example_aad();
     // Using example_claims doesn't make sense, since they contain a cnf for the key,
     // but we don't know the CEK at this point.
-    let claims = ClaimsSetBuilder::new().audience(AUDIENCE.to_string()).build();
+    let claims = ClaimsSetBuilder::new()
+        .audience(AUDIENCE.to_string())
+        .build();
     let encrypted = encrypt_access_token_multiple::<FakeCrypto, FakeRng>(
         vec![&key1, &key2],
         claims.clone(),
         Some(&aad),
         Some(unprotected_header.clone()),
         Some(protected_header.clone()),
-        rng
+        rng,
     )?;
     let (unprotected, protected) = get_token_headers(&encrypted).expect("invalid headers");
     assert_header_is_part_of(&unprotected_header, &unprotected);
@@ -222,16 +229,33 @@ fn test_encrypt_decrypt_multiple() -> Result<(), AccessTokenError<<FakeCrypto as
             &claims
         );
     }
-    let failed = decrypt_access_token_multiple::<FakeCrypto, FakeCrypto>(&invalid_key1, &encrypted, Some(&aad));
-    assert!(failed.err().filter(|x| matches!(x, AccessTokenError::NoMatchingRecipient)).is_some());
-    let failed = decrypt_access_token_multiple::<FakeCrypto, FakeCrypto>(&invalid_key2, &encrypted, Some(&aad));
-    dbg!(&failed);
-    assert!(failed.err().filter(|x| matches!(x, AccessTokenError::CoseCipherError(CoseCipherError::DecryptionFailure))).is_some());
+    let failed = decrypt_access_token_multiple::<FakeCrypto, FakeCrypto>(
+        &invalid_key1,
+        &encrypted,
+        Some(&aad),
+    );
+    assert!(failed
+        .err()
+        .filter(|x| matches!(x, AccessTokenError::NoMatchingRecipient))
+        .is_some());
+    let failed = decrypt_access_token_multiple::<FakeCrypto, FakeCrypto>(
+        &invalid_key2,
+        &encrypted,
+        Some(&aad),
+    );
+    assert!(failed
+        .err()
+        .filter(|x| matches!(
+            x,
+            AccessTokenError::CoseCipherError(CoseCipherError::DecryptionFailure)
+        ))
+        .is_some());
     Ok(())
 }
 
 #[test]
-fn test_encrypt_decrypt_match_multiple() -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
+fn test_encrypt_decrypt_match_multiple(
+) -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
     let (unprotected_header, protected_header) = example_headers();
     let key1 = example_key_one();
     let rng = FakeRng;
@@ -243,18 +267,24 @@ fn test_encrypt_decrypt_match_multiple() -> Result<(), AccessTokenError<<FakeCry
         Some(&aad),
         Some(unprotected_header.clone()),
         Some(protected_header.clone()),
-        rng
+        rng,
     )?;
     let (unprotected, protected) = get_token_headers(&encrypted).expect("invalid headers");
     assert_header_is_part_of(&unprotected_header, &unprotected);
     assert_header_is_part_of(&protected_header, &protected.header);
     // In the future, this should only be an error in "strict mode".
-    assert!(decrypt_access_token_multiple::<FakeCrypto, FakeCrypto>(&key1, &encrypted, Some(&aad)).err().filter(|x| matches!(x, AccessTokenError::MultipleMatchingRecipients)).is_some());
+    assert!(
+        decrypt_access_token_multiple::<FakeCrypto, FakeCrypto>(&key1, &encrypted, Some(&aad))
+            .err()
+            .filter(|x| matches!(x, AccessTokenError::MultipleMatchingRecipients))
+            .is_some()
+    );
     Ok(())
 }
 
 #[test]
-fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
+fn test_encrypt_decrypt_invalid_header(
+) -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
     let key = example_key_one();
     let (unprotected_header, protected_header) = example_headers();
     let (unprotected_invalid, protected_invalid) = example_invalid_headers();
@@ -262,7 +292,7 @@ fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError<<FakeCry
     let aad = example_aad();
     let rng = FakeRng;
     let encrypted = encrypt_access_token::<FakeCrypto, FakeRng>(
-        key.clone(),
+        &key,
         claims.clone(),
         Some(&aad),
         Some(unprotected_invalid),
@@ -271,8 +301,8 @@ fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError<<FakeCry
     );
     assert!(encrypted.err().map_or(false, |x| {
         if let AccessTokenError::CoseCipherError(CoseCipherError::HeaderAlreadySet {
-                                                     existing_header_name,
-                                                 }) = x
+            existing_header_name,
+        }) = x
         {
             existing_header_name == "47"
         } else {
@@ -281,7 +311,7 @@ fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError<<FakeCry
     }));
 
     let encrypted = encrypt_access_token::<FakeCrypto, FakeRng>(
-        key,
+        &key,
         claims,
         Some(&aad),
         Some(unprotected_header),
@@ -291,8 +321,8 @@ fn test_encrypt_decrypt_invalid_header() -> Result<(), AccessTokenError<<FakeCry
     assert!(encrypted.is_err());
     assert!(encrypted.err().map_or(false, |x| {
         if let AccessTokenError::CoseCipherError(CoseCipherError::HeaderAlreadySet {
-                                                     existing_header_name,
-                                                 }) = x
+            existing_header_name,
+        }) = x
         {
             existing_header_name == "alg"
         } else {
@@ -330,14 +360,18 @@ fn test_sign_verify() -> Result<(), AccessTokenError<<FakeCrypto as CoseSignCiph
 }
 
 #[test]
-fn test_sign_verify_multiple() -> Result<(), AccessTokenError<<FakeCrypto as CoseSignCipher>::Error>> {
+fn test_sign_verify_multiple() -> Result<(), AccessTokenError<<FakeCrypto as CoseSignCipher>::Error>>
+{
     const AUDIENCE: &str = "example_aud";
     let key1 = example_key_one();
     let key2 = example_key_two();
     let invalid_key1 = FakeKey::try_from(vec![0, 0, 0, 0, 0, 0, 0]).expect("invalid test key");
-    let invalid_key2 = FakeKey::try_from(vec![0, 0, 0, 0, 0, 0xDC, 0xAF]).expect("invalid test key");
+    let invalid_key2 =
+        FakeKey::try_from(vec![0, 0, 0, 0, 0, 0xDC, 0xAF]).expect("invalid test key");
     let (unprotected_header, protected_header) = example_headers();
-    let claims = ClaimsSetBuilder::new().audience(AUDIENCE.to_string()).build();
+    let claims = ClaimsSetBuilder::new()
+        .audience(AUDIENCE.to_string())
+        .build();
     let aad = example_aad();
     let rng = FakeRng;
     let signed = sign_access_token_multiple::<FakeCrypto, FakeRng>(
@@ -346,7 +380,7 @@ fn test_sign_verify_multiple() -> Result<(), AccessTokenError<<FakeCrypto as Cos
         Some(&aad),
         Some(unprotected_header.clone()),
         Some(protected_header.clone()),
-        rng
+        rng,
     )?;
     let (unprotected, protected) =
         get_token_headers(&signed).ok_or(AccessTokenError::<String>::UnknownCoseStructure)?;
@@ -355,7 +389,20 @@ fn test_sign_verify_multiple() -> Result<(), AccessTokenError<<FakeCrypto as Cos
     for key in vec![key1, key2] {
         verify_access_token_multiple::<FakeCrypto>(&key, &signed, Some(&aad))?;
     }
-    assert!(verify_access_token_multiple::<FakeCrypto>(&invalid_key1, &signed, Some(&aad)).err().filter(|x| matches!(x, AccessTokenError::NoMatchingRecipient)).is_some());
-    assert!(verify_access_token_multiple::<FakeCrypto>(&invalid_key2, &signed, Some(&aad)).err().filter(|x| matches!(x, AccessTokenError::CoseCipherError(CoseCipherError::VerificationFailure))).is_some());
+    assert!(
+        verify_access_token_multiple::<FakeCrypto>(&invalid_key1, &signed, Some(&aad))
+            .err()
+            .filter(|x| matches!(x, AccessTokenError::NoMatchingRecipient))
+            .is_some()
+    );
+    assert!(
+        verify_access_token_multiple::<FakeCrypto>(&invalid_key2, &signed, Some(&aad))
+            .err()
+            .filter(|x| matches!(
+                x,
+                AccessTokenError::CoseCipherError(CoseCipherError::VerificationFailure)
+            ))
+            .is_some()
+    );
     Ok(())
 }
