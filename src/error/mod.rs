@@ -237,8 +237,8 @@ impl Display for InvalidAifEncodedScopeError {
     }
 }
 
-/// Error type used when a [`CoseEncrypt0Cipher`](crate::CoseEncrypt0Cipher),
-/// [`CoseSign1Cipher`](crate::CoseSign1Cipher), or [`CoseMac0Cipher`](crate::CoseMac0Cipher).
+/// Error type used when a [`CoseEncryptCipher`](crate::CoseEncryptCipher),
+/// [`CoseSignCipher`](crate::CoseSignCipher), or [`CoseMacCipher`](crate::CoseMacCipher).
 /// fails to perform an operation.
 ///
 /// `T` is the type of the nested error represented by the [`Other`](CoseCipherError::Other) variant.
@@ -343,10 +343,17 @@ where
     }
 }
 
+/// Error type used when a token for multiple recipients (i.e., `CoseEncrypt`) is decrypted.
+///
+/// In that case, the recipients may be encrypted with a different cipher (`K`) than the
+/// actual content (`C`); hence, this error type differentiates between the two.
 #[derive(Debug)]
 pub enum MultipleCoseError<K, C> where K: Display, C: Display {
+    /// Used when an error occurred in the Key Encryption Key's cipher.
     KekError(K),
-    CekError(C)
+
+    /// Used when an error occurred in the Content Encryption Key's cipher.
+    CekError(C),
 }
 
 impl<K, C> Display for MultipleCoseError<K, C> where K: Display, C: Display {
@@ -477,14 +484,14 @@ where
     /// [`CoseEncrypt0`](coset::CoseEncrypt0), [`CoseSign1`](coset::CoseSign1),
     /// nor [`CoseMac0`](coset::CoseMac0).
     UnknownCoseStructure,
-    /// No matching key was found in the list of COSE_Recipient structures.
+    /// No matching recipient was found in the list of COSE_Recipient structures.
     /// This means that the given Key Encryption Key could not be used to decrypt any of the
     /// recipients, which means no Content Encryption Key could be extracted.
-    NoMatchingKey,
-    /// Multiple matching keys were found in the list of COSE_Recipient structures.
+    NoMatchingRecipient,
+    /// Multiple matching recipients were found in the list of COSE_Recipient structures.
     /// This means that the given Key Encryption Key could be used to decrypt multiple of the
     /// recipients, which means the token is malformed.
-    MultipleMatchingKeys
+    MultipleMatchingRecipients
 }
 
 impl<T> Display for AccessTokenError<T>
@@ -499,8 +506,8 @@ where
                 f,
                 "input is either invalid or none of CoseEncrypt0, CoseSign1 nor CoseMac0"
             ),
-            AccessTokenError::NoMatchingKey => write!(f, "given KEK doesn't match any recipient"),
-            AccessTokenError::MultipleMatchingKeys => write!(f, "given KEK matches multiple recipients")
+            AccessTokenError::NoMatchingRecipient => write!(f, "given KEK doesn't match any recipient"),
+            AccessTokenError::MultipleMatchingRecipients => write!(f, "given KEK matches multiple recipients")
         }
     }
 }
@@ -519,6 +526,7 @@ impl<T> From<CoseError> for AccessTokenError<T> where T: Display {
     }
 }
 
+#[allow(dead_code)]
 impl<T> AccessTokenError<T>
 where
     T: Display {
@@ -530,8 +538,8 @@ where
             AccessTokenError::CoseCipherError(x) => AccessTokenError::CoseCipherError(CoseCipherError::from_kek_error(x)),
             AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
             AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-            AccessTokenError::NoMatchingKey => AccessTokenError::NoMatchingKey,
-            AccessTokenError::MultipleMatchingKeys => AccessTokenError::MultipleMatchingKeys,
+            AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
+            AccessTokenError::MultipleMatchingRecipients => AccessTokenError::MultipleMatchingRecipients,
         }
     }
 
@@ -540,8 +548,8 @@ where
             AccessTokenError::CoseCipherError(x) => AccessTokenError::CoseCipherError(CoseCipherError::from_cek_error(x)),
             AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
             AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-            AccessTokenError::NoMatchingKey => AccessTokenError::NoMatchingKey,
-            AccessTokenError::MultipleMatchingKeys => AccessTokenError::MultipleMatchingKeys,
+            AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
+            AccessTokenError::MultipleMatchingRecipients => AccessTokenError::MultipleMatchingRecipients,
         }
     }
 }

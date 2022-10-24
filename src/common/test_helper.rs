@@ -106,7 +106,7 @@ impl FakeCrypto {
             return Err(CoseCipherError::existing_header("alg"));
         }
         if !protected_header.key_id.is_empty() {
-            return Err(CoseCipherError::existing_header("key_id"));
+            return Err(CoseCipherError::existing_header("kid"));
         }
         unprotected_header.rest.push((Label::Int(47), Value::Null));
         protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));
@@ -340,11 +340,12 @@ impl RngCore for FakeRng {
     }
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
-        dest.fill(0)
+        dest.fill(0);
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
-        Ok(dest.fill(0))
+        dest.fill(0);
+        Ok(())
     }
 }
 
@@ -368,8 +369,8 @@ impl<C, K> From<AccessTokenError<MultipleCoseError<C, K>>> for AccessTokenError<
             AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
             AccessTokenError::CoseCipherError(x) => AccessTokenError::CoseCipherError(CoseCipherError::from(x)),
             AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-            AccessTokenError::NoMatchingKey => AccessTokenError::NoMatchingKey,
-            AccessTokenError::MultipleMatchingKeys => AccessTokenError::MultipleMatchingKeys
+            AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
+            AccessTokenError::MultipleMatchingRecipients => AccessTokenError::MultipleMatchingRecipients
         }
     }
 }
