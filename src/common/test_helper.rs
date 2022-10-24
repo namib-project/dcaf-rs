@@ -16,8 +16,8 @@ use core::convert::identity;
 use core::fmt::{Debug, Display};
 
 use ciborium::value::Value;
-use coset::{CoseKey, CoseKeyBuilder, Header, Label, ProtectedHeader};
 use coset::iana::Algorithm;
+use coset::{CoseKey, CoseKeyBuilder, Header, Label, ProtectedHeader};
 use rand::{CryptoRng, Error, RngCore};
 
 #[cfg(not(feature = "std"))]
@@ -27,10 +27,10 @@ use {
     alloc::vec::Vec,
 };
 
-use crate::{CoseEncryptCipher, CoseMacCipher, CoseSignCipher};
 use crate::common::cbor_map::ToCborMap;
 use crate::error::{AccessTokenError, CoseCipherError, MultipleCoseError};
 use crate::token::{MultipleEncryptCipher, MultipleSignCipher, ToCoseKey};
+use crate::{CoseEncryptCipher, CoseMacCipher, CoseSignCipher};
 
 /// Helper function for tests which ensures that [`value`] serializes to the hexadecimal bytestring
 /// [expected_hex] and deserializes back to [`value`].
@@ -244,9 +244,13 @@ impl CoseSignCipher for FakeCrypto {
         } else {
             protected_header.header.key_id == key.kid
         };
-        let signed_again = Self::sign(key, signed_data, unprotected_header, &protected_header.header);
-        if matching_kid && signed_again == signature
-        {
+        let signed_again = Self::sign(
+            key,
+            signed_data,
+            unprotected_header,
+            &protected_header.header,
+        );
+        if matching_kid && signed_again == signature {
             Ok(())
         } else {
             Err(CoseCipherError::VerificationFailure)
@@ -292,12 +296,12 @@ impl CoseMacCipher for FakeCrypto {
     ) -> Result<(), CoseCipherError<Self::Error>> {
         if protected_header.header.key_id == key.kid
             && tag
-            == Self::compute(
-            key,
-            maced_data,
-            unprotected_header,
-            &protected_header.header,
-        )
+                == Self::compute(
+                    key,
+                    maced_data,
+                    unprotected_header,
+                    &protected_header.header,
+                )
         {
             Ok(())
         } else {
@@ -352,25 +356,41 @@ impl RngCore for FakeRng {
 impl CryptoRng for FakeRng {}
 
 // Makes the tests easier later on, as we use String as the error type in there.
-impl<C, K> From<CoseCipherError<MultipleCoseError<C, K>>> for CoseCipherError<String> where C: Display, K: Display {
+impl<C, K> From<CoseCipherError<MultipleCoseError<C, K>>> for CoseCipherError<String>
+where
+    C: Display,
+    K: Display,
+{
     fn from(x: CoseCipherError<MultipleCoseError<C, K>>) -> Self {
         match x {
-            CoseCipherError::HeaderAlreadySet { existing_header_name } => CoseCipherError::HeaderAlreadySet { existing_header_name },
+            CoseCipherError::HeaderAlreadySet {
+                existing_header_name,
+            } => CoseCipherError::HeaderAlreadySet {
+                existing_header_name,
+            },
             CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
             CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
-            CoseCipherError::Other(x) => CoseCipherError::Other(x.to_string())
+            CoseCipherError::Other(x) => CoseCipherError::Other(x.to_string()),
         }
     }
 }
 
-impl<C, K> From<AccessTokenError<MultipleCoseError<C, K>>> for AccessTokenError<String> where C: Display, K: Display {
+impl<C, K> From<AccessTokenError<MultipleCoseError<C, K>>> for AccessTokenError<String>
+where
+    C: Display,
+    K: Display,
+{
     fn from(x: AccessTokenError<MultipleCoseError<C, K>>) -> Self {
         match x {
             AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
-            AccessTokenError::CoseCipherError(x) => AccessTokenError::CoseCipherError(CoseCipherError::from(x)),
+            AccessTokenError::CoseCipherError(x) => {
+                AccessTokenError::CoseCipherError(CoseCipherError::from(x))
+            }
             AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
             AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
-            AccessTokenError::MultipleMatchingRecipients => AccessTokenError::MultipleMatchingRecipients
+            AccessTokenError::MultipleMatchingRecipients => {
+                AccessTokenError::MultipleMatchingRecipients
+            }
         }
     }
 }

@@ -300,10 +300,10 @@
 #![warn(missing_docs, rustdoc::missing_crate_level_docs)]
 // These ones are a little too eager
 #![allow(
-clippy::doc_markdown,
-clippy::module_name_repetitions,
-clippy::wildcard_imports,
-clippy::type_complexity
+    clippy::doc_markdown,
+    clippy::module_name_repetitions,
+    clippy::wildcard_imports,
+    clippy::type_complexity
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
 #[macro_use]
@@ -331,13 +331,11 @@ pub use endpoints::token_req::{
 };
 #[doc(inline)]
 pub use token::{
-    CoseEncryptCipher, CoseMacCipher, CoseSignCipher,
     decrypt_access_token, decrypt_access_token_multiple, encrypt_access_token,
-    encrypt_access_token_multiple,
-    get_token_headers, MultipleEncryptCipher,
-    MultipleMacCipher, MultipleSignCipher,
-    sign_access_token, sign_access_token_multiple,
-    verify_access_token, verify_access_token_multiple,
+    encrypt_access_token_multiple, get_token_headers, sign_access_token,
+    sign_access_token_multiple, verify_access_token, verify_access_token_multiple,
+    CoseEncryptCipher, CoseMacCipher, CoseSignCipher, MultipleEncryptCipher, MultipleMacCipher,
+    MultipleSignCipher,
 };
 
 pub mod common;

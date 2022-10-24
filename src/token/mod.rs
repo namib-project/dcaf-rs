@@ -167,8 +167,13 @@ use alloc::vec::Vec;
 use core::fmt::{Debug, Display};
 
 use ciborium::value::Value;
-use coset::{AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder, CoseEncryptBuilder, CoseKey, CoseRecipientBuilder, CoseSign, CoseSign1, CoseSign1Builder, CoseSignatureBuilder, CoseSignBuilder, EncryptionContext, Header, HeaderBuilder, ProtectedHeader};
 use coset::cwt::ClaimsSet;
+use coset::{
+    AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder,
+    CoseEncryptBuilder, CoseKey, CoseRecipientBuilder, CoseSign, CoseSign1, CoseSign1Builder,
+    CoseSignBuilder, CoseSignatureBuilder, EncryptionContext, Header, HeaderBuilder,
+    ProtectedHeader,
+};
 use rand::{CryptoRng, RngCore};
 
 use crate::common::cbor_values::ByteString;
@@ -396,12 +401,8 @@ macro_rules! prepare_headers {
     ($key:expr, $unprotected:ident, $protected:ident, $rng:expr, $t:ty) => {{
         let mut unprotected = $unprotected.unwrap_or_else(|| HeaderBuilder::new().build());
         let mut protected = $protected.unwrap_or_else(|| HeaderBuilder::new().build());
-        if let Err(e) = <$t>::set_headers($key, &mut unprotected, &mut protected, $rng)
-        {
-            Err(e)
-        } else {
-            Ok((unprotected, protected))
-        }
+        <$t>::set_headers($key, &mut unprotected, &mut protected, $rng)?;
+        Ok::<(Header, Header), CoseCipherError<<$t>::Error>>((unprotected, protected))
     }};
 }
 
@@ -432,7 +433,7 @@ macro_rules! prepare_headers {
 /// assert_eq!(decrypt_access_token::<FakeCrypto>(&key, &token, None)?, claims);
 /// ```
 pub fn encrypt_access_token<T, RNG>(
-    key: T::EncryptKey,
+    key: &T::EncryptKey,
     claims: ClaimsSet,
     external_aad: Option<&[u8]>,
     unprotected_header: Option<Header>,
@@ -444,14 +445,14 @@ where
     RNG: RngCore + CryptoRng,
 {
     let (unprotected, protected) =
-        prepare_headers!(&key, unprotected_header, protected_header, &mut rng, T)?;
+        prepare_headers!(key, unprotected_header, protected_header, &mut rng, T)?;
     CoseEncrypt0Builder::new()
         .unprotected(unprotected.clone())
         .protected(protected.clone())
         .create_ciphertext(
             &claims.to_vec()?[..],
             external_aad.unwrap_or(&[0; 0]),
-            |payload, aad| T::encrypt(&key, payload, aad, &unprotected, &protected),
+            |payload, aad| T::encrypt(key, payload, aad, &unprotected, &protected),
         )
         .build()
         .to_vec()
@@ -496,7 +497,8 @@ where
     RNG: CryptoRng + RngCore,
 {
     let key = T::generate_cek(&mut rng);
-    let (unprotected, protected) = prepare_headers!(&key, unprotected_header, protected_header, &mut rng, T)?;
+    let (unprotected, protected) =
+        prepare_headers!(&key, unprotected_header, protected_header, &mut rng, T)?;
     let mut builder = CoseEncryptBuilder::new()
         .unprotected(unprotected.clone())
         .protected(protected.clone())
@@ -508,14 +510,23 @@ where
     let serialized_key: Vec<u8> = key.into();
     for rec_key in keys {
         let (rec_unprotected, rec_protected) = prepare_headers!(rec_key, None, None, &mut rng, T)?;
-        builder = builder.add_recipient(CoseRecipientBuilder::new().protected(rec_protected.clone()).unprotected(rec_unprotected.clone()).create_ciphertext(
-            // TODO: What should AAD be here?
-            EncryptionContext::EncRecipient, &serialized_key, &[0; 0], |payload, aad| T::encrypt(rec_key, payload, aad, &rec_protected, &rec_unprotected)
-        ).build());
+        builder = builder.add_recipient(
+            CoseRecipientBuilder::new()
+                .protected(rec_protected.clone())
+                .unprotected(rec_unprotected.clone())
+                .create_ciphertext(
+                    // TODO: What should AAD be here?
+                    EncryptionContext::EncRecipient,
+                    &serialized_key,
+                    &[0; 0],
+                    |payload, aad| {
+                        T::encrypt(rec_key, payload, aad, &rec_protected, &rec_unprotected)
+                    },
+                )
+                .build(),
+        );
     }
-    builder.build()
-        .to_vec()
-        .map_err(AccessTokenError::from)
+    builder.build().to_vec().map_err(AccessTokenError::from)
 }
 
 /// Signs the given `claims` with the given headers and `aad` using the `key` and the cipher
@@ -603,11 +614,14 @@ pub fn sign_access_token_multiple<T, RNG>(
     protected_header: Option<Header>,
     mut rng: RNG,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
-    where
-        T: MultipleSignCipher,
-        RNG: RngCore + CryptoRng,
+where
+    T: MultipleSignCipher,
+    RNG: RngCore + CryptoRng,
 {
-    let (unprotected, protected) = (unprotected_header.unwrap_or_else(|| HeaderBuilder::default().build()), protected_header.unwrap_or_else(|| HeaderBuilder::default().build()));
+    let (unprotected, protected) = (
+        unprotected_header.unwrap_or_else(|| HeaderBuilder::default().build()),
+        protected_header.unwrap_or_else(|| HeaderBuilder::default().build()),
+    );
     let mut builder = CoseSignBuilder::new()
         .unprotected(unprotected.clone())
         .protected(protected.clone())
@@ -615,15 +629,16 @@ pub fn sign_access_token_multiple<T, RNG>(
 
     for key in keys {
         let (rec_unprotected, rec_protected) = prepare_headers!(key, None, None, &mut rng, T)?;
-        let signature = CoseSignatureBuilder::new().unprotected(rec_unprotected.clone()).protected(rec_protected.clone()).build();
+        let signature = CoseSignatureBuilder::new()
+            .unprotected(rec_unprotected.clone())
+            .protected(rec_protected.clone())
+            .build();
         builder = builder.add_created_signature(signature, external_aad.unwrap_or(&[0; 0]), |x| {
             T::sign(key, x, &unprotected, &protected)
         });
     }
 
-    builder.build()
-        .to_vec()
-        .map_err(AccessTokenError::from)
+    builder.build().to_vec().map_err(AccessTokenError::from)
 }
 
 /// Returns the headers of the given signed ([`CoseSign1`] / [`CoseSign`]),
@@ -777,9 +792,7 @@ where
         }
     }
     if matching_kid {
-        Err(AccessTokenError::from(
-            CoseCipherError::VerificationFailure,
-        ))
+        Err(AccessTokenError::from(CoseCipherError::VerificationFailure))
     } else {
         Err(AccessTokenError::NoMatchingRecipient)
     }
@@ -809,15 +822,13 @@ pub fn decrypt_access_token<T>(
 where
     T: CoseEncryptCipher,
 {
-    let encrypt =
-        CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
+    let encrypt = CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
     let (unprotected, protected) =
         get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
     // TODO: Verify protected header
-    let result = encrypt
-        .decrypt(external_aad.unwrap_or(&[0; 0]), |ciphertext, aad| {
-            T::decrypt(key, ciphertext, aad, &unprotected, &protected)
-        })?;
+    let result = encrypt.decrypt(external_aad.unwrap_or(&[0; 0]), |ciphertext, aad| {
+        T::decrypt(key, ciphertext, aad, &unprotected, &protected)
+    })?;
     ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from)
 }
 
@@ -849,8 +860,7 @@ where
     K: CoseEncryptCipher,
     C: CoseEncryptCipher,
 {
-    let encrypt =
-        CoseEncrypt::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
+    let encrypt = CoseEncrypt::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
     let (unprotected, protected) =
         get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
     let aad = external_aad.unwrap_or(&[0; 0]);
@@ -862,17 +872,18 @@ where
         .iter()
         .filter(|x| x.unprotected.key_id == kek_id || x.protected.header.key_id == kek_id);
     let mut content_keys = recipients.map(|r| {
-        r.decrypt(EncryptionContext::EncRecipient, &[0; 0], |ciphertext, aad| {
-            K::decrypt(kek, ciphertext, aad, &r.unprotected, &r.protected)
-        })
+        r.decrypt(
+            EncryptionContext::EncRecipient,
+            &[0; 0],
+            |ciphertext, aad| K::decrypt(kek, ciphertext, aad, &r.unprotected, &r.protected),
+        )
     });
     // Our CEK must be contained exactly once.
     if let Some(content_key_result) = content_keys.next() {
         if content_keys.next().is_none() {
             let content_key = content_key_result.map_err(CoseCipherError::from_kek_error)?;
-            let target_key = C::DecryptKey::try_from(content_key).map_err(|_| {
-                CoseCipherError::DecryptionFailure
-            })?;
+            let target_key = C::DecryptKey::try_from(content_key)
+                .map_err(|_| CoseCipherError::DecryptionFailure)?;
             // TODO: Verify protected header
             let result = encrypt
                 .decrypt(aad, |ciphertext, aad| {
