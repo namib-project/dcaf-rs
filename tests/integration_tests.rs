@@ -16,7 +16,7 @@ use coset::iana::{Algorithm, CwtClaimName};
 use coset::iana::EllipticCurve::P_256;
 use rand::{CryptoRng, Error, RngCore};
 
-use dcaf::{CoseSignCipher, sign_access_token};
+use dcaf::{CoseSignCipher, sign_access_token, verify_access_token};
 use dcaf::common::cbor_map::ToCborMap;
 use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
 use dcaf::common::scope::TextEncodedScope;
@@ -26,7 +26,7 @@ use dcaf::endpoints::token_req::{
     TokenType,
 };
 use dcaf::error::CoseCipherError;
-use dcaf::token::ToCoseKey;
+use dcaf::token::{ToCoseKey, verify_access_token_multiple};
 
 #[derive(Clone)]
 pub(crate) struct EC2P256Key {
@@ -261,6 +261,8 @@ fn test_scenario() -> Result<(), String> {
         .map_err(|x| x.to_string())?;
     let result = pseudo_send_receive(response.clone())?;
     assert_eq!(response, result);
+
+    verify_access_token::<FakeCrypto>(&key, &response.access_token, Some(aad.as_slice())).map_err(|x| x.to_string())?;
 
     let error = ErrorResponse::builder()
         .error(ErrorCode::InvalidRequest)

@@ -223,7 +223,7 @@ fn test_encrypt_decrypt_multiple() -> Result<(), AccessTokenError<<FakeCrypto as
         );
     }
     let failed = decrypt_access_token_multiple::<FakeCrypto, FakeCrypto>(&invalid_key1, &encrypted, Some(&aad));
-    assert!(failed.err().filter(|x| matches!(x, AccessTokenError::NoMatchingKey)).is_some());
+    assert!(failed.err().filter(|x| matches!(x, AccessTokenError::NoMatchingRecipient)).is_some());
     let failed = decrypt_access_token_multiple::<FakeCrypto, FakeCrypto>(&invalid_key2, &encrypted, Some(&aad));
     dbg!(&failed);
     assert!(failed.err().filter(|x| matches!(x, AccessTokenError::CoseCipherError(CoseCipherError::DecryptionFailure))).is_some());
@@ -249,7 +249,7 @@ fn test_encrypt_decrypt_match_multiple() -> Result<(), AccessTokenError<<FakeCry
     assert_header_is_part_of(&unprotected_header, &unprotected);
     assert_header_is_part_of(&protected_header, &protected.header);
     // In the future, this should only be an error in "strict mode".
-    assert!(decrypt_access_token_multiple::<FakeCrypto, FakeCrypto>(&key1, &encrypted, Some(&aad)).err().filter(|x| matches!(x, AccessTokenError::MultipleMatchingKeys)).is_some());
+    assert!(decrypt_access_token_multiple::<FakeCrypto, FakeCrypto>(&key1, &encrypted, Some(&aad)).err().filter(|x| matches!(x, AccessTokenError::MultipleMatchingRecipients)).is_some());
     Ok(())
 }
 
@@ -355,7 +355,7 @@ fn test_sign_verify_multiple() -> Result<(), AccessTokenError<<FakeCrypto as Cos
     for key in vec![key1, key2] {
         verify_access_token_multiple::<FakeCrypto>(&key, &signed, Some(&aad))?;
     }
-    assert!(verify_access_token_multiple::<FakeCrypto>(&invalid_key1, &signed, Some(&aad)).err().filter(|x| matches!(x, AccessTokenError::NoMatchingKey)).is_some());
+    assert!(verify_access_token_multiple::<FakeCrypto>(&invalid_key1, &signed, Some(&aad)).err().filter(|x| matches!(x, AccessTokenError::NoMatchingRecipient)).is_some());
     assert!(verify_access_token_multiple::<FakeCrypto>(&invalid_key2, &signed, Some(&aad)).err().filter(|x| matches!(x, AccessTokenError::CoseCipherError(CoseCipherError::VerificationFailure))).is_some());
     Ok(())
 }
