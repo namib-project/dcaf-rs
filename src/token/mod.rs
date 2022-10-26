@@ -406,9 +406,9 @@ macro_rules! prepare_headers {
     }};
 }
 
-/// Encrypts the given `claims` with the given headers and `aad` using the `key` and the cipher
-/// given by type parameter `T`, returning the token as a serialized bytestring of
-/// the [`CoseEncrypt0`] structure.
+/// Encrypts the given `claims` with the given headers and `external_aad` using the
+/// `key` and the cipher given by type parameter `T`, returning the token as a serialized
+/// bytestring of the [`CoseEncrypt0`] structure.
 ///
 /// Note that this method will create a token intended for a single recipient.
 /// If you wish to create a token for more than one recipient, use
@@ -459,8 +459,8 @@ where
         .map_err(AccessTokenError::from)
 }
 
-/// Encrypts the given `claims` with the given headers and `aad` for each recipient by using the
-/// `keys` with the cipher given by type parameter `T`,
+/// Encrypts the given `claims` with the given headers and `external_aad` for each recipient
+/// by using the `keys` with the cipher given by type parameter `T`,
 /// returning the token as a serialized bytestring of the [`CoseEncrypt`] structure.
 ///
 /// Note that the given `keys` must each have an associated `kid` (key ID) field when converted
@@ -529,8 +529,8 @@ where
     builder.build().to_vec().map_err(AccessTokenError::from)
 }
 
-/// Signs the given `claims` with the given headers and `aad` using the `key` and the cipher
-/// given by type parameter `T`, returning the token as a serialized bytestring of
+/// Signs the given `claims` with the given headers and `external_aad` using the `key` and the
+/// cipher given by type parameter `T`, returning the token as a serialized bytestring of
 /// the [`CoseSign1`] structure.
 ///
 /// Note that this method will create a token intended for a single recipient.
@@ -581,9 +581,9 @@ where
         .map_err(AccessTokenError::from)
 }
 
-/// Signs the given `claims` with the given headers and `aad` for each recipient by using the `keys`
-/// with the cipher given by type parameter `T`, returning the token as a serialized bytestring of
-/// the [`CoseSign`] structure.
+/// Signs the given `claims` with the given headers and `external_aad` for each recipient
+/// by using the `keys` with the cipher given by type parameter `T`,
+/// returning the token as a serialized bytestring of the [`CoseSign`] structure.
 ///
 /// For each key in `keys`, another signature will be added, created with that respective key.
 /// The given headers will be used for the [`CoseSign`] structure as a whole, not for each
@@ -693,7 +693,7 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
     }
 }
 
-/// Verifies the given `token` and `aad` with the `key` using the cipher
+/// Verifies the given `token` and `external_aad` with the `key` using the cipher
 /// given by type parameter `T`, returning an error in case it could not be verified.
 ///
 /// This method should be used when the given `token` is a [`CoseSign1`] rather than
@@ -713,7 +713,7 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
 pub fn verify_access_token<T>(
     key: &T::VerifyKey,
     token: &ByteString,
-    aad: Option<&[u8]>,
+    external_aad: Option<&[u8]>,
 ) -> Result<(), AccessTokenError<T::Error>>
 where
     T: CoseSignCipher,
@@ -722,7 +722,7 @@ where
     let (unprotected, protected) =
         get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
     // TODO: Verify protected headers
-    sign.verify_signature(aad.unwrap_or(&[0; 0]), |signature, signed_data| {
+    sign.verify_signature(external_aad.unwrap_or(&[0; 0]), |signature, signed_data| {
         T::verify(
             key,
             signature,
@@ -736,7 +736,7 @@ where
     .map_err(AccessTokenError::from)
 }
 
-/// Verifies the given `token` and `aad` with the `key` using the cipher
+/// Verifies the given `token` and `external_aad` with the `key` using the cipher
 /// given by type parameter `T`, returning an error in case it could not be verified.
 ///
 /// This method should be used when the given `token` is a [`CoseSign`] rather than
@@ -754,7 +754,7 @@ where
 pub fn verify_access_token_multiple<T>(
     key: &T::VerifyKey,
     token: &ByteString,
-    aad: Option<&[u8]>,
+    external_aad: Option<&[u8]>,
 ) -> Result<(), AccessTokenError<T::Error>>
 where
     T: CoseSignCipher,
@@ -775,8 +775,10 @@ where
     for index in matching {
         matching_kid = true;
         // TODO: Verify protected headers
-        if let Ok(()) =
-            sign.verify_signature(index, aad.unwrap_or(&[0; 0]), |signature, signed_data| {
+        if let Ok(()) = sign.verify_signature(
+            index,
+            external_aad.unwrap_or(&[0; 0]),
+            |signature, signed_data| {
                 T::verify(
                     key,
                     signature,
@@ -786,8 +788,8 @@ where
                     Some(&sign.signatures[index].unprotected),
                     Some(&sign.signatures[index].protected),
                 )
-            })
-        {
+            },
+        ) {
             return Ok(());
         }
     }
@@ -798,8 +800,8 @@ where
     }
 }
 
-/// Decrypts the given `token` and `aad` using the `key` and the cipher given by type parameter `T`,
-/// returning the decrypted [`ClaimsSet`].
+/// Decrypts the given `token` and `external_aad` using the `key` and the cipher
+/// given by type parameter `T`, returning the decrypted [`ClaimsSet`].
 ///
 /// This method should be used when the given `token` is a [`CoseEncrypt0`] rather than
 /// [`CoseEncrypt`] (i.e., if it is intended for a single recipient). In case the token is an
@@ -832,7 +834,7 @@ where
     ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from)
 }
 
-/// Decrypts the given `token` and `aad` using the Key Encryption Key `kek` and the cipher given
+/// Decrypts the given `token` and `external_aad` using the Key Encryption Key `kek` and the cipher given
 /// by type parameter `T`, returning the decrypted [`ClaimsSet`].
 ///
 /// Note that the given `kek` must have an associated `kid` (key ID) field when converted
