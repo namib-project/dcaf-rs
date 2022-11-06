@@ -292,7 +292,7 @@ pub trait CoseEncryptCipher {
     add_common_cipher_functionality![Self::EncryptKey];
 }
 
-/// Intended for ciphers which encrypt for multiple recipients.
+/// Intended for ciphers which can encrypt for multiple recipients.
 /// For this purpose, a method must be provided which generates the Content Encryption Key.
 ///
 /// If these recipients each use different key types, you can use an enum to represent them.
@@ -351,7 +351,7 @@ pub trait CoseSignCipher {
     add_common_cipher_functionality![Self::SignKey];
 }
 
-/// Marker trait intended for ciphers which create signatures for multiple recipients.
+/// Marker trait intended for ciphers which can create signatures for multiple recipients.
 ///
 /// If these recipients each use different key types, you can use an enum to represent them.
 pub trait MultipleSignCipher: CoseSignCipher {}
@@ -389,7 +389,7 @@ pub trait CoseMacCipher {
     add_common_cipher_functionality![Self::ComputeKey];
 }
 
-/// Marker trait intended for ciphers which create MAC tags for multiple recipients.
+/// Marker trait intended for ciphers which can create MAC tags for multiple recipients.
 ///
 /// If these recipients each use different key types, you can use an enum to represent them.
 pub trait MultipleMacCipher: CoseMacCipher {}
