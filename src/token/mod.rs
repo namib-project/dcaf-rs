@@ -170,9 +170,9 @@ use ciborium::value::Value;
 use coset::cwt::ClaimsSet;
 use coset::{
     AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder,
-    CoseEncryptBuilder, CoseKey, CoseRecipientBuilder, CoseSign, CoseSign1, CoseSign1Builder,
-    CoseSignBuilder, CoseSignatureBuilder, EncryptionContext, Header, HeaderBuilder,
-    ProtectedHeader,
+    CoseEncryptBuilder, CoseKey, CoseMac, CoseRecipient, CoseRecipientBuilder, CoseSign, CoseSign1,
+    CoseSign1Builder, CoseSignBuilder, CoseSignatureBuilder, EncryptionContext, Header,
+    HeaderBuilder, ProtectedHeader,
 };
 use rand::{CryptoRng, RngCore};
 
@@ -266,7 +266,7 @@ pub trait CoseEncryptCipher {
     /// Type of the decryption key. Needs to be deserializable from a vector of bytes in case
     /// [`decrypt_access_token_multiple`] is used, in which we need to deserialize the
     /// Key Encryption Keys.
-    type DecryptKey: ToCoseKey + TryFrom<Vec<u8>>;
+    type DecryptKey: ToCoseKey + TryFrom<(Header, ProtectedHeader, Vec<u8>)>;
 
     /// Encrypts the `plaintext` and `aad` with the given `key`, returning the result.
     fn encrypt(
@@ -289,6 +289,12 @@ pub trait CoseEncryptCipher {
         protected_header: &ProtectedHeader,
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 
+    fn key_could_match(
+        key: &Self::DecryptKey,
+        unprotected_header: &Header,
+        protected_header: &ProtectedHeader,
+    ) -> bool;
+
     add_common_cipher_functionality![Self::EncryptKey];
 }
 
@@ -301,7 +307,11 @@ pub trait MultipleEncryptCipher: CoseEncryptCipher {
     /// The content of the `CoseEncrypt` will then be encrypted with the key, while each recipient
     /// will be encrypted with a corresponding Key Encryption Key (KEK) provided by the caller
     /// of [`encrypt_access_token_multiple`].
-    fn generate_cek<RNG: RngCore + CryptoRng>(rng: &mut RNG) -> Self::EncryptKey;
+    fn generate_cek<RNG: RngCore + CryptoRng>(
+        rng: &mut RNG,
+        unprotected_header: Option<&Header>,
+        protected_header: Option<&Header>,
+    ) -> Result<Self::EncryptKey, CoseCipherError<Self::Error>>;
 }
 
 /// Provides basic operations for signing and verifying COSE structures.
@@ -496,7 +506,11 @@ where
     T: MultipleEncryptCipher,
     RNG: CryptoRng + RngCore,
 {
-    let key = T::generate_cek(&mut rng);
+    let key = T::generate_cek(
+        &mut rng,
+        unprotected_header.as_ref(),
+        protected_header.as_ref(),
+    )?;
     let (unprotected, protected) =
         prepare_headers!(&key, unprotected_header, protected_header, &mut rng, T)?;
     let mut builder = CoseEncryptBuilder::new()
@@ -884,8 +898,9 @@ where
     if let Some(content_key_result) = content_keys.next() {
         if content_keys.next().is_none() {
             let content_key = content_key_result.map_err(CoseCipherError::from_kek_error)?;
-            let target_key = C::DecryptKey::try_from(content_key)
-                .map_err(|_| CoseCipherError::DecryptionFailure)?;
+            let target_key =
+                C::DecryptKey::try_from((unprotected.clone(), protected.clone(), content_key))
+                    .map_err(|_| CoseCipherError::DecryptionFailure)?;
             // TODO: Verify protected header
             let result = encrypt
                 .decrypt(aad, |ciphertext, aad| {
@@ -900,4 +915,119 @@ where
     } else {
         Err(AccessTokenError::NoMatchingRecipient)
     }
+}
+
+fn decrypt_nested_recipients<K: CoseEncryptCipher, C: CoseEncryptCipher>(
+    recipients: &[CoseRecipient],
+    unprotected_header: &Header,
+    protected_header: &ProtectedHeader,
+    highest_rec_context: EncryptionContext,
+    key: &K::DecryptKey,
+) -> Vec<K::DecryptKey> {
+    // Perform a deep search through all CoseRecipients until we find one that we can decrypt.
+    let mut current_indices: Vec<usize> = vec![0];
+    let mut current_recipient_stack: Vec<&CoseRecipient> = vec![];
+    let mut current_recipient_array = recipients;
+    let mut result_keys = Vec::new();
+    let mut at_highest_layer = true;
+    loop {
+        if let Some(recipient) = current_recipient_array.get(*current_indices.last().unwrap()) {
+            *current_indices.last_mut().unwrap() += 1;
+            if recipient.recipients.is_empty() {
+                // Recipient has no recipients itself, i.e. decryption should be possible using the
+                // cipher if the key matches.
+                if K::key_could_match(key, &recipient.unprotected, &recipient.protected) {
+                    // Attempt to decrypt the content encryption key using the current nested
+                    // recipients, starting with the last one, which might be decryptable using
+                    // the provided key.
+                    current_recipient_stack.push(recipient);
+                    let mut current_key_storage = None;
+                    let mut current_key = key;
+                    let recipient_iter = current_recipient_stack.iter().rev().enumerate();
+                    for (i, decrypt_recipient) in recipient_iter {
+                        let enc_ctx = if i == current_recipient_stack.len() {
+                            highest_rec_context
+                        } else {
+                            EncryptionContext::RecRecipient
+                        };
+                        // TODO handle direct key and ECDH (will cause panic here because of empty ciphertext)
+                        match decrypt_recipient.decrypt(enc_ctx, &[0; 0], |ciphertext, aad| {
+                            K::decrypt(
+                                current_key,
+                                ciphertext,
+                                aad,
+                                &decrypt_recipient.unprotected,
+                                &decrypt_recipient.protected,
+                            )
+                        }) {
+                            Ok(result_key) => {
+                                // Recipient decryption successful, attempt to construct key for
+                                // next higher layer of recipients.
+                                let (next_hdr, next_prt_hdr) = current_recipient_stack
+                                    .get(current_recipient_stack.len() - i)
+                                    .map_or((unprotected_header, protected_header), |v| {
+                                        (&v.unprotected, &v.protected)
+                                    });
+                                if let Ok(parsed_key) = K::DecryptKey::try_from((
+                                    next_hdr.clone(),
+                                    next_prt_hdr.clone(),
+                                    result_key,
+                                )) {
+                                    // Update current key.
+                                    current_key_storage = Some(parsed_key);
+                                    current_key = current_key_storage.as_ref().unwrap();
+                                } else {
+                                    // Unable to decrypt key in this layer, abort attempt and
+                                    // indicate failure.
+                                    current_key_storage = None;
+                                    break;
+                                }
+                            }
+                            _ => break,
+                        }
+                    }
+                    // Check if decrypting the highest layer of recipients was successful.
+                    // If so, we can add the resulting key to the candidates list and continue
+                    // with the next recipient in the highest layer (since finding another
+                    // matching key for this recipient wouldn't do anything).
+                    // TODO for strict mode, continue search to identify multiple matches.
+                    if let Some(result_key) = current_key_storage {
+                        result_keys.push(result_key);
+                        current_recipient_stack.clear();
+                        current_indices.truncate(1);
+                        current_recipient_array = recipients;
+                        at_highest_layer = true;
+                        continue;
+                    }
+                    // If we are here, then decryption of the chain failed.
+                    // Restore previous state of the recipient stack and resume search.
+                    current_recipient_stack.pop();
+                }
+            } else {
+                // Recipient has recipients itself, i.e. we need to check whether one of these
+                // recipients matches our key.
+                current_recipient_array = recipient.recipients.as_slice();
+                current_indices.push(0);
+                current_recipient_stack.push(recipient);
+                at_highest_layer = false;
+            }
+        } else {
+            // No more recipients to check at current layer, go back one layer up if possible.
+            current_recipient_stack.pop();
+            current_indices.pop();
+            current_recipient_array = match current_recipient_stack.last() {
+                Some(recipient) => recipient.recipients.as_slice(),
+                // If no higher layer is available in the recipient stack, we have exhausted all
+                // possible recipients in the provided array.
+                None => {
+                    if at_highest_layer {
+                        break;
+                    }
+                    at_highest_layer = true;
+                    recipients
+                }
+            }
+        }
+    }
+    result_keys
 }
