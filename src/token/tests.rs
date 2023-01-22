@@ -20,19 +20,23 @@ use coset::cwt::ClaimsSetBuilder;
 use coset::iana::{Algorithm, CoapContentFormat, CwtClaimName};
 use coset::{AsCborValue, CoseKey, CoseKeyBuilder, CoseMac0Builder, HeaderBuilder};
 
-use crate::common::test_helper::{FakeCrypto, FakeKey, FakeRng};
+use crate::common::test_helper::{FakeCrypto, FakeRng};
 use crate::error::CoseCipherError;
 
 use super::*;
 
 /// Generates a test key with content `[1,2,3,4,5]` and key id `[0xDC, 0xAF]`.
-fn example_key_one() -> FakeKey {
-    FakeKey::try_from(vec![1, 2, 3, 4, 5, 0xDC, 0xAF]).expect("invalid test key")
+fn example_key_one() -> CoseKey {
+    CoseKeyBuilder::new_symmetric_key(vec![1, 2, 3, 4, 5])
+        .key_id(vec![0xDC, 0xAF])
+        .build()
 }
 
 /// Generates a test key with content `[10, 9, 8, 7, 6]` and key id `[0xCA, 0xFE]`.
-fn example_key_two() -> FakeKey {
-    FakeKey::try_from(vec![10, 9, 8, 7, 6, 0xCA, 0xFE]).expect("invalid test key")
+fn example_key_two() -> CoseKey {
+    CoseKeyBuilder::new_symmetric_key(vec![10, 9, 8, 7, 6, 0xCA, 0xFE])
+        .key_id(vec![0xCA, 0xFE])
+        .build()
 }
 
 fn example_headers() -> (Header, Header) {
@@ -60,10 +64,10 @@ fn example_aad() -> Vec<u8> {
 }
 
 fn example_claims(
-    key: CoseKey,
-) -> Result<ClaimsSet, AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
+    key: &CoseKey,
+) -> Result<ClaimsSet, AccessTokenError<<FakeCrypto as CoseCipher>::Error>> {
     Ok(ClaimsSetBuilder::new()
-        .claim(CwtClaimName::Cnf, key.to_cbor_value()?)
+        .claim(CwtClaimName::Cnf, key.clone().to_cbor_value()?)
         .build())
 }
 
@@ -104,8 +108,7 @@ fn assert_header_is_part_of(subset: &Header, superset: &Header) {
 }
 
 #[test]
-fn test_get_headers_enc() -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>>
-{
+fn test_get_headers_enc() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipher>::Error>> {
     let (unprotected_header, protected_header) = example_headers();
     let enc_test = CoseEncrypt0Builder::new()
         .unprotected(unprotected_header.clone())
@@ -122,7 +125,7 @@ fn test_get_headers_enc() -> Result<(), AccessTokenError<<FakeCrypto as CoseEncr
 }
 
 #[test]
-fn test_get_headers_sign() -> Result<(), AccessTokenError<<FakeCrypto as CoseSignCipher>::Error>> {
+fn test_get_headers_sign() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipher>::Error>> {
     let (unprotected_header, protected_header) = example_headers();
     let sign_test = CoseSign1Builder::new()
         .unprotected(unprotected_header.clone())
@@ -139,7 +142,7 @@ fn test_get_headers_sign() -> Result<(), AccessTokenError<<FakeCrypto as CoseSig
 }
 
 #[test]
-fn test_get_headers_mac() -> Result<(), AccessTokenError<<FakeCrypto as CoseMacCipher>::Error>> {
+fn test_get_headers_mac() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipher>::Error>> {
     let (unprotected_header, protected_header) = example_headers();
     let mac_test = CoseMac0Builder::new()
         .unprotected(unprotected_header.clone())
@@ -170,11 +173,10 @@ fn test_get_headers_invalid() {
 }
 
 #[test]
-fn test_encrypt_decrypt() -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>>
-{
+fn test_encrypt_decrypt() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipher>::Error>> {
     let key = example_key_one();
     let (unprotected_header, protected_header) = example_headers();
-    let claims = example_claims(key.to_cose_key())?;
+    let claims = example_claims(&key)?;
     let aad = example_aad();
     let rng = FakeRng;
     let encrypted = encrypt_access_token::<FakeCrypto, FakeRng>(
@@ -196,15 +198,18 @@ fn test_encrypt_decrypt() -> Result<(), AccessTokenError<<FakeCrypto as CoseEncr
 }
 
 #[test]
-fn test_encrypt_decrypt_multiple(
-) -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
+fn test_encrypt_decrypt_multiple() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipher>::Error>>
+{
     const AUDIENCE: &str = "example_aud";
     let (unprotected_header, protected_header) = example_headers();
     let key1 = example_key_one();
     let key2 = example_key_two();
-    let invalid_key1 = FakeKey::try_from(vec![0, 0, 0, 0, 0, 0, 0]).expect("invalid test key");
-    let invalid_key2 =
-        FakeKey::try_from(vec![0, 0, 0, 0, 0, 0xDC, 0xAF]).expect("invalid test key");
+    let invalid_key1 = CoseKeyBuilder::new_symmetric_key(vec![0; 5])
+        .key_id(vec![0, 0])
+        .build();
+    let invalid_key2 = CoseKeyBuilder::new_symmetric_key(vec![0; 5])
+        .key_id(vec![0xDC, 0xAF])
+        .build();
     let rng = FakeRng;
     let aad = example_aad();
     // Using example_claims doesn't make sense, since they contain a cnf for the key,
@@ -255,7 +260,7 @@ fn test_encrypt_decrypt_multiple(
 
 #[test]
 fn test_encrypt_decrypt_match_multiple(
-) -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
+) -> Result<(), AccessTokenError<<FakeCrypto as CoseCipher>::Error>> {
     let (unprotected_header, protected_header) = example_headers();
     let key1 = example_key_one();
     let rng = FakeRng;
@@ -284,11 +289,11 @@ fn test_encrypt_decrypt_match_multiple(
 
 #[test]
 fn test_encrypt_decrypt_invalid_header(
-) -> Result<(), AccessTokenError<<FakeCrypto as CoseEncryptCipher>::Error>> {
+) -> Result<(), AccessTokenError<<FakeCrypto as CoseCipher>::Error>> {
     let key = example_key_one();
     let (unprotected_header, protected_header) = example_headers();
     let (unprotected_invalid, protected_invalid) = example_invalid_headers();
-    let claims = example_claims(key.to_cose_key())?;
+    let claims = example_claims(&key)?;
     let aad = example_aad();
     let rng = FakeRng;
     let encrypted = encrypt_access_token::<FakeCrypto, FakeRng>(
@@ -334,10 +339,10 @@ fn test_encrypt_decrypt_invalid_header(
 }
 
 #[test]
-fn test_sign_verify() -> Result<(), AccessTokenError<<FakeCrypto as CoseSignCipher>::Error>> {
+fn test_sign_verify() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipher>::Error>> {
     let key = example_key_one();
     let (unprotected_header, protected_header) = example_headers();
-    let claims = example_claims(key.to_cose_key())?;
+    let claims = example_claims(&key)?;
     let aad = example_aad();
     let rng = FakeRng;
     let signed = sign_access_token::<FakeCrypto, FakeRng>(
@@ -360,14 +365,16 @@ fn test_sign_verify() -> Result<(), AccessTokenError<<FakeCrypto as CoseSignCiph
 }
 
 #[test]
-fn test_sign_verify_multiple() -> Result<(), AccessTokenError<<FakeCrypto as CoseSignCipher>::Error>>
-{
+fn test_sign_verify_multiple() -> Result<(), AccessTokenError<<FakeCrypto as CoseCipher>::Error>> {
     const AUDIENCE: &str = "example_aud";
     let key1 = example_key_one();
     let key2 = example_key_two();
-    let invalid_key1 = FakeKey::try_from(vec![0, 0, 0, 0, 0, 0, 0]).expect("invalid test key");
-    let invalid_key2 =
-        FakeKey::try_from(vec![0, 0, 0, 0, 0, 0xDC, 0xAF]).expect("invalid test key");
+    let invalid_key1 = CoseKeyBuilder::new_symmetric_key(vec![0; 5])
+        .key_id(vec![0, 0])
+        .build();
+    let invalid_key2 = CoseKeyBuilder::new_symmetric_key(vec![0; 5])
+        .key_id(vec![0xDC, 0xAF])
+        .build();
     let (unprotected_header, protected_header) = example_headers();
     let claims = ClaimsSetBuilder::new()
         .audience(AUDIENCE.to_string())

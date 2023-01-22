@@ -87,7 +87,7 @@
 //! of the token, using an existing cipher of type `FakeCrypto`[^cipher]:
 //! ```
 //! # use ciborium::value::Value;
-//! # use coset::{AsCborValue, CoseKey, CoseKeyBuilder, Header, Label, ProtectedHeader};
+//! # use coset::{AsCborValue, CoseKey, CoseKeyBuilder, Header, iana, Label, ProtectedHeader};
 //! # use coset::cwt::{ClaimsSetBuilder, Timestamp};
 //! # use coset::iana::{Algorithm, CwtClaimName};
 //! # use rand::{CryptoRng, RngCore};
@@ -95,26 +95,24 @@
 //! # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
 //! # use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
 //! # use dcaf::error::{AccessTokenError, CoseCipherError};
-//! # use dcaf::token::ToCoseKey;
+//! use dcaf::token::CoseCipher;
 //!
-//! #[derive(Clone)]
-//! # pub(crate) struct FakeKey {
-//! #     key: [u8; 5],
-//! #     kid: [u8; 2],
-//! # }
-//! #
-//! # impl ToCoseKey for FakeKey {
-//! #     fn to_cose_key(&self) -> CoseKey {
-//! #         CoseKeyBuilder::new_symmetric_key(self.key.to_vec())
-//! #             .key_id(self.kid.to_vec())
-//! #             .build()
-//! #     }
-//! # }
-//! #
 //! # struct FakeCrypto {}
 //! #
 //! # #[derive(Clone, Copy)]
 //! # pub(crate) struct FakeRng;
+//! #
+//! # fn get_k_from_key(key: &CoseKey) -> Option<Vec<u8>> {
+//! #     const K_PARAM: i64 = iana::SymmetricKeyParameter::K as i64;
+//! #     for (label, value) in key.params.iter() {
+//! #         if let Label::Int(K_PARAM) = label {
+//! #             if let Value::Bytes(k_val) = value {
+//! #                 return Some(k_val.clone());
+//! #             }
+//! #         }
+//! #     }
+//! #     None
+//! # }
 //! #
 //! # impl RngCore for FakeRng {
 //! #     fn next_u32(&mut self) -> u32 {
@@ -137,20 +135,11 @@
 //! #
 //! # impl CryptoRng for FakeRng {}
 //! #
-//! # /// Implements basic operations from the [`CoseSignCipher`](crate::token::CoseSignCipher) trait
-//! # /// without actually using any "real" cryptography.
-//! # /// This is purely to be used for testing and obviously offers no security at all.
-//! # impl CoseSignCipher for FakeCrypto {
+//! # impl CoseCipher for FakeCrypto {
 //! #     type Error = String;
-//! #     type SignKey = FakeKey;
-//! #     type VerifyKey = Self::SignKey;
 //! #
-//! #     fn set_headers<RNG: RngCore + CryptoRng>(
-//! #         key: &FakeKey,
-//! #         unprotected_header: &mut Header,
-//! #         protected_header: &mut Header,
-//! #         rng: RNG
-//! #     ) -> Result<(), CoseCipherError<Self::Error>> {
+//! #     fn set_headers<RNG: RngCore + CryptoRng>(key: &CoseKey, unprotected_header: &mut Header, protected_header: &mut Header, rng: RNG) -> Result<(), CoseCipherError<Self::Error>> {
+//! #         // We have to later verify these headers really are used.
 //! #         if let Some(label) = unprotected_header
 //! #             .rest
 //! #             .iter()
@@ -161,28 +150,31 @@
 //! #         if protected_header.alg != None {
 //! #             return Err(CoseCipherError::existing_header("alg"));
 //! #         }
-//! #         if !protected_header.key_id.is_empty() {
-//! #             return Err(CoseCipherError::existing_header("key_id"));
-//! #         }
 //! #         unprotected_header.rest.push((Label::Int(47), Value::Null));
 //! #         protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));
-//! #         protected_header.key_id = key.kid.to_vec();
 //! #         Ok(())
 //! #     }
+//! # }
+//! #
+//! # /// Implements basic operations from the [`CoseSignCipher`](crate::token::CoseSignCipher) trait
+//! # /// without actually using any "real" cryptography.
+//! # /// This is purely to be used for testing and obviously offers no security at all.
+//! # impl CoseSignCipher for FakeCrypto {
 //! #     fn sign(
-//! #         key: &Self::SignKey,
+//! #         key: &CoseKey,
 //! #         target: &[u8],
 //! #         unprotected_header: &Header,
 //! #         protected_header: &Header,
 //! #     ) -> Vec<u8> {
 //! #         // We simply append the key behind the data.
 //! #         let mut signature = target.to_vec();
-//! #         signature.append(&mut key.key.to_vec());
+//! #         let k = get_k_from_key(key);
+//! #         signature.append(&mut k.expect("k must be present in key!"));
 //! #         signature
 //! #     }
 //! #
 //! #     fn verify(
-//! #         key: &Self::VerifyKey,
+//! #         key: &CoseKey,
 //! #         signature: &[u8],
 //! #         signed_data: &[u8],
 //! #         unprotected_header: &Header,
@@ -190,13 +182,13 @@
 //! #         unprotected_signature_header: Option<&Header>,
 //! #         protected_signature_header: Option<&ProtectedHeader>,
 //! #     ) -> Result<(), CoseCipherError<Self::Error>> {
-//! #         let matching_kid = if let Some(protected) = protected_signature_header {
-//! #             protected.header.key_id == key.kid
-//! #         } else {
-//! #             protected_header.header.key_id == key.kid
-//! #         };
-//! #         let signed_again = Self::sign(key, signed_data, unprotected_header, &protected_header.header);
-//! #         if matching_kid && signed_again == signature
+//! #         if signature
+//! #             == Self::sign(
+//! #             key,
+//! #             signed_data,
+//! #             unprotected_header,
+//! #             &protected_header.header,
+//! #         )
 //! #         {
 //! #             Ok(())
 //! #         } else {
@@ -206,12 +198,11 @@
 //! # }
 //!
 //! let rng = FakeRng;
-//! let key = FakeKey { key: [1,2,3,4,5], kid: [0xDC, 0xAF]};
-//! let cose_key: CoseKey = key.to_cose_key();
+//! let key = CoseKeyBuilder::new_symmetric_key(vec![1,2,3,4,5]).key_id(vec![0xDC, 0xAF]).build();
 //! let claims = ClaimsSetBuilder::new()
 //!      .audience(String::from("coaps://rs.example.com"))
 //!      .issuer(String::from("coaps://as.example.com"))
-//!      .claim(CwtClaimName::Cnf, cose_key.to_cbor_value()?)
+//!      .claim(CwtClaimName::Cnf, key.clone().to_cbor_value()?)
 //!      .build();
 //! let token = sign_access_token::<FakeCrypto, FakeRng>(&key, claims, None, None, None, rng)?;
 //! assert!(verify_access_token::<FakeCrypto>(&key, &token, None).is_ok());
@@ -295,13 +286,13 @@
 //! # COSE Cipher
 //! As mentioned before, cryptographic functions are outside the scope of this crate.
 //! For this reason, the various COSE cipher traits exist; namely,
-//! [`CoseEncryptCipher`](core::token::CoseEncryptCipher), [`CoseSignCipher`](core::token::CoseSignCipher),
-//! and [`CoseMacCipher`](core::token::CoseMacCipher), each implementing
+//! [`CoseEncryptCipher`](token::CoseEncryptCipher), [`CoseSignCipher`](token::CoseSignCipher),
+//! and [`CoseMacCipher`](token::CoseMacCipher), each implementing
 //! a corresponding COSE operation as specified in sections 4, 5, and 6 of
 //! [RFC 8152](https://www.rfc-editor.org/rfc/rfc8152).
-//! There are also the traits [`MultipleEncryptCipher`](core::token::MultipleEncryptCipher),
-//! [`MultipleSignCipher`](core::token::MultipleSignCipher), and
-//! [`MultipleMacCipher`](core::token::MultipleMacCipher),
+//! There are also the traits [`MultipleEncryptCipher`](token::MultipleEncryptCipher),
+//! [`MultipleSignCipher`](token::MultipleSignCipher), and
+//! [`MultipleMacCipher`](token::MultipleMacCipher),
 //! which are used for creating tokens intended for multiple recipients.
 //!
 //! Note that these ciphers *don't* need to wrap their results in, e.g.,

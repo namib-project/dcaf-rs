@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 This release mainly adds support for multiple token recipients, deals with the newly released RFCs,
 and fixes `no_std` support.
+Note that the cipher interfaces have been refactored in a major way.
 
 ### Added
 
@@ -27,7 +28,7 @@ and fixes `no_std` support.
 - The ciphers' API has been majorly changed. As a result, the API for the token functions has changed as well.
   Users no longer need to pass in an instance of the cipher, they only need to specify the type parameter, as the
   cipher's methods no longer need `self` as a parameter. Additionally, users now need to pass in the `key` for the
-  corresponding operation, whereas the type of the key is defined in the cipher. For more information, read the
+  corresponding operation, specified as a `CoseKey`. For more information, read the
   documentation of `CoseEncryptCipher`, `CoseSignCipher`, or `CoseMacCipher`, as well as of the token functions.
 - The documentation has been updated to refer to the recently released RFCs instead of the now outdated internet drafts.
 

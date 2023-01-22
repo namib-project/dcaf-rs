@@ -12,7 +12,7 @@
 use ciborium::value::Value;
 use coset::cwt::{ClaimsSetBuilder, Timestamp};
 use coset::iana::EllipticCurve::P_256;
-use coset::iana::{Algorithm, CwtClaimName};
+use coset::iana::{Algorithm, CwtClaimName, EllipticCurve};
 use coset::{
     iana, CborSerializable, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, KeyType, Label,
     ProtectedHeader,
@@ -28,54 +28,31 @@ use dcaf::endpoints::token_req::{
     TokenType,
 };
 use dcaf::error::CoseCipherError;
-use dcaf::token::{verify_access_token_multiple, ToCoseKey};
+use dcaf::token::CoseCipher;
 use dcaf::{sign_access_token, verify_access_token, CoseSignCipher};
 
-#[derive(Clone)]
-pub(crate) struct EC2P256Key {
-    x: Vec<u8>,
-    y: Vec<u8>,
+fn create_ec2p256_key(x: Vec<u8>, y: Vec<u8>) -> CoseKey {
+    CoseKeyBuilder::new_ec2_pub_key(P_256, x, y).build()
 }
 
-impl ToCoseKey for EC2P256Key {
-    fn to_cose_key(&self) -> CoseKey {
-        CoseKeyBuilder::new_ec2_pub_key(P_256, self.x.to_vec(), self.y.to_vec()).build()
-    }
-}
-
-impl TryFrom<Vec<u8>> for EC2P256Key {
-    type Error = String;
-
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        let key = CoseKey::from_slice(value.as_slice()).map_err(|x| x.to_string())?;
-        assert_eq!(key.kty, KeyType::Assigned(iana::KeyType::EC2));
-        assert_eq!(
-            get_param(Label::Int(iana::Ec2KeyParameter::Crv as i64), &key.params),
-            Some(Value::from(P_256 as u64))
-        );
-
-        if let Some(Value::Bytes(x)) =
-            get_param(Label::Int(iana::Ec2KeyParameter::X as i64), &key.params)
-        {
-            if let Some(Value::Bytes(y)) =
-                get_param(Label::Int(iana::Ec2KeyParameter::Y as i64), &key.params)
-            {
-                return Ok(EC2P256Key { x, y });
+fn get_x_y_from_key(key: &CoseKey) -> (Vec<u8>, Vec<u8>) {
+    const X_PARAM: i64 = iana::Ec2KeyParameter::X as i64;
+    const Y_PARAM: i64 = iana::Ec2KeyParameter::Y as i64;
+    let mut x: Option<Vec<u8>> = None;
+    let mut y: Option<Vec<u8>> = None;
+    for (label, value) in key.params.iter() {
+        if let Label::Int(X_PARAM) = label {
+            if let Value::Bytes(x_val) = value {
+                x = Some(x_val.clone());
+            }
+        } else if let Label::Int(Y_PARAM) = label {
+            if let Value::Bytes(y_val) = value {
+                y = Some(y_val.clone());
             }
         }
-        return Err("x and y must be present in key as bytes".to_string());
-
-        fn get_param(label: Label, params: &Vec<(Label, Value)>) -> Option<Value> {
-            let mut iter = params.iter().filter(|x| x.0 == label);
-            iter.map(|x| x.1.clone()).next()
-        }
     }
-}
-
-impl From<EC2P256Key> for Vec<u8> {
-    fn from(k: EC2P256Key) -> Self {
-        k.to_cose_key().to_vec().expect("couldn't serialize key")
-    }
+    let test = x.and_then(|a| y.map(|b| (a, b)));
+    test.expect("X and Y value must be present in key!")
 }
 
 #[derive(Clone, Copy)]
@@ -118,29 +95,52 @@ fn example_aad() -> Vec<u8> {
 #[derive(Copy, Clone)]
 pub(crate) struct FakeCrypto {}
 
+impl CoseCipher for FakeCrypto {
+    type Error = String;
+
+    fn set_headers<RNG: RngCore + CryptoRng>(
+        key: &CoseKey,
+        unprotected_header: &mut Header,
+        protected_header: &mut Header,
+        rng: RNG,
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        // We have to later verify these headers really are used.
+        if let Some(label) = unprotected_header
+            .rest
+            .iter()
+            .find(|x| x.0 == Label::Int(47))
+        {
+            return Err(CoseCipherError::existing_header_label(&label.0));
+        }
+        if protected_header.alg != None {
+            return Err(CoseCipherError::existing_header("alg"));
+        }
+        unprotected_header.rest.push((Label::Int(47), Value::Null));
+        protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));
+        Ok(())
+    }
+}
+
 /// Implements basic operations from the [`CoseSign1Cipher`] trait without actually using any
 /// "real" cryptography.
 /// This is purely to be used for testing and obviously offers no security at all.
 impl CoseSignCipher for FakeCrypto {
-    type SignKey = EC2P256Key;
-    type VerifyKey = Self::SignKey;
-    type Error = String;
-
     fn sign(
-        key: &Self::SignKey,
+        key: &CoseKey,
         target: &[u8],
         unprotected_header: &Header,
         protected_header: &Header,
     ) -> Vec<u8> {
         // We simply append the key behind the data.
         let mut signature = target.to_vec();
-        signature.append(&mut key.x.to_vec());
-        signature.append(&mut key.y.to_vec());
+        let (x, y) = get_x_y_from_key(key);
+        signature.append(&mut x.clone());
+        signature.append(&mut y.clone());
         signature
     }
 
     fn verify(
-        key: &Self::VerifyKey,
+        key: &CoseKey,
         signature: &[u8],
         signed_data: &[u8],
         unprotected_header: &Header,
@@ -160,28 +160,6 @@ impl CoseSignCipher for FakeCrypto {
         } else {
             Err(CoseCipherError::VerificationFailure)
         }
-    }
-
-    fn set_headers<RNG: RngCore + CryptoRng>(
-        key: &Self::SignKey,
-        unprotected_header: &mut Header,
-        protected_header: &mut Header,
-        rng: RNG,
-    ) -> Result<(), CoseCipherError<Self::Error>> {
-        // We have to later verify these headers really are used.
-        if let Some(label) = unprotected_header
-            .rest
-            .iter()
-            .find(|x| x.0 == Label::Int(47))
-        {
-            return Err(CoseCipherError::existing_header_label(&label.0));
-        }
-        if protected_header.alg != None {
-            return Err(CoseCipherError::existing_header("alg"));
-        }
-        unprotected_header.rest.push((Label::Int(47), Value::Null));
-        protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));
-        Ok(())
     }
 }
 
@@ -204,15 +182,16 @@ fn test_scenario() -> Result<(), String> {
     let scope = TextEncodedScope::try_from("first second").map_err(|x| x.to_string())?;
     assert!(scope.elements().eq(["first", "second"]));
     // Taken from RFC 8747, section 3.2.
-    let key = EC2P256Key {
-        x: hex::decode("d7cc072de2205bdc1537a543d53c60a6acb62eccd890c7fa27c9e354089bbe13")
+    let key = CoseKeyBuilder::new_ec2_pub_key(
+        P_256,
+        hex::decode("d7cc072de2205bdc1537a543d53c60a6acb62eccd890c7fa27c9e354089bbe13")
             .map_err(|x| x.to_string())?,
-        y: hex::decode("f95e1d4b851a2cc80fff87d8e23f22afb725d535e515d020731e79a3b4e47120")
+        hex::decode("f95e1d4b851a2cc80fff87d8e23f22afb725d535e515d020731e79a3b4e47120")
             .map_err(|x| x.to_string())?,
-    };
+    )
+    .build();
 
     let (unprotected_headers, protected_headers) = example_headers();
-    let mut crypto = FakeCrypto {};
     let aad = example_aad();
 
     let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder()
@@ -231,7 +210,7 @@ fn test_scenario() -> Result<(), String> {
         .client_nonce(nonce)
         .ace_profile()
         .client_id(client_id)
-        .req_cnf(PlainCoseKey(key.to_cose_key()))
+        .req_cnf(PlainCoseKey(key.clone()))
         .build()
         .map_err(|x| x.to_string())?;
     let result = pseudo_send_receive(request.clone())?;
@@ -247,7 +226,7 @@ fn test_scenario() -> Result<(), String> {
             .issued_at(Timestamp::WholeSeconds(47))
             .claim(
                 CwtClaimName::Cnf,
-                PlainCoseKey(key.to_cose_key()).to_ciborium_value(),
+                PlainCoseKey(key.clone()).to_ciborium_value(),
             )
             .build(),
         // TODO: Proper headers
