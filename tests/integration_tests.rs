@@ -12,11 +12,8 @@
 use ciborium::value::Value;
 use coset::cwt::{ClaimsSetBuilder, Timestamp};
 use coset::iana::EllipticCurve::P_256;
-use coset::iana::{Algorithm, CwtClaimName, EllipticCurve};
-use coset::{
-    iana, CborSerializable, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, KeyType, Label,
-    ProtectedHeader,
-};
+use coset::iana::{Algorithm, CwtClaimName};
+use coset::{iana, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, Label, ProtectedHeader};
 use rand::{CryptoRng, Error, RngCore};
 
 use dcaf::common::cbor_map::ToCborMap;
@@ -30,10 +27,6 @@ use dcaf::endpoints::token_req::{
 use dcaf::error::CoseCipherError;
 use dcaf::token::CoseCipher;
 use dcaf::{sign_access_token, verify_access_token, CoseSignCipher};
-
-fn create_ec2p256_key(x: Vec<u8>, y: Vec<u8>) -> CoseKey {
-    CoseKeyBuilder::new_ec2_pub_key(P_256, x, y).build()
-}
 
 fn get_x_y_from_key(key: &CoseKey) -> (Vec<u8>, Vec<u8>) {
     const X_PARAM: i64 = iana::Ec2KeyParameter::X as i64;
@@ -72,7 +65,8 @@ impl RngCore for FakeRng {
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
-        Ok(dest.fill(0))
+        dest.fill(0);
+        Ok(())
     }
 }
 
@@ -99,10 +93,10 @@ impl CoseCipher for FakeCrypto {
     type Error = String;
 
     fn set_headers<RNG: RngCore + CryptoRng>(
-        key: &CoseKey,
+        _key: &CoseKey,
         unprotected_header: &mut Header,
         protected_header: &mut Header,
-        rng: RNG,
+        _rng: RNG,
     ) -> Result<(), CoseCipherError<Self::Error>> {
         // We have to later verify these headers really are used.
         if let Some(label) = unprotected_header
@@ -128,14 +122,14 @@ impl CoseSignCipher for FakeCrypto {
     fn sign(
         key: &CoseKey,
         target: &[u8],
-        unprotected_header: &Header,
-        protected_header: &Header,
+        _unprotected_header: &Header,
+        _protected_header: &Header,
     ) -> Vec<u8> {
         // We simply append the key behind the data.
         let mut signature = target.to_vec();
-        let (x, y) = get_x_y_from_key(key);
-        signature.append(&mut x.clone());
-        signature.append(&mut y.clone());
+        let (mut x, mut y) = get_x_y_from_key(key);
+        signature.append(&mut x);
+        signature.append(&mut y);
         signature
     }
 
@@ -145,8 +139,8 @@ impl CoseSignCipher for FakeCrypto {
         signed_data: &[u8],
         unprotected_header: &Header,
         protected_header: &ProtectedHeader,
-        unprotected_signature_header: Option<&Header>,
-        protected_signature_header: Option<&ProtectedHeader>,
+        _unprotected_signature_header: Option<&Header>,
+        _protected_signature_header: Option<&ProtectedHeader>,
     ) -> Result<(), CoseCipherError<Self::Error>> {
         if signature
             == Self::sign(

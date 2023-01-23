@@ -16,7 +16,7 @@ use core::convert::identity;
 use core::fmt::{Debug, Display};
 
 use ciborium::value::Value;
-use coset::iana::{Algorithm, SymmetricKeyParameter};
+use coset::iana::Algorithm;
 use coset::{iana, CoseKey, CoseKeyBuilder, Header, Label, ProtectedHeader};
 use rand::{CryptoRng, Error, RngCore};
 
@@ -37,10 +37,10 @@ use crate::{CoseEncryptCipher, CoseMacCipher, CoseSignCipher};
 /// # Panics
 /// If [`key`] is not a symmetric key or has no valid key value.
 fn get_symmetric_key_value(key: &CoseKey) -> Vec<u8> {
-    let k_label = iana::SymmetricKeyParameter::K as i64;
+    const K_LABEL: i64 = iana::SymmetricKeyParameter::K as i64;
     key.params
         .iter()
-        .find(|x| matches!(x.0, Label::Int(k_label)))
+        .find(|x| matches!(x.0, Label::Int(K_LABEL)))
         .and_then(|x| match x {
             (_, Value::Bytes(x)) => Some(x),
             _ => None,
@@ -112,7 +112,7 @@ impl CoseCipher for FakeCrypto {
         key: &CoseKey,
         unprotected_header: &mut Header,
         protected_header: &mut Header,
-        rng: RNG,
+        _rng: RNG,
     ) -> Result<(), CoseCipherError<Self::Error>> {
         // We have to later verify these headers really are used.
         if let Some(label) = unprotected_header
@@ -143,8 +143,8 @@ impl CoseEncryptCipher for FakeCrypto {
         key: &CoseKey,
         plaintext: &[u8],
         aad: &[u8],
-        protected_header: &Header,
-        unprotected_header: &Header,
+        _protected_header: &Header,
+        _unprotected_header: &Header,
     ) -> Vec<u8> {
         // We put the key and the AAD before the data.
         // Again, this obviously isn't secure in any sane definition of the word.
@@ -158,12 +158,12 @@ impl CoseEncryptCipher for FakeCrypto {
         key: &CoseKey,
         ciphertext: &[u8],
         aad: &[u8],
-        unprotected_header: &Header,
+        _unprotected_header: &Header,
         protected_header: &ProtectedHeader,
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         // Now we just split off the AAD and key we previously put at the end of the data.
         // We return an error if it does not match.
-        if key.key_id.clone() != protected_header.header.key_id {
+        if &key.key_id != &protected_header.header.key_id {
             // Mismatching key
             return Err(CoseCipherError::DecryptionFailure);
         }
@@ -191,8 +191,8 @@ impl CoseSignCipher for FakeCrypto {
     fn sign(
         key: &CoseKey,
         target: &[u8],
-        unprotected_header: &Header,
-        protected_header: &Header,
+        _unprotected_header: &Header,
+        _protected_header: &Header,
     ) -> Vec<u8> {
         // We simply append the key behind the data.
         let mut signature = target.to_vec();
@@ -206,7 +206,7 @@ impl CoseSignCipher for FakeCrypto {
         signed_data: &[u8],
         unprotected_header: &Header,
         protected_header: &ProtectedHeader,
-        unprotected_signature_header: Option<&Header>,
+        _unprotected_signature_header: Option<&Header>,
         protected_signature_header: Option<&ProtectedHeader>,
     ) -> Result<(), CoseCipherError<Self::Error>> {
         let matching_kid = if let Some(protected) = protected_signature_header {
@@ -235,8 +235,8 @@ impl CoseMacCipher for FakeCrypto {
     fn compute(
         key: &CoseKey,
         target: &[u8],
-        unprotected_header: &Header,
-        protected_header: &Header,
+        _unprotected_header: &Header,
+        _protected_header: &Header,
     ) -> Vec<u8> {
         // We simply append the key behind the data.
         let mut tag = target.to_vec();
