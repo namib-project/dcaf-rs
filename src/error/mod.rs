@@ -11,21 +11,20 @@
 
 //! Contains error types used across this crate.
 
-#[cfg(feature = "std")]
-use {std::marker::PhantomData, std::num::TryFromIntError};
-
-#[cfg(not(feature = "std"))]
-use {
-    alloc::format, alloc::string::String, alloc::string::ToString, core::num::TryFromIntError,
-    derive_builder::export::core::marker::PhantomData,
-};
-
 use core::any::type_name;
 use core::fmt::{Display, Formatter};
 
 use ciborium::value::Value;
 use coset::{CoseError, Label};
 use strum_macros::IntoStaticStr;
+
+#[cfg(not(feature = "std"))]
+use {
+    alloc::format, alloc::string::String, alloc::string::ToString, core::num::TryFromIntError,
+    derive_builder::export::core::marker::PhantomData,
+};
+#[cfg(feature = "std")]
+use {std::marker::PhantomData, std::num::TryFromIntError};
 
 /// Error type used when the parameter of the type `T` couldn't be
 /// converted into [`expected_type`](WrongSourceTypeError::expected_type) because the received
@@ -238,8 +237,8 @@ impl Display for InvalidAifEncodedScopeError {
     }
 }
 
-/// Error type used when a [`CoseEncrypt0Cipher`](crate::CoseEncrypt0Cipher),
-/// [`CoseSign1Cipher`](crate::CoseSign1Cipher), or [`CoseMac0Cipher`](crate::CoseMac0Cipher).
+/// Error type used when a [`CoseEncryptCipher`](crate::CoseEncryptCipher),
+/// [`CoseSignCipher`](crate::CoseSignCipher), or [`CoseMacCipher`](crate::CoseMacCipher).
 /// fails to perform an operation.
 ///
 /// `T` is the type of the nested error represented by the [`Other`](CoseCipherError::Other) variant.
@@ -300,6 +299,37 @@ where
     pub fn other_error(other: T) -> CoseCipherError<T> {
         CoseCipherError::Other(other)
     }
+
+    // TODO: Maybe there's a better way to do the below, parts of this are redundant and duplicated.
+    pub(crate) fn from_kek_error<C: Display>(
+        error: CoseCipherError<T>,
+    ) -> CoseCipherError<MultipleCoseError<T, C>> {
+        match error {
+            CoseCipherError::Other(x) => CoseCipherError::Other(MultipleCoseError::KekError(x)),
+            CoseCipherError::HeaderAlreadySet {
+                existing_header_name,
+            } => CoseCipherError::HeaderAlreadySet {
+                existing_header_name,
+            },
+            CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
+            CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
+        }
+    }
+
+    pub(crate) fn from_cek_error<K: Display>(
+        error: CoseCipherError<T>,
+    ) -> CoseCipherError<MultipleCoseError<K, T>> {
+        match error {
+            CoseCipherError::Other(x) => CoseCipherError::Other(MultipleCoseError::CekError(x)),
+            CoseCipherError::HeaderAlreadySet {
+                existing_header_name,
+            } => CoseCipherError::HeaderAlreadySet {
+                existing_header_name,
+            },
+            CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
+            CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
+        }
+    }
 }
 
 impl<T> Display for CoseCipherError<T>
@@ -317,6 +347,36 @@ where
             CoseCipherError::VerificationFailure => write!(f, "data verification failed"),
             CoseCipherError::DecryptionFailure => write!(f, "decryption failed"),
             CoseCipherError::Other(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+/// Error type used when a token for multiple recipients (i.e., `CoseEncrypt`) is decrypted.
+///
+/// In that case, the recipients may be encrypted with a different cipher (`K`) than the
+/// actual content (`C`); hence, this error type differentiates between the two.
+#[derive(Debug)]
+pub enum MultipleCoseError<K, C>
+where
+    K: Display,
+    C: Display,
+{
+    /// Used when an error occurred in the Key Encryption Key's cipher.
+    KekError(K),
+
+    /// Used when an error occurred in the Content Encryption Key's cipher.
+    CekError(C),
+}
+
+impl<K, C> Display for MultipleCoseError<K, C>
+where
+    K: Display,
+    C: Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            MultipleCoseError::KekError(k) => k.fmt(f),
+            MultipleCoseError::CekError(c) => c.fmt(f),
         }
     }
 }
@@ -440,6 +500,14 @@ where
     /// [`CoseEncrypt0`](coset::CoseEncrypt0), [`CoseSign1`](coset::CoseSign1),
     /// nor [`CoseMac0`](coset::CoseMac0).
     UnknownCoseStructure,
+    /// No matching recipient was found in the list of COSE_Recipient structures.
+    /// This means that the given Key Encryption Key could not be used to decrypt any of the
+    /// recipients, which means no Content Encryption Key could be extracted.
+    NoMatchingRecipient,
+    /// Multiple matching recipients were found in the list of COSE_Recipient structures.
+    /// This means that the given Key Encryption Key could be used to decrypt multiple of the
+    /// recipients, which means the token is malformed.
+    MultipleMatchingRecipients,
 }
 
 impl<T> Display for AccessTokenError<T>
@@ -454,26 +522,73 @@ where
                 f,
                 "input is either invalid or none of CoseEncrypt0, CoseSign1 nor CoseMac0"
             ),
+            AccessTokenError::NoMatchingRecipient => {
+                write!(f, "given KEK doesn't match any recipient")
+            }
+            AccessTokenError::MultipleMatchingRecipients => {
+                write!(f, "given KEK matches multiple recipients")
+            }
         }
     }
 }
 
+impl<T> From<CoseCipherError<T>> for AccessTokenError<T>
+where
+    T: Display,
+{
+    #[must_use]
+    fn from(error: CoseCipherError<T>) -> Self {
+        AccessTokenError::CoseCipherError(error)
+    }
+}
+
+impl<T> From<CoseError> for AccessTokenError<T>
+where
+    T: Display,
+{
+    #[must_use]
+    fn from(error: CoseError) -> Self {
+        AccessTokenError::CoseError(error)
+    }
+}
+
+#[allow(dead_code)]
 impl<T> AccessTokenError<T>
 where
     T: Display,
 {
-    /// Creates a new [`AccessTokenError`] of variant [`CoseError`](AccessTokenError::CoseError)
-    /// with the given `error`.
-    #[must_use]
-    pub fn from_cose_error(error: CoseError) -> AccessTokenError<T> {
-        AccessTokenError::CoseError(error)
+    // TODO: Again, as in CoseCipherError, maybe there's a better way to do the below.
+
+    pub(crate) fn from_kek_error<C: Display>(
+        error: AccessTokenError<T>,
+    ) -> AccessTokenError<MultipleCoseError<T, C>> {
+        match error {
+            AccessTokenError::CoseCipherError(x) => {
+                AccessTokenError::CoseCipherError(CoseCipherError::from_kek_error(x))
+            }
+            AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
+            AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
+            AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
+            AccessTokenError::MultipleMatchingRecipients => {
+                AccessTokenError::MultipleMatchingRecipients
+            }
+        }
     }
 
-    /// Creates a new [`AccessTokenError`] of variant
-    /// [`CoseCipherError`](AccessTokenError::CoseCipherError) with the given `error`.
-    #[must_use]
-    pub fn from_cose_cipher_error(error: CoseCipherError<T>) -> AccessTokenError<T> {
-        AccessTokenError::CoseCipherError(error)
+    pub(crate) fn from_cek_error<K: Display>(
+        error: AccessTokenError<T>,
+    ) -> AccessTokenError<MultipleCoseError<K, T>> {
+        match error {
+            AccessTokenError::CoseCipherError(x) => {
+                AccessTokenError::CoseCipherError(CoseCipherError::from_cek_error(x))
+            }
+            AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
+            AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
+            AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
+            AccessTokenError::MultipleMatchingRecipients => {
+                AccessTokenError::MultipleMatchingRecipients
+            }
+        }
     }
 }
 

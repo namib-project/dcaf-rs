@@ -13,7 +13,9 @@ use ciborium::value::Value;
 use coset::cwt::{ClaimsSetBuilder, Timestamp};
 use coset::iana::EllipticCurve::P_256;
 use coset::iana::{Algorithm, CwtClaimName};
-use coset::{CoseKeyBuilder, Header, HeaderBuilder, Label};
+use coset::{iana, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, Label, ProtectedHeader};
+use rand::{CryptoRng, Error, RngCore};
+
 use dcaf::common::cbor_map::ToCborMap;
 use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
 use dcaf::common::scope::TextEncodedScope;
@@ -23,9 +25,52 @@ use dcaf::endpoints::token_req::{
     TokenType,
 };
 use dcaf::error::CoseCipherError;
-use dcaf::token::CoseCipherCommon;
-use dcaf::{sign_access_token, CoseSign1Cipher};
-use std::fmt::Debug;
+use dcaf::token::CoseCipher;
+use dcaf::{sign_access_token, verify_access_token, CoseSignCipher};
+
+fn get_x_y_from_key(key: &CoseKey) -> (Vec<u8>, Vec<u8>) {
+    const X_PARAM: i64 = iana::Ec2KeyParameter::X as i64;
+    const Y_PARAM: i64 = iana::Ec2KeyParameter::Y as i64;
+    let mut x: Option<Vec<u8>> = None;
+    let mut y: Option<Vec<u8>> = None;
+    for (label, value) in key.params.iter() {
+        if let Label::Int(X_PARAM) = label {
+            if let Value::Bytes(x_val) = value {
+                x = Some(x_val.clone());
+            }
+        } else if let Label::Int(Y_PARAM) = label {
+            if let Value::Bytes(y_val) = value {
+                y = Some(y_val.clone());
+            }
+        }
+    }
+    let test = x.and_then(|a| y.map(|b| (a, b)));
+    test.expect("X and Y value must be present in key!")
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct FakeRng;
+
+impl RngCore for FakeRng {
+    fn next_u32(&mut self) -> u32 {
+        0
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        0
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        dest.fill(0)
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
+        dest.fill(0);
+        Ok(())
+    }
+}
+
+impl CryptoRng for FakeRng {}
 
 fn example_headers() -> (Header, Header) {
     let unprotected_header = HeaderBuilder::new()
@@ -38,19 +83,20 @@ fn example_headers() -> (Header, Header) {
 }
 
 fn example_aad() -> Vec<u8> {
-    vec![0x01, 0x02, 0x03, 0x04, 0x05]
+    vec![0x10, 0x12, 0x13, 0x14, 0x15]
 }
 
 #[derive(Copy, Clone)]
 pub(crate) struct FakeCrypto {}
 
-impl CoseCipherCommon for FakeCrypto {
+impl CoseCipher for FakeCrypto {
     type Error = String;
 
-    fn header(
-        &self,
+    fn set_headers<RNG: RngCore + CryptoRng>(
+        _key: &CoseKey,
         unprotected_header: &mut Header,
         protected_header: &mut Header,
+        _rng: RNG,
     ) -> Result<(), CoseCipherError<Self::Error>> {
         // We have to later verify these headers really are used.
         if let Some(label) = unprotected_header
@@ -72,20 +118,41 @@ impl CoseCipherCommon for FakeCrypto {
 /// Implements basic operations from the [`CoseSign1Cipher`] trait without actually using any
 /// "real" cryptography.
 /// This is purely to be used for testing and obviously offers no security at all.
-impl CoseSign1Cipher for FakeCrypto {
-    fn generate_signature(&mut self, data: &[u8]) -> Vec<u8> {
-        data.to_vec()
+impl CoseSignCipher for FakeCrypto {
+    fn sign(
+        key: &CoseKey,
+        target: &[u8],
+        _unprotected_header: &Header,
+        _protected_header: &Header,
+    ) -> Vec<u8> {
+        // We simply append the key behind the data.
+        let mut signature = target.to_vec();
+        let (mut x, mut y) = get_x_y_from_key(key);
+        signature.append(&mut x);
+        signature.append(&mut y);
+        signature
     }
 
-    fn verify_signature(
-        &mut self,
-        sig: &[u8],
-        data: &[u8],
+    fn verify(
+        key: &CoseKey,
+        signature: &[u8],
+        signed_data: &[u8],
+        unprotected_header: &Header,
+        protected_header: &ProtectedHeader,
+        _unprotected_signature_header: Option<&Header>,
+        _protected_signature_header: Option<&ProtectedHeader>,
     ) -> Result<(), CoseCipherError<Self::Error>> {
-        if sig != self.generate_signature(data) {
-            Err(CoseCipherError::VerificationFailure)
-        } else {
+        if signature
+            == Self::sign(
+                key,
+                signed_data,
+                unprotected_header,
+                &protected_header.header,
+            )
+        {
             Ok(())
+        } else {
+            Err(CoseCipherError::VerificationFailure)
         }
     }
 }
@@ -117,8 +184,8 @@ fn test_scenario() -> Result<(), String> {
             .map_err(|x| x.to_string())?,
     )
     .build();
+
     let (unprotected_headers, protected_headers) = example_headers();
-    let mut crypto = FakeCrypto {};
     let aad = example_aad();
 
     let hint: AuthServerRequestCreationHint = AuthServerRequestCreationHint::builder()
@@ -137,25 +204,30 @@ fn test_scenario() -> Result<(), String> {
         .client_nonce(nonce)
         .ace_profile()
         .client_id(client_id)
-        .req_cnf(key.clone())
+        .req_cnf(PlainCoseKey(key.clone()))
         .build()
         .map_err(|x| x.to_string())?;
     let result = pseudo_send_receive(request.clone())?;
 
     assert_eq!(request, result);
     let expires_in: u32 = 3600;
-    let token = sign_access_token(
+    let rng = FakeRng;
+    let token = sign_access_token::<FakeCrypto, FakeRng>(
+        &key,
         ClaimsSetBuilder::new()
             .audience(resource_server.to_string())
             .issuer(auth_server.to_string())
             .issued_at(Timestamp::WholeSeconds(47))
-            .claim(CwtClaimName::Cnf, PlainCoseKey(key).to_ciborium_value())
+            .claim(
+                CwtClaimName::Cnf,
+                PlainCoseKey(key.clone()).to_ciborium_value(),
+            )
             .build(),
         // TODO: Proper headers
-        &mut crypto,
         Some(aad.as_slice()),
         Some(unprotected_headers),
         Some(protected_headers),
+        rng,
     )
     .map_err(|x| x.to_string())?;
     let response = AccessTokenResponse::builder()
@@ -168,6 +240,9 @@ fn test_scenario() -> Result<(), String> {
         .map_err(|x| x.to_string())?;
     let result = pseudo_send_receive(response.clone())?;
     assert_eq!(response, result);
+
+    verify_access_token::<FakeCrypto>(&key, &response.access_token, Some(aad.as_slice()))
+        .map_err(|x| x.to_string())?;
 
     let error = ErrorResponse::builder()
         .error(ErrorCode::InvalidRequest)
@@ -182,7 +257,7 @@ fn test_scenario() -> Result<(), String> {
 
 fn pseudo_send_receive<T>(input: T) -> Result<T, String>
 where
-    T: ToCborMap + Debug + PartialEq + Clone,
+    T: ToCborMap + PartialEq + Clone,
 {
     let mut serialized: Vec<u8> = Vec::new();
     input

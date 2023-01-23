@@ -13,36 +13,82 @@
 //! [signing](sign_access_token) and [verifying](verify_access_token) access tokens.
 //!
 //! **NOTE: The APIs in this module are experimental and likely to change in the future!**
-//! This is due to the COSE support being very basic right now (e.g. only `CoseEncrypt0` instead of
-//! `CoseEncrypt`) and due to the APIs needing to be "battle-tested" in active use.
-//! Builders will also most likely be added as well due to a lot of optional arguments present
-//! in the functions at the moment.
+//! This is because we plan to move much of the code here to the [coset](https://docs.rs/coset/)
+//! library, since much of this just builds on COSE functionality and isn't ACE-OAuth specific.
 //!
 //! In order to use any of these methods, you will need to provide a cipher which handles
-//! the cryptographic operations by implementing both [`CoseCipherCommon`] (which sets
-//! necessary headers) and either [`CoseEncrypt0Cipher`], [`CoseMac0Cipher`] or [`CoseSign1Cipher`],
-//! depending on the intended operation. See the respective traits for details.
+//! the cryptographic operations by implementing either [`CoseEncryptCipher`],
+//! [`CoseMacCipher`] or [`CoseSignCipher`], depending on the intended operation.
+//! If you plan to support `CoseEncrypt` or `CoseSign` rather than just `CoseEncrypt0` or
+//! `CoseSign1` (i.e., if you have multiple recipients with separate keys), you will also need to
+//! implement [`MultipleEncryptCipher`] or [`MultipleSignCipher`].
+//! See the respective traits for details.
 //!
 //! # Example
-//! The following shows how to create and sign an access token (assuming a cipher implementing
-//! both [`CoseSign1Cipher`] and [`CoseCipherCommon`] exists in variable `cipher`):
+//! The following shows how to create and sign an access token (assuming a cipher named
+//! `FakeCrypto` which implements [`CoseSignCipher`] exists.):
 //! ```
+//! # // TODO: There's really too much hidden code here. Should be heavily refactored once we have
+//! # //       crypto implementations available. Same goes for crate-level docs.
 //! # use ciborium::value::Value;
-//! # use coset::{Header, Label};
+//! # use coset::{AsCborValue, CoseKey, CoseKeyBuilder, Header, iana, Label, ProtectedHeader};
 //! # use coset::cwt::{ClaimsSetBuilder, Timestamp};
 //! # use coset::iana::{Algorithm, CwtClaimName};
-//! # use dcaf::{ToCborMap, CoseCipherCommon, CoseSign1Cipher, sign_access_token, verify_access_token};
+//! # use rand::{CryptoRng, RngCore};
+//! # use dcaf::{ToCborMap, sign_access_token, verify_access_token, CoseSignCipher};
 //! # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
 //! # use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
 //! # use dcaf::error::{AccessTokenError, CoseCipherError};
+//! use dcaf::token::CoseCipher;
+//!
 //! # struct FakeCrypto {}
 //! #
-//! # impl CoseCipherCommon for FakeCrypto {
+//! # fn get_k_from_key(key: &CoseKey) -> Option<Vec<u8>> {
+//! #     const K_PARAM: i64 = iana::SymmetricKeyParameter::K as i64;
+//! #     for (label, value) in key.params.iter() {
+//! #         if let Label::Int(K_PARAM) = label {
+//! #             if let Value::Bytes(k_val) = value {
+//! #                 return Some(k_val.clone());
+//! #             }
+//! #         }
+//! #     }
+//! #     None
+//! # }
+//! #
+//! # #[derive(Clone, Copy)]
+//! # pub(crate) struct FakeRng;
+//! #
+//! # impl RngCore for FakeRng {
+//! #     fn next_u32(&mut self) -> u32 {
+//! #         0
+//! #     }
+//! #
+//! #     fn next_u64(&mut self) -> u64 {
+//! #         0
+//! #     }
+//! #
+//! #     fn fill_bytes(&mut self, dest: &mut [u8]) {
+//! #         dest.fill(0);
+//! #     }
+//! #
+//! #     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+//! #         dest.fill(0);
+//! #         Ok(())
+//! #     }
+//! # }
+//! #
+//! # impl CryptoRng for FakeRng {}
+//! #
+//! # impl CoseCipher for FakeCrypto {
 //! #     type Error = String;
 //! #
-//! #     fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
+//! #     fn set_headers<RNG: RngCore + CryptoRng>(key: &CoseKey, unprotected_header: &mut Header, protected_header: &mut Header, rng: RNG) -> Result<(), CoseCipherError<Self::Error>> {
 //! #         // We have to later verify these headers really are used.
-//! #         if let Some(label) = unprotected_header.rest.iter().find(|x| x.0 == Label::Int(47)) {
+//! #         if let Some(label) = unprotected_header
+//! #             .rest
+//! #             .iter()
+//! #             .find(|x| x.0 == Label::Int(47))
+//! #         {
 //! #             return Err(CoseCipherError::existing_header_label(&label.0));
 //! #         }
 //! #         if protected_header.alg != None {
@@ -54,70 +100,97 @@
 //! #     }
 //! # }
 //! #
-//! # /// Implements basic operations from the [`CoseSign1Cipher`] trait without actually using any
-//! # /// "real" cryptography.
+//! # /// Implements basic operations from the [`CoseSignCipher`](crate::token::CoseSignCipher) trait
+//! # /// without actually using any "real" cryptography.
 //! # /// This is purely to be used for testing and obviously offers no security at all.
-//! # impl CoseSign1Cipher for FakeCrypto {
-//! #     fn generate_signature(&mut self, data: &[u8]) -> Vec<u8> {
-//! #         data.to_vec()
+//! # impl CoseSignCipher for FakeCrypto {
+//! #     fn sign(
+//! #         key: &CoseKey,
+//! #         target: &[u8],
+//! #         unprotected_header: &Header,
+//! #         protected_header: &Header,
+//! #     ) -> Vec<u8> {
+//! #         // We simply append the key behind the data.
+//! #         let mut signature = target.to_vec();
+//! #         let k = get_k_from_key(key);
+//! #         signature.append(&mut k.expect("k must be present in key!"));
+//! #         signature
 //! #     }
 //! #
-//! #     fn verify_signature(&mut self, sig: &[u8], data: &[u8]) -> Result<(), CoseCipherError<Self::Error>> {
-//! #         if sig != self.generate_signature(data) {
-//! #             Err(CoseCipherError::VerificationFailure)
-//! #         } else {
+//! #     fn verify(
+//! #         key: &CoseKey,
+//! #         signature: &[u8],
+//! #         signed_data: &[u8],
+//! #         unprotected_header: &Header,
+//! #         protected_header: &ProtectedHeader,
+//! #         unprotected_signature_header: Option<&Header>,
+//! #         protected_signature_header: Option<&ProtectedHeader>,
+//! #     ) -> Result<(), CoseCipherError<Self::Error>> {
+//! #         if signature
+//! #             == Self::sign(
+//! #             key,
+//! #             signed_data,
+//! #             unprotected_header,
+//! #             &protected_header.header,
+//! #         )
+//! #         {
 //! #             Ok(())
+//! #         } else {
+//! #             Err(CoseCipherError::VerificationFailure)
 //! #         }
 //! #     }
 //! # }
 //!
-//! # let mut cipher = FakeCrypto {};
-//! let key = ProofOfPossessionKey::KeyId(vec![0xDC, 0xAF]);
+//! let rng = FakeRng;
+//! let key = CoseKeyBuilder::new_symmetric_key(vec![1,2,3,4,5]).key_id(vec![0xDC, 0xAF]).build();
 //! let claims = ClaimsSetBuilder::new()
 //!      .audience(String::from("coaps://rs.example.com"))
 //!      .issuer(String::from("coaps://as.example.com"))
-//!      .claim(CwtClaimName::Cnf, key.to_ciborium_value())
+//!      .claim(CwtClaimName::Cnf, key.clone().to_cbor_value()?)
 //!      .build();
-//! let token = sign_access_token(claims, &mut cipher, None, None, None)?;
-//! assert!(verify_access_token(&token, &mut cipher, None).is_ok());
+//! let token = sign_access_token::<FakeCrypto, FakeRng>(&key, claims, None, None, None, rng)?;
+//! assert!(verify_access_token::<FakeCrypto>(&key, &token, None).is_ok());
 //! # Ok::<(), AccessTokenError<String>>(())
 //! ```
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-
-use crate::common::cbor_values::ByteString;
 use core::fmt::{Debug, Display};
+
+use ciborium::value::Value;
 use coset::cwt::ClaimsSet;
 use coset::{
-    CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseMac0, CoseSign1, CoseSign1Builder,
-    Header, HeaderBuilder, ProtectedHeader,
+    AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder,
+    CoseEncryptBuilder, CoseKey, CoseRecipientBuilder, CoseSign, CoseSign1, CoseSign1Builder,
+    CoseSignBuilder, CoseSignatureBuilder, EncryptionContext, Header, HeaderBuilder,
+    ProtectedHeader,
 };
+use rand::{CryptoRng, RngCore};
 
-use crate::error::{AccessTokenError, CoseCipherError};
+use crate::common::cbor_values::ByteString;
+use crate::error::{AccessTokenError, CoseCipherError, MultipleCoseError};
 
 #[cfg(test)]
 mod tests;
 
-/// Provides common operations necessary for other COSE cipher types to function.
-///
-/// This needs to be implemented if [`CoseEncrypt0Cipher`], [`CoseSign1Cipher`], or
-/// [`CoseMac0Cipher`] is to be implemented as well.
-///
-/// See the documentation of [`header`](CoseCipherCommon::header) for an example.
-pub trait CoseCipherCommon {
+/// Trait for common parts required for [`CoseSignCipher`], [`CoseEncryptCipher`]
+/// and [`CoseMacCipher`].
+pub trait CoseCipher {
     /// Error type that this cipher uses in [`Result`]s returned by cryptographic operations.
     type Error: Display + Debug;
 
     /// Sets headers specific to this cipher by adding new header fields to the given
     /// `unprotected_header` and `protected_header`.
     ///
+    /// The given `key` may be used to extract information for the headers (e.g., the key ID)
+    /// and `rng` may be used to generate random values for the headers (e.g., an IV).
+    ///
     /// Before actually changing the headers, it will be verified that none of the header fields
     /// that are about to be set are already set, so as not to overwrite them. In such a
     /// case, an error is returned.
     ///
     /// This will usually not be called by users of `dcaf-rs`, but instead by access methods
-    /// such as [`encrypt_access_token`], which will later pass it to [`coset`]'s methods.
+    /// such as [`encrypt_access_token`], which will later pass it to [coset]'s methods.
     ///
     /// # Errors
     /// - When the fields that this method would set on the given headers are already set.
@@ -125,410 +198,408 @@ pub trait CoseCipherCommon {
     /// # Example
     /// Let's say our cipher needs to set the content type to
     /// [`Cbor`](coset::iana::CoapContentFormat::Cbor) (in the unprotected header)
-    /// and the algorithm to [`HMAC_256_256`](coset::iana::Algorithm::HMAC_256_256)
-    /// (in the protected header). Our implementation would first need to verify that these
+    /// and the key ID to the ID of the passed in `key` (in the protected header).
+    /// Our implementation would first need to verify that these
     /// header fields haven't already been set, then actually set them, so an implementation
     /// of this function might look like the following:
-    /// ```
-    /// # use ciborium::value::Value;
-    /// # use coset::{ContentType, Header, Label, RegisteredLabel};
-    /// # use coset::iana::Algorithm;
-    /// # use dcaf::CoseCipherCommon;
-    /// # use dcaf::error::CoseCipherError;
-    /// # struct FakeCipher {}
-    /// # impl CoseCipherCommon for FakeCipher {
-    /// #    // This should of course be an actual error type, not just a String.
-    /// #    type Error = String;
-    ///
-    /// fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
+    /// ```ignore
+    /// fn set_headers<RNG: RngCore + CryptoRng>(
+    ///     key: &FakeKey,
+    ///     unprotected_header: &mut Header,
+    ///     protected_header: &mut Header,
+    ///     rng: RNG
+    /// ) -> Result<(), CoseCipherError<Self::Error>> {
     ///    if unprotected_header.content_type.is_some() {
     ///        return Err(CoseCipherError::existing_header("content_type"));
     ///    }
-    ///    if protected_header.alg.is_some() {
-    ///        return Err(CoseCipherError::existing_header("alg"));
+    ///    if !protected_header.key_id.is_empty() {
+    ///        return Err(CoseCipherError::existing_header("kid"));
     ///    }
     ///    unprotected_header.content_type = Some(ContentType::Assigned(coset::iana::CoapContentFormat::Cbor));
-    ///    protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::HMAC_256_256));
+    ///    protected_header.key_id = key.kid.to_vec();
     ///    Ok(())
     /// }
-    /// # }
     /// ```
-    fn header(
-        &self,
+    fn set_headers<RNG: RngCore + CryptoRng>(
+        key: &CoseKey,
         unprotected_header: &mut Header,
         protected_header: &mut Header,
+        rng: RNG,
     ) -> Result<(), CoseCipherError<Self::Error>>;
 }
 
+// TODO: Examples in here are currently either not run or do not exist because they require too much
+//       setup (see crate-level docs). This should be fixed once we have cipher implementations.
+
 /// Provides basic operations for encrypting and decrypting COSE structures.
 ///
-/// This will be used by [`encrypt_access_token`] and [`decrypt_access_token`] to apply the
+/// This will be used by [`encrypt_access_token`] and [`decrypt_access_token`] (as well as the
+/// variants for multiple recipients: [`encrypt_access_token_multiple`]
+/// and [`decrypt_access_token_multiple`]) to apply the
 /// corresponding cryptographic operations to the constructed token bytestring.
-/// Since [`CoseCipherCommon`] also needs to be implemented, the
-/// [`headers` method](CoseCipherCommon::header) can be used to set parameters this cipher requires
-/// to be set. If you need to operate on other fields in the token than just the claims,
-/// you can use the data type behind this trait for that.
-/// The methods provided in this trait accept `&mut self` in case the structure behind it needs to
-/// modify internal fields during any cryptographic operation.
-///
-/// # Example
-/// For example, to simply implement the encryption operation as appending the `aad` to the
-/// `plaintext` (which you **clearly should not do**, this is just for illustrative purposes),
-/// and implementing `decrypt` by verifying that the AAD matches (same warning applies):
-/// ```
-/// # use coset::Header;
-/// # use dcaf::{CoseCipherCommon, CoseEncrypt0Cipher};
-/// # use dcaf::error::CoseCipherError;
-/// # struct FakeCrypto {};
-/// # impl CoseCipherCommon for FakeCrypto {
-/// #     type Error = String;
-/// #     fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
-/// #        unimplemented!()
-/// #     }
-/// # }
-/// impl CoseEncrypt0Cipher for FakeCrypto {
-///     fn encrypt(&mut self, data: &[u8], aad: &[u8]) -> Vec<u8> {
-///         // We simply put AAD behind the data and call it a day.
-///         let mut result: Vec<u8> = Vec::new();
-///         result.append(&mut data.to_vec());
-///         result.append(&mut aad.to_vec());
-///         result
-///     }
-///
-///     fn decrypt(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-///         // Now we just split off the AAD we previously put at the end of the data.
-///         // We return an error if it does not match.
-///         if ciphertext.len() < aad.len() {
-///             return Err(CoseCipherError::Other("Encrypted data must be at least as long as AAD!".to_string()));
-///         }
-///         let mut result: Vec<u8> = ciphertext.to_vec();
-///         let aad_result = result.split_off(ciphertext.len() - aad.len());
-///         if aad != aad_result {
-///             Err(CoseCipherError::DecryptionFailure)
-///         } else {
-///             Ok(result)
-///         }
-///     }
-/// }
-///
-/// let mut cipher = FakeCrypto{};
-/// let data = vec![0xDC, 0xAF];
-/// let aad = vec![42];
-/// let encrypted = cipher.encrypt(&data, &aad);
-/// assert_eq!(cipher.decrypt(&encrypted, &aad)?, data);
-/// # Ok::<(), CoseCipherError<String>>(())
-/// ```
-pub trait CoseEncrypt0Cipher: CoseCipherCommon {
-    /// Encrypts the given `plaintext` and `aad`, returning the result.
-    ///
-    /// For an example, view the documentation of [`CoseEncrypt0Cipher`].
-    fn encrypt(&mut self, plaintext: &[u8], aad: &[u8]) -> Vec<u8>;
+/// The [`set_headers` method](CoseCipher::set_headers) can be used to set parameters this
+/// cipher requires to be set.
+pub trait CoseEncryptCipher: CoseCipher {
+    /// Encrypts the `plaintext` and `aad` with the given `key`, returning the result.
+    fn encrypt(
+        key: &CoseKey,
+        plaintext: &[u8],
+        aad: &[u8],
+        protected_header: &Header,
+        unprotected_header: &Header,
+    ) -> Vec<u8>;
 
-    /// Decrypts the given `ciphertext` and `aad`, returning the result.
-    ///
-    /// For an example, view the documentation of [`CoseEncrypt0Cipher`].
+    /// Decrypts the `ciphertext` and `aad` with the given `key`, returning the result.
     ///
     /// # Errors
     /// If the `ciphertext` and `aad` are invalid, i.e., can't be decrypted.
     fn decrypt(
-        &mut self,
+        key: &CoseKey,
         ciphertext: &[u8],
         aad: &[u8],
+        unprotected_header: &Header,
+        protected_header: &ProtectedHeader,
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
+}
+
+/// Intended for ciphers which can encrypt for multiple recipients.
+/// For this purpose, a method must be provided which generates the Content Encryption Key.
+///
+/// If these recipients each use different key types, you can use an enum to represent them.
+pub trait MultipleEncryptCipher: CoseEncryptCipher {
+    /// Randomly generates a new Content Encryption Key (CEK) using the given `rng`.
+    /// The content of the `CoseEncrypt` will then be encrypted with the key, while each recipient
+    /// will be encrypted with a corresponding Key Encryption Key (KEK) provided by the caller
+    /// of [`encrypt_access_token_multiple`].
+    fn generate_cek<RNG: RngCore + CryptoRng>(rng: &mut RNG) -> CoseKey;
 }
 
 /// Provides basic operations for signing and verifying COSE structures.
 ///
-/// This will be used by [`sign_access_token`] and [`verify_access_token`] to apply the
+/// This will be used by [`sign_access_token`] and [`verify_access_token`] (as well as the
+/// equivalents for multiple recipients: [`sign_access_token_multiple`] and
+/// [`verify_access_token_multiple`]) to apply the
 /// corresponding cryptographic operations to the constructed token bytestring.
-/// Since [`CoseCipherCommon`] also needs to be implemented, the
-/// [`headers` method](CoseCipherCommon::header) can be used to set parameters this cipher requires
-/// to be set. If you need to operate on other fields in the token than just the claims,
-/// you can use the data type behind this trait for that.
-/// The methods provided in this trait accept `&mut self` in case the structure behind it needs to
-/// modify internal fields during any cryptographic operation.
-///
-/// # Example
-/// For example, to simply implement the signing operation as the identity function
-/// (which you **clearly should not do**, this is just for illustrative purposes):
-/// ```
-/// # use coset::Header;
-/// # use dcaf::{CoseCipherCommon, CoseSign1Cipher};
-/// # use dcaf::error::CoseCipherError;
-/// # struct FakeSigner {};
-/// # impl CoseCipherCommon for FakeSigner {
-/// #     type Error = String;
-/// #     fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
-/// #        unimplemented!()
-/// #     }
-/// # }
-/// impl CoseSign1Cipher for FakeSigner {
-///    fn generate_signature(&mut self, target: &[u8]) -> Vec<u8> {
-///        target.to_vec()
-///    }
-///
-///    fn verify_signature(&mut self, signature: &[u8], signed_data: &[u8]) -> Result<(), CoseCipherError<Self::Error>> {
-///         if signature != self.generate_signature(signed_data) {
-///              Err(CoseCipherError::VerificationFailure)
-///         } else {
-///              Ok(())
-///         }
-///    }
-/// }
-///
-/// let mut signer = FakeSigner {};
-/// let signature = signer.generate_signature(&vec![0xDC, 0xAF]);
-/// assert!(signer.verify_signature(&signature, &vec![0xDC, 0xAF]).is_ok());
-/// assert!(signer.verify_signature(&signature, &vec![0xDE, 0xAD]).is_err());
-/// ```
-pub trait CoseSign1Cipher: CoseCipherCommon {
-    /// Cryptographically signs the given `target` value and returns the signature.
-    ///
-    /// For an example, see the documentation of [`CoseSign1Cipher`].
-    fn generate_signature(&mut self, target: &[u8]) -> Vec<u8>;
+/// The [`set_headers` method](CoseCipher::set_headers) can be used to set parameters
+/// this cipher requires to be set.
+pub trait CoseSignCipher: CoseCipher {
+    /// Cryptographically signs the `target` value with the `key` and returns the signature.
+    fn sign(
+        key: &CoseKey,
+        target: &[u8],
+        unprotected_header: &Header,
+        protected_header: &Header,
+    ) -> Vec<u8>;
 
-    /// Verifies the `signature` of the `signed_data`.
+    /// Verifies the `signature` of the `signed_data` with the `key`.
     ///
-    /// For an example, see the documentation of [`CoseSign1Cipher`].
+    /// Note that, for single recipients (i.e., `CoseSign1`),
+    /// `unprotected_signature_header` and `protected_signature_header` will be `None`.
+    /// For multiple recipients (i.e., `CoseSign`), `unprotected_signature_header` and
+    /// `protected_signature_header` will be the headers of the individual signature for this
+    /// recipient, whereas `unprotected_header` and `protected_header` will be the headers
+    /// of the `CoseSign` structure as a whole.
     ///
     /// # Errors
     /// If the `signature` is invalid or does not belong to the `signed_data`.
-    fn verify_signature(
-        &mut self,
+    fn verify(
+        key: &CoseKey,
         signature: &[u8],
         signed_data: &[u8],
+        unprotected_header: &Header,
+        protected_header: &ProtectedHeader,
+        unprotected_signature_header: Option<&Header>,
+        protected_signature_header: Option<&ProtectedHeader>,
     ) -> Result<(), CoseCipherError<Self::Error>>;
 }
+
+/// Marker trait intended for ciphers which can create signatures for multiple recipients.
+///
+/// If these recipients each use different key types, you can use an enum to represent them.
+pub trait MultipleSignCipher: CoseSignCipher {}
 
 /// Provides basic operations for generating and verifying MAC tags for COSE structures.
 ///
 /// This trait is currently not used by any access token function.
-///
-/// # Example
-/// For example, to simply implement the signing operation as the identity function
-/// (which you **clearly should not do**, this is just for illustrative purposes):
-/// ```
-/// # use coset::Header;
-/// # use dcaf::{CoseCipherCommon, CoseMac0Cipher, CoseSign1Cipher};
-/// # use dcaf::error::CoseCipherError;
-/// # struct FakeTagger {};
-/// # impl CoseCipherCommon for FakeTagger {
-/// #     type Error = String;
-/// #     fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
-/// #        unimplemented!()
-/// #     }
-/// # }
-/// impl CoseMac0Cipher for FakeTagger {
-///    fn generate_tag(&mut self, target: &[u8]) -> Vec<u8> {
-///        target.to_vec()
-///    }
-///
-///    fn verify_tag(&mut self, tag: &[u8], signed_data: &[u8]) -> Result<(), CoseCipherError<Self::Error>> {
-///         if tag != self.generate_tag(signed_data) {
-///              Err(CoseCipherError::VerificationFailure)
-///         } else {
-///              Ok(())
-///         }
-///    }
-/// }
-///
-/// let mut tagger = FakeTagger {};
-/// let tag = tagger.generate_tag(&vec![0xDC, 0xAF]);
-/// assert!(tagger.verify_tag(&tag, &vec![0xDC, 0xAF]).is_ok());
-/// assert!(tagger.verify_tag(&tag, &vec![0xDE, 0xAD]).is_err());
-/// ```
-pub trait CoseMac0Cipher: CoseCipherCommon {
-    /// Generates a MAC tag for the given `target` and returns it.
-    ///
-    /// For an example, see the documentation of [`CoseMac0Cipher`].
-    fn generate_tag(&mut self, target: &[u8]) -> Vec<u8>;
+pub trait CoseMacCipher: CoseCipher {
+    /// Generates a MAC tag for the given `target` with the given `key` and returns it.
+    fn compute(
+        key: &CoseKey,
+        target: &[u8],
+        unprotected_header: &Header,
+        protected_header: &Header,
+    ) -> Vec<u8>;
 
-    /// Verifies the `tag` of the `maced_data`.
-    ///
-    /// For an example, see the documentation of [`CoseMac0Cipher`].
+    /// Verifies the `tag` of the `maced_data` with the `key`.
     ///
     /// # Errors
     /// If the `tag` is invalid or does not belong to the `maced_data`.
-    fn verify_tag(
-        &mut self,
+    fn verify(
+        key: &CoseKey,
         tag: &[u8],
         maced_data: &[u8],
+        unprotected_header: &Header,
+        protected_header: &ProtectedHeader,
     ) -> Result<(), CoseCipherError<Self::Error>>;
 }
 
+/// Marker trait intended for ciphers which can create MAC tags for multiple recipients.
+///
+/// If these recipients each use different key types, you can use an enum to represent them.
+pub trait MultipleMacCipher: CoseMacCipher {}
+
 /// Creates new headers if `unprotected_header` or `protected_header` is `None`, respectively,
 /// and passes them to the `cipher`'s `header` function, returning the mutated result.
-fn prepare_headers<T>(
-    unprotected_header: Option<Header>,
-    protected_header: Option<Header>,
-    cipher: &T,
-) -> Result<(Header, Header), AccessTokenError<T::Error>>
-where
-    T: CoseCipherCommon,
-{
-    let mut unprotected = unprotected_header.unwrap_or_else(|| HeaderBuilder::new().build());
-    let mut protected = protected_header.unwrap_or_else(|| HeaderBuilder::new().build());
-    cipher
-        .header(&mut unprotected, &mut protected)
-        .map_err(AccessTokenError::from_cose_cipher_error)?;
-    Ok((unprotected, protected))
+/// Arguments: key (expr), unprotected (ident), protected (ident), rng (expr), cipher (type)
+macro_rules! prepare_headers {
+    ($key:expr, $unprotected:ident, $protected:ident, $rng:expr, $t:ty) => {{
+        let mut unprotected = $unprotected.unwrap_or_else(|| HeaderBuilder::new().build());
+        let mut protected = $protected.unwrap_or_else(|| HeaderBuilder::new().build());
+        <$t>::set_headers($key, &mut unprotected, &mut protected, $rng)?;
+        Ok::<(Header, Header), CoseCipherError<<$t>::Error>>((unprotected, protected))
+    }};
 }
 
-/// Encrypts the given `claims` with the given headers and `aad` using `cipher` for cryptography,
-/// returning the token as a serialized bytestring of the [`CoseEncrypt0`] structure.
+/// Encrypts the given `claims` with the given headers and `external_aad` using the
+/// `key` and the cipher given by type parameter `T`, returning the token as a serialized
+/// bytestring of the [`CoseEncrypt0`] structure.
+///
+/// Note that this method will create a token intended for a single recipient.
+/// If you wish to create a token for more than one recipient, use
+/// [`encrypt_access_token_multiple`].
 ///
 /// # Errors
 /// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
 /// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseEncrypt0`] structure.
+/// - When the given headers conflict with the headers set by the cipher `T`.
 ///
 /// # Example
-/// For example, assuming we have a [`CoseEncrypt0Cipher`] in `cipher`,
-/// have a [`ProofOfPossessionKey`](crate::common::cbor_values::ProofOfPossessionKey)
+/// For example, assuming we have a [`CoseEncryptCipher`] in `FakeCrypto`, a random number generator
+/// in `rng`, a [`ProofOfPossessionKey`](crate::common::cbor_values::ProofOfPossessionKey)
 /// in `key` and want to associate this key with the access token we are about to create and encrypt:
-/// ```
-/// # use coset::cwt::ClaimsSetBuilder;
-/// # use coset::Header;
-/// # use coset::iana::CwtClaimName;
-/// # use dcaf::{ToCborMap, CoseCipherCommon, CoseEncrypt0Cipher, decrypt_access_token, encrypt_access_token, sign_access_token, verify_access_token};
-/// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
-/// # use dcaf::error::{AccessTokenError, CoseCipherError};
-/// # struct FakeCrypto {};
-/// # impl CoseCipherCommon for FakeCrypto {
-/// #     type Error = String;
-/// #     fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
-/// #        Ok(())
-/// #     }
-/// # }
-/// # impl CoseEncrypt0Cipher for FakeCrypto {
-/// #     fn encrypt(&mut self, data: &[u8], aad: &[u8]) -> Vec<u8> {
-/// #         let mut result: Vec<u8> = Vec::new();
-/// #         result.append(&mut data.to_vec());
-/// #         result.append(&mut aad.to_vec());
-/// #         result
-/// #     }
-/// #
-/// #     fn decrypt(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-/// #         if ciphertext.len() < aad.len() {
-/// #             return Err(CoseCipherError::Other("Encrypted data must be at least as long as AAD!".to_string()));
-/// #         }
-/// #         let mut result: Vec<u8> = ciphertext.to_vec();
-/// #         let aad_result = result.split_off(ciphertext.len() - aad.len());
-/// #         if aad != aad_result {
-/// #             Err(CoseCipherError::DecryptionFailure)
-/// #         } else {
-/// #             Ok(result)
-/// #         }
-/// #     }
-/// # }
-/// # let mut cipher = FakeCrypto{};
-/// # let key = ProofOfPossessionKey::KeyId(vec![0xDC, 0xAF]);
+/// ```ignore
 /// let claims = ClaimsSetBuilder::new()
 ///    .audience(String::from("coaps://rs.example.com"))
 ///    .issuer(String::from("coaps://as.example.com"))
-///    .claim(CwtClaimName::Cnf, key.to_ciborium_value())
+///    .claim(CwtClaimName::Cnf, key.to_cose_key().to_cbor_value()?)
 ///    .build();
-/// let token: ByteString = encrypt_access_token(claims.clone(), &mut cipher, None, None, None)?;
-/// assert_eq!(decrypt_access_token(&token, &mut cipher, None)?, claims);
-/// # Ok::<(), AccessTokenError<String>>(())
+/// let token: ByteString = encrypt_access_token::<FakeCrypto, FakeRng>(&key, claims.clone(), None, None, None, rng)?;
+/// assert_eq!(decrypt_access_token::<FakeCrypto>(&key, &token, None)?, claims);
 /// ```
-pub fn encrypt_access_token<T>(
+pub fn encrypt_access_token<T, RNG>(
+    key: &CoseKey,
     claims: ClaimsSet,
-    cipher: &mut T,
-    aad: Option<&[u8]>,
+    external_aad: Option<&[u8]>,
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
+    mut rng: RNG,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
 where
-    T: CoseEncrypt0Cipher,
+    T: CoseEncryptCipher,
+    RNG: RngCore + CryptoRng,
 {
-    let (unprotected, protected) = prepare_headers(unprotected_header, protected_header, cipher)?;
+    let (unprotected, protected) =
+        prepare_headers!(key, unprotected_header, protected_header, &mut rng, T)?;
     CoseEncrypt0Builder::new()
-        .unprotected(unprotected)
-        .protected(protected)
+        .unprotected(unprotected.clone())
+        .protected(protected.clone())
         .create_ciphertext(
-            &claims.to_vec().map_err(AccessTokenError::from_cose_error)?[..],
-            aad.unwrap_or(&[0; 0]),
-            |payload, aad| cipher.encrypt(payload, aad),
+            &claims.to_vec()?[..],
+            external_aad.unwrap_or(&[0; 0]),
+            |payload, aad| T::encrypt(key, payload, aad, &unprotected, &protected),
         )
         .build()
         .to_vec()
-        .map_err(AccessTokenError::from_cose_error)
+        .map_err(AccessTokenError::from)
 }
 
-/// Signs the given `claims` with the given headers and `aad` using `cipher` for cryptography,
-/// returning the token as a serialized bytestring of the [`CoseSign1`] structure.
+/// Encrypts the given `claims` with the given headers and `external_aad` for each recipient
+/// by using the `keys` with the cipher given by type parameter `T`,
+/// returning the token as a serialized bytestring of the [`CoseEncrypt`] structure.
+///
+/// Note that the given `keys` must each have an associated `kid` (key ID) field when converted
+/// to COSE keys, as the recipients inside the [`CoseEncrypt`] are identified in this way.
+///
+/// The Content Encryption Key (used to encrypt the actual claims) is randomly generated by the
+/// given cipher in `T`, whereas the given `keys` are used as Key Encryption Keys, that is,
+/// they encrypt the Content Encryption Key for each recipient.
+///
+/// # Errors
+/// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
+/// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseEncrypt`] structure.
+/// - When the given headers conflict with the headers set by the cipher `T`.
+///
+/// # Example
+/// For example, assuming we have a [`MultipleEncryptCipher`] in `FakeCrypto`, a random number
+/// generator in `rng`, and some `claims`, we can then create a token encrypted for two recipients
+/// (with keys `key1` and `key2`, respectively) as follows:
+/// ```ignore
+/// let encrypted = encrypt_access_token_multiple::<FakeCrypto, FakeRng>(
+///    vec![&key1, &key2], claims.clone(), None, None, None rng
+/// )?;
+/// ```
+pub fn encrypt_access_token_multiple<T, RNG>(
+    keys: Vec<&CoseKey>,
+    claims: ClaimsSet,
+    external_aad: Option<&[u8]>,
+    unprotected_header: Option<Header>,
+    protected_header: Option<Header>,
+    mut rng: RNG,
+) -> Result<ByteString, AccessTokenError<T::Error>>
+where
+    T: MultipleEncryptCipher,
+    RNG: CryptoRng + RngCore,
+{
+    let key = T::generate_cek(&mut rng);
+    let (unprotected, protected) =
+        prepare_headers!(&key, unprotected_header, protected_header, &mut rng, T)?;
+    let mut builder = CoseEncryptBuilder::new()
+        .unprotected(unprotected.clone())
+        .protected(protected.clone())
+        .create_ciphertext(
+            &claims.to_vec()?[..],
+            external_aad.unwrap_or(&[0; 0]),
+            |payload, aad| T::encrypt(&key, payload, aad, &protected, &unprotected),
+        );
+    let serialized_key: Vec<u8> = key.to_vec().map_err(AccessTokenError::CoseError)?;
+    for rec_key in keys {
+        let (rec_unprotected, rec_protected) = prepare_headers!(rec_key, None, None, &mut rng, T)?;
+        builder = builder.add_recipient(
+            CoseRecipientBuilder::new()
+                .protected(rec_protected.clone())
+                .unprotected(rec_unprotected.clone())
+                .create_ciphertext(
+                    // TODO: What should AAD be here?
+                    EncryptionContext::EncRecipient,
+                    &serialized_key,
+                    &[0; 0],
+                    |payload, aad| {
+                        T::encrypt(rec_key, payload, aad, &rec_protected, &rec_unprotected)
+                    },
+                )
+                .build(),
+        );
+    }
+    builder.build().to_vec().map_err(AccessTokenError::from)
+}
+
+/// Signs the given `claims` with the given headers and `external_aad` using the `key` and the
+/// cipher given by type parameter `T`, returning the token as a serialized bytestring of
+/// the [`CoseSign1`] structure.
+///
+/// Note that this method will create a token intended for a single recipient.
+/// If you wish to create a token for more than one recipient, use
+/// [`sign_access_token_multiple`].
 ///
 /// # Errors
 /// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
 /// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseSign1`] structure.
+/// - When the given headers conflict with the headers set by the cipher `T`.
 ///
 /// # Example
-/// For example, assuming we have a [`CoseSign1Cipher`] in `cipher`,
-/// have a [`ProofOfPossessionKey`](crate::common::cbor_values::ProofOfPossessionKey)
+/// For example, assuming we have a [`CoseSignCipher`] in `FakeCrypto`, a random number generator
+/// in `rng`, a [`ProofOfPossessionKey`](crate::common::cbor_values::ProofOfPossessionKey)
 /// in `key` and want to associate this key with the access token we are about to create and sign:
-/// ```
-/// # use coset::cwt::ClaimsSetBuilder;
-/// # use coset::Header;
-/// # use coset::iana::CwtClaimName;
-/// # use dcaf::{ToCborMap, CoseCipherCommon, CoseSign1Cipher, encrypt_access_token, sign_access_token, verify_access_token};
-/// # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
-/// # use dcaf::error::{AccessTokenError, CoseCipherError};
-/// # struct FakeSigner {};
-/// # impl CoseCipherCommon for FakeSigner {
-/// #     type Error = String;
-/// #     fn header(&self, unprotected_header: &mut Header, protected_header: &mut Header) -> Result<(), CoseCipherError<Self::Error>> {
-/// #         Ok(())
-/// #     }
-/// # }
-/// # impl CoseSign1Cipher for FakeSigner {
-/// #    fn generate_signature(&mut self, target: &[u8]) -> Vec<u8> {
-/// #        target.to_vec()
-/// #    }
-/// #    fn verify_signature(&mut self, signature: &[u8], signed_data: &[u8]) -> Result<(), CoseCipherError<Self::Error>> {
-/// #         if signature != self.generate_signature(signed_data) {
-/// #              Err(CoseCipherError::VerificationFailure)
-/// #         } else {
-/// #              Ok(())
-/// #         }
-/// #    }
-/// # }
-/// # let mut cipher = FakeSigner {};
-/// # let key = ProofOfPossessionKey::KeyId(vec![0xDC, 0xAF]);
+/// ```ignore
 /// let claims = ClaimsSetBuilder::new()
 ///    .audience(String::from("coaps://rs.example.com"))
 ///    .issuer(String::from("coaps://as.example.com"))
-///    .claim(CwtClaimName::Cnf, key.to_ciborium_value())
+///    .claim(CwtClaimName::Cnf, key.to_cose_key().to_cbor_value()?)
 ///    .build();
-/// let token: ByteString = sign_access_token(claims, &mut cipher, None, None, None)?;
-/// assert!(verify_access_token(&token, &mut cipher, None).is_ok());
-/// # Ok::<(), AccessTokenError<String>>(())
+/// let token: ByteString = sign_access_token::<FakeCrypto, FakeRng>(&key, claims, None, None, None, rng)?;
+/// assert!(verify_access_token::<FakeCrypto>(&key, &token, None).is_ok());
 /// ```
-pub fn sign_access_token<T>(
+pub fn sign_access_token<T, RNG>(
+    key: &CoseKey,
     claims: ClaimsSet,
-    cipher: &mut T,
-    aad: Option<&[u8]>,
+    external_aad: Option<&[u8]>,
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
+    mut rng: RNG,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
 where
-    T: CoseSign1Cipher,
+    T: CoseSignCipher,
+    RNG: RngCore + CryptoRng,
 {
-    let (unprotected, protected) = prepare_headers(unprotected_header, protected_header, cipher)?;
+    let (unprotected, protected) =
+        prepare_headers!(key, unprotected_header, protected_header, &mut rng, T)?;
     CoseSign1Builder::new()
-        .unprotected(unprotected)
-        .protected(protected)
-        .payload(claims.to_vec().map_err(AccessTokenError::from_cose_error)?)
-        .create_signature(aad.unwrap_or(&[0; 0]), |x| cipher.generate_signature(x))
+        .unprotected(unprotected.clone())
+        .protected(protected.clone())
+        .payload(claims.to_vec()?)
+        .create_signature(external_aad.unwrap_or(&[0; 0]), |x| {
+            T::sign(key, x, &unprotected, &protected)
+        })
         .build()
         .to_vec()
-        .map_err(AccessTokenError::from_cose_error)
+        .map_err(AccessTokenError::from)
 }
 
-/// Returns the headers of the given signed ([`CoseSign1`]), MAC tagged ([`CoseMac0`]),
-/// or encrypted ([`CoseEncrypt0`]) access token.
+/// Signs the given `claims` with the given headers and `external_aad` for each recipient
+/// by using the `keys` with the cipher given by type parameter `T`,
+/// returning the token as a serialized bytestring of the [`CoseSign`] structure.
 ///
-/// When the given `token` is neither a [`CoseEncrypt0`], [`CoseSign1`], nor a [`CoseMac0`]
-/// structure, `None` is returned.
+/// For each key in `keys`, another signature will be added, created with that respective key.
+/// The given headers will be used for the [`CoseSign`] structure as a whole, not for each
+/// individual signature.
+///
+/// # Errors
+/// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
+/// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseSign`] structure.
+/// - When the given headers conflict with the headers set by the cipher `T`.
+///
+/// # Example
+/// For example, assuming we have a [`MultipleSignCipher`] in `FakeCrypto`,
+/// a random number generator in `rng`, and some `claims`, we can then create a token
+/// with signatures for two recipients (with keys `key1` and `key2`, respectively) as follows:
+/// ```ignore
+/// let signed = sign_access_token_multiple::<FakeCrypto, FakeRng>(
+///     vec![&key1, &key2],
+///     claims,
+///     None, None, None,
+///     rng
+/// )?;
+/// ```
+pub fn sign_access_token_multiple<T, RNG>(
+    keys: Vec<&CoseKey>,
+    claims: ClaimsSet,
+    external_aad: Option<&[u8]>,
+    unprotected_header: Option<Header>,
+    protected_header: Option<Header>,
+    mut rng: RNG,
+) -> Result<ByteString, AccessTokenError<T::Error>>
+where
+    T: MultipleSignCipher,
+    RNG: RngCore + CryptoRng,
+{
+    let (unprotected, protected) = (
+        unprotected_header.unwrap_or_else(|| HeaderBuilder::default().build()),
+        protected_header.unwrap_or_else(|| HeaderBuilder::default().build()),
+    );
+    let mut builder = CoseSignBuilder::new()
+        .unprotected(unprotected.clone())
+        .protected(protected.clone())
+        .payload(claims.to_vec().map_err(AccessTokenError::from)?);
+
+    for key in keys {
+        let (rec_unprotected, rec_protected) = prepare_headers!(key, None, None, &mut rng, T)?;
+        let signature = CoseSignatureBuilder::new()
+            .unprotected(rec_unprotected.clone())
+            .protected(rec_protected.clone())
+            .build();
+        builder = builder.add_created_signature(signature, external_aad.unwrap_or(&[0; 0]), |x| {
+            T::sign(key, x, &unprotected, &protected)
+        });
+    }
+
+    builder.build().to_vec().map_err(AccessTokenError::from)
+}
+
+/// Returns the headers of the given signed ([`CoseSign1`] / [`CoseSign`]),
+/// MAC tagged (`CoseMac0` / `CoseMac`), or encrypted ([`CoseEncrypt0`] / [`CoseEncrypt`])
+/// access token.
+///
+/// When the given `token` is none of those structures mentioned above, `None` is returned.
 ///
 /// # Example
 /// For example, say you have an access token saved in `token` and want to look at its headers:
@@ -553,17 +624,35 @@ where
 /// ```
 #[must_use]
 pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)> {
-    CoseSign1::from_slice(token.as_slice())
-        .map(|x| (x.unprotected, x.protected))
-        .or_else(|_| {
-            CoseEncrypt0::from_slice(token.as_slice()).map(|x| (x.unprotected, x.protected))
-        })
-        .or_else(|_| CoseMac0::from_slice(token.as_slice()).map(|x| (x.unprotected, x.protected)))
-        .ok()
+    let value: Option<Value> = ciborium::de::from_reader(token.as_slice()).ok();
+    // All of COSE_Encrypt(0), COSE_Sign(1), COSE_Mac(0) are an array with headers first
+    match value {
+        Some(Value::Array(x)) => {
+            let mut iter = x.into_iter();
+            let protected = iter
+                .next()
+                .map(ProtectedHeader::from_cbor_bstr)
+                .and_then(Result::ok);
+            let unprotected = iter
+                .next()
+                .map(Header::from_cbor_value)
+                .and_then(Result::ok);
+            if let (Some(u), Some(p)) = (unprotected, protected) {
+                Some((u, p))
+            } else {
+                None
+            }
+        }
+        Some(_) | None => None,
+    }
 }
 
-/// Verifies the given `token` and `aad` using `verifier` for cryptography,
-/// returning an error in case it could not be verified.
+/// Verifies the given `token` and `external_aad` with the `key` using the cipher
+/// given by type parameter `T`, returning an error in case it could not be verified.
+///
+/// This method should be used when the given `token` is a [`CoseSign1`] rather than
+/// [`CoseSign`] (i.e., if it is intended for a single recipient). In case the token is an
+/// instance of the latter, use [`verify_access_token_multiple`] instead.
 ///
 /// NOTE: Protected headers are not verified as of now.
 ///
@@ -573,26 +662,104 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
 /// - When there's a [`CoseError`](coset::CoseError) while deserializing the given `token`
 ///   to a [`CoseSign1`] structure
 ///   (e.g., if it's not in fact a [`CoseSign1`] structure but rather something else).
-/// - When there's a verification error coming from the `verifier`
+/// - When there's a verification error coming from the cipher `T`
 ///   (e.g., if the `token`'s data does not match its signature).
 pub fn verify_access_token<T>(
+    key: &CoseKey,
     token: &ByteString,
-    cipher: &mut T,
-    aad: Option<&[u8]>,
+    external_aad: Option<&[u8]>,
 ) -> Result<(), AccessTokenError<T::Error>>
 where
-    T: CoseSign1Cipher,
+    T: CoseSignCipher,
 {
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
+    let (unprotected, protected) =
+        get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
     // TODO: Verify protected headers
-    sign.verify_signature(aad.unwrap_or(&[0; 0]), |signature, signed_data| {
-        cipher.verify_signature(signature, signed_data)
+    sign.verify_signature(external_aad.unwrap_or(&[0; 0]), |signature, signed_data| {
+        T::verify(
+            key,
+            signature,
+            signed_data,
+            &unprotected,
+            &protected,
+            None,
+            None,
+        )
     })
-    .map_err(AccessTokenError::from_cose_cipher_error)
+    .map_err(AccessTokenError::from)
 }
 
-/// Decrypts the given `token` and `aad` using `cipher` for cryptography,
-/// returning the decrypted `ClaimsSet`.
+/// Verifies the given `token` and `external_aad` with the `key` using the cipher
+/// given by type parameter `T`, returning an error in case it could not be verified.
+///
+/// This method should be used when the given `token` is a [`CoseSign`] rather than
+/// [`CoseSign1`] (i.e., if it is intended for a multiple recipients). In case the token is an
+/// instance of the latter, use [`verify_access_token`] instead.
+///
+/// NOTE: Protected headers are not verified as of now.
+///
+/// # Errors
+/// - When there's a [`CoseError`](coset::CoseError) while deserializing the given `token`
+///   to a [`CoseSign`] structure
+///   (e.g., if it's not in fact a [`CoseSign`] structure but rather something else).
+/// - When there's a verification error coming from the cipher `T`
+///   (e.g., if the `token`'s data does not match its signature).
+pub fn verify_access_token_multiple<T>(
+    key: &CoseKey,
+    token: &ByteString,
+    external_aad: Option<&[u8]>,
+) -> Result<(), AccessTokenError<T::Error>>
+where
+    T: CoseSignCipher,
+{
+    let sign = CoseSign::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
+    let kid = &key.key_id;
+    let (unprotected, protected) =
+        get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
+    let matching = sign
+        .signatures
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| &s.unprotected.key_id == kid || &s.protected.header.key_id == kid)
+        .map(|(i, _)| i);
+    let mut matching_kid = false;
+    // We iterate over each signature whose kid matches until it completes successfully.
+    // TODO: However: https://www.rfc-editor.org/rfc/rfc9052.html#section-4.1-3
+    for index in matching {
+        matching_kid = true;
+        // TODO: Verify protected headers
+        if let Ok(()) = sign.verify_signature(
+            index,
+            external_aad.unwrap_or(&[0; 0]),
+            |signature, signed_data| {
+                T::verify(
+                    key,
+                    signature,
+                    signed_data,
+                    &unprotected,
+                    &protected,
+                    Some(&sign.signatures[index].unprotected),
+                    Some(&sign.signatures[index].protected),
+                )
+            },
+        ) {
+            return Ok(());
+        }
+    }
+    if matching_kid {
+        Err(AccessTokenError::from(CoseCipherError::VerificationFailure))
+    } else {
+        Err(AccessTokenError::NoMatchingRecipient)
+    }
+}
+
+/// Decrypts the given `token` and `external_aad` using the `key` and the cipher
+/// given by type parameter `T`, returning the decrypted [`ClaimsSet`].
+///
+/// This method should be used when the given `token` is a [`CoseEncrypt0`] rather than
+/// [`CoseEncrypt`] (i.e., if it is intended for a single recipient). In case the token is an
+/// instance of the latter, use [`decrypt_access_token_multiple`] instead.
 ///
 /// For an example, see the documentation of [`encrypt_access_token`].
 ///
@@ -600,23 +767,90 @@ where
 /// - When there's a [`CoseError`](coset::CoseError) while deserializing
 ///   the given `token` to a [`CoseEncrypt0`] structure
 ///   (e.g., if it's not in fact a [`CoseEncrypt0`] structure but rather something else).
-/// - When there's a decryption error coming from the `cipher`.
+/// - When there's a decryption error coming from the cipher given by `T`.
 /// - When the deserialized and decrypted [`CoseEncrypt0`] structure does not contain a valid
 ///   [`ClaimsSet`].
 pub fn decrypt_access_token<T>(
+    key: &CoseKey,
     token: &ByteString,
-    cipher: &mut T,
-    aad: Option<&[u8]>,
+    external_aad: Option<&[u8]>,
 ) -> Result<ClaimsSet, AccessTokenError<T::Error>>
 where
-    T: CoseEncrypt0Cipher,
+    T: CoseEncryptCipher,
 {
-    let encrypt =
-        CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from_cose_error)?;
-    let result = encrypt
-        .decrypt(aad.unwrap_or(&[0; 0]), |ciphertext, aad| {
-            cipher.decrypt(ciphertext, aad)
-        })
-        .map_err(AccessTokenError::from_cose_cipher_error)?;
-    ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from_cose_error)
+    let encrypt = CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
+    let (unprotected, protected) =
+        get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
+    // TODO: Verify protected header
+    let result = encrypt.decrypt(external_aad.unwrap_or(&[0; 0]), |ciphertext, aad| {
+        T::decrypt(key, ciphertext, aad, &unprotected, &protected)
+    })?;
+    ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from)
+}
+
+/// Decrypts the given `token` and `external_aad` using the Key Encryption Key `kek` and the cipher given
+/// by type parameter `T`, returning the decrypted [`ClaimsSet`].
+///
+/// Note that the given `kek` must have an associated `kid` (key ID) field when converted
+/// to a COSE key, as the recipient inside the [`CoseEncrypt`] is identified in this way.
+///
+/// This method should be used when the given `token` is a [`CoseEncrypt`] rather than
+/// [`CoseEncrypt0`] (i.e., if it is intended for multiple recipients). In case the token is an
+/// instance of the latter, use [`decrypt_access_token`] instead.
+///
+/// # Errors
+/// - When there's a [`CoseError`](coset::CoseError) while deserializing
+///   the given `token` to a [`CoseEncrypt`] structure
+///   (e.g., if it's not in fact a [`CoseEncrypt`] structure but rather something else).
+/// - When there's a decryption error coming from the cipher given by `T`.
+/// - When the deserialized and decrypted [`CoseEncrypt`] structure does not contain a valid
+///   [`ClaimsSet`].
+/// - When the [`CoseEncrypt`] contains either multiple matching recipients or none at all for
+///   the given `kek`.
+pub fn decrypt_access_token_multiple<K, C>(
+    kek: &CoseKey,
+    token: &ByteString,
+    external_aad: Option<&[u8]>,
+) -> Result<ClaimsSet, AccessTokenError<MultipleCoseError<K::Error, C::Error>>>
+where
+    K: CoseEncryptCipher,
+    C: CoseEncryptCipher,
+{
+    let encrypt = CoseEncrypt::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
+    let (unprotected, protected) =
+        get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
+    let aad = external_aad.unwrap_or(&[0; 0]);
+    let kek_id = kek.key_id.as_slice();
+    // One of the recipient structures should contain CEK encrypted with our KEK.
+    let recipients = encrypt
+        .recipients
+        .iter()
+        .filter(|x| x.unprotected.key_id == kek_id || x.protected.header.key_id == kek_id);
+    let mut content_keys = recipients.map(|r| {
+        r.decrypt(
+            EncryptionContext::EncRecipient,
+            &[0; 0],
+            |ciphertext, aad| K::decrypt(kek, ciphertext, aad, &r.unprotected, &r.protected),
+        )
+    });
+    // Our CEK must be contained exactly once.
+    if let Some(content_key_result) = content_keys.next() {
+        if content_keys.next().is_none() {
+            let content_key = content_key_result.map_err(CoseCipherError::from_kek_error)?;
+            let target_key = CoseKey::from_slice(&content_key)
+                .map_err(|_| CoseCipherError::DecryptionFailure)?;
+            // TODO: Verify protected header
+            let result = encrypt
+                .decrypt(aad, |ciphertext, aad| {
+                    C::decrypt(&target_key, ciphertext, aad, &unprotected, &protected)
+                })
+                .map_err(CoseCipherError::from_cek_error)?;
+            ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from)
+        } else {
+            // TODO: Implement strict mode, where this is prohibited, otherwise allow it
+            Err(AccessTokenError::MultipleMatchingRecipients)
+        }
+    } else {
+        Err(AccessTokenError::NoMatchingRecipient)
+    }
 }
