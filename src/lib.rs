@@ -258,7 +258,7 @@
 //! The function will return a [`Result`](::core::result::Result) of the opaque
 //! [`ByteString`](crate::common::cbor_values::ByteString) containing the access token.
 //!
-//! # Verifying / decrypting Access Tokens
+//! # Verifying and Decrypting Access Tokens
 //! In order to verify or decrypt existing access tokens represented as [`ByteString`](crate::common::cbor_values::ByteString)s,
 //! use [`verify_access_token`](crate::token::verify_access_token) or
 //! [`decrypt_access_token`](crate::token::decrypt_access_token) respectively.
