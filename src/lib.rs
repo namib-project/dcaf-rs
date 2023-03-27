@@ -72,7 +72,7 @@
 //!    .client_id("myclient")
 //!    .audience("valve242")
 //!    .scope(TextEncodedScope::try_from("read")?)
-//!    .req_cnf(ProofOfPossessionKey::KeyId(base64::decode("6kg0dXJM13U")?))
+//!    .req_cnf(ProofOfPossessionKey::KeyId(hex::decode("ea483475724cd775")?))
 //!    .build()?;
 //! let mut encoded = Vec::new();
 //! request.clone().serialize_into(&mut encoded)?;
