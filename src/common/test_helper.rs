@@ -163,7 +163,7 @@ impl CoseEncryptCipher for FakeCrypto {
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         // Now we just split off the AAD and key we previously put at the end of the data.
         // We return an error if it does not match.
-        if &key.key_id != &protected_header.header.key_id {
+        if key.key_id != protected_header.header.key_id {
             // Mismatching key
             return Err(CoseCipherError::DecryptionFailure);
         }
