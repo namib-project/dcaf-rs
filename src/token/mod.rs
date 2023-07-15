@@ -170,6 +170,8 @@ use rand::{CryptoRng, RngCore};
 use crate::common::cbor_values::ByteString;
 use crate::error::{AccessTokenError, CoseCipherError, MultipleCoseError};
 
+pub mod crypto_impl;
+
 #[cfg(test)]
 mod tests;
 
@@ -289,7 +291,7 @@ pub trait CoseSignCipher: CoseCipher {
         target: &[u8],
         unprotected_header: &Header,
         protected_header: &Header,
-    ) -> Vec<u8>;
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 
     /// Verifies the `signature` of the `signed_data` with the `key`.
     ///
@@ -822,6 +824,9 @@ where
     let aad = external_aad.unwrap_or(&[0; 0]);
     let kek_id = kek.key_id.as_slice();
     // One of the recipient structures should contain CEK encrypted with our KEK.
+    // TODO: Recipient structures can be encrypted themselves, and have nested recipient structures
+    //       inside of them. We should probably search those as well (while still ensuring that
+    //       there is a maximum recursion depth to avoid DoS or stack overflow.
     let recipients = encrypt
         .recipients
         .iter()
