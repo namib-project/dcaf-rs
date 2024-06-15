@@ -109,12 +109,12 @@
 //! #         target: &[u8],
 //! #         unprotected_header: &Header,
 //! #         protected_header: &Header,
-//! #     ) -> Vec<u8> {
+//! #     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
 //! #         // We simply append the key behind the data.
 //! #         let mut signature = target.to_vec();
 //! #         let k = get_k_from_key(key);
 //! #         signature.append(&mut k.expect("k must be present in key!"));
-//! #         signature
+//! #         Ok(signature)
 //! #     }
 //! #
 //! #     fn verify(
@@ -132,7 +132,7 @@
 //! #             signed_data,
 //! #             unprotected_header,
 //! #             &protected_header.header,
-//! #         )
+//! #         )?
 //! #         {
 //! #             Ok(())
 //! #         } else {
@@ -153,7 +153,6 @@
 //! # Ok::<(), AccessTokenError<String>>(())
 //! ```
 
-#[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use core::fmt::{Debug, Display};
 
@@ -529,9 +528,9 @@ where
         .unprotected(unprotected.clone())
         .protected(protected.clone())
         .payload(claims.to_vec()?)
-        .create_signature(external_aad.unwrap_or(&[0; 0]), |x| {
+        .try_create_signature(external_aad.unwrap_or(&[0; 0]), |x| {
             T::sign(key, x, &unprotected, &protected)
-        })
+        })?
         .build()
         .to_vec()
         .map_err(AccessTokenError::from)
@@ -589,9 +588,10 @@ where
             .unprotected(rec_unprotected.clone())
             .protected(rec_protected.clone())
             .build();
-        builder = builder.add_created_signature(signature, external_aad.unwrap_or(&[0; 0]), |x| {
-            T::sign(key, x, &unprotected, &protected)
-        });
+        builder =
+            builder.try_add_created_signature(signature, external_aad.unwrap_or(&[0; 0]), |x| {
+                T::sign(key, x, &unprotected, &protected)
+            })?;
     }
 
     builder.build().to_vec().map_err(AccessTokenError::from)

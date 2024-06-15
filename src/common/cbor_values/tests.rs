@@ -10,7 +10,6 @@
  */
 
 mod pop {
-    #[cfg(not(feature = "std"))]
     use alloc::{string::String, string::ToString, vec};
     use core::marker::PhantomData;
 

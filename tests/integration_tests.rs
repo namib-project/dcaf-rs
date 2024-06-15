@@ -124,13 +124,13 @@ impl CoseSignCipher for FakeCrypto {
         target: &[u8],
         _unprotected_header: &Header,
         _protected_header: &Header,
-    ) -> Vec<u8> {
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         // We simply append the key behind the data.
         let mut signature = target.to_vec();
         let (mut x, mut y) = get_x_y_from_key(key);
         signature.append(&mut x);
         signature.append(&mut y);
-        signature
+        Ok(signature)
     }
 
     fn verify(
@@ -148,7 +148,7 @@ impl CoseSignCipher for FakeCrypto {
                 signed_data,
                 unprotected_header,
                 &protected_header.header,
-            )
+            )?
         {
             Ok(())
         } else {

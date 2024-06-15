@@ -20,10 +20,8 @@ use coset::iana::Algorithm;
 use coset::{iana, CoseKey, CoseKeyBuilder, Header, Label, ProtectedHeader};
 use rand::{CryptoRng, Error, RngCore};
 
-#[cfg(not(feature = "std"))]
 use {
     alloc::string::{String, ToString},
-    alloc::vec,
     alloc::vec::Vec,
 };
 
@@ -193,11 +191,11 @@ impl CoseSignCipher for FakeCrypto {
         target: &[u8],
         _unprotected_header: &Header,
         _protected_header: &Header,
-    ) -> Vec<u8> {
+    ) -> Result<Vec<u8>, CoseCipherError<String>> {
         // We simply append the key behind the data.
         let mut signature = target.to_vec();
         signature.append(&mut get_symmetric_key_value(key));
-        signature
+        Ok(signature)
     }
 
     fn verify(
@@ -219,7 +217,7 @@ impl CoseSignCipher for FakeCrypto {
             signed_data,
             unprotected_header,
             &protected_header.header,
-        );
+        )?;
         if matching_kid && signed_again == signature {
             Ok(())
         } else {

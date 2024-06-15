@@ -21,7 +21,6 @@ use coset::AsCborValue;
 use crate::common::cbor_values::{ByteString, ProofOfPossessionKey};
 use crate::Scope;
 
-#[cfg(not(feature = "std"))]
 use {alloc::boxed::Box, alloc::string::String, alloc::vec::Vec};
 
 #[cfg(test)]

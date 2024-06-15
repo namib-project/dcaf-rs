@@ -32,7 +32,6 @@ use core::ops::Deref;
 use coset::{CoseEncrypt0, CoseKey};
 use strum_macros::IntoStaticStr;
 
-#[cfg(not(feature = "std"))]
 use {alloc::boxed::Box, alloc::format, alloc::vec, alloc::vec::Vec};
 
 #[cfg(test)]

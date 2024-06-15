@@ -9,7 +9,6 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 
-#[cfg(not(feature = "std"))]
 use alloc::{
     string::{String, ToString},
     vec,

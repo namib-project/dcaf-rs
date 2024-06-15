@@ -18,11 +18,10 @@ use ciborium::value::Value;
 use coset::{CoseError, Label};
 use strum_macros::IntoStaticStr;
 
+use {alloc::format, alloc::string::String, alloc::string::ToString};
+
 #[cfg(not(feature = "std"))]
-use {
-    alloc::format, alloc::string::String, alloc::string::ToString, core::num::TryFromIntError,
-    derive_builder::export::core::marker::PhantomData,
-};
+use {core::num::TryFromIntError, derive_builder::export::core::marker::PhantomData};
 #[cfg(feature = "std")]
 use {std::marker::PhantomData, std::num::TryFromIntError};
 

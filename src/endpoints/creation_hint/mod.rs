@@ -18,7 +18,6 @@
 use crate::common::cbor_values::ByteString;
 use crate::Scope;
 
-#[cfg(not(feature = "std"))]
 use {alloc::string::String, alloc::vec::Vec};
 
 #[cfg(test)]

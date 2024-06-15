@@ -97,7 +97,6 @@
 //! [RFC 9200, section 5.8.1](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.1-2.4).
 //! AIF is defined in [RFC 9237](https://www.rfc-editor.org/rfc/rfc9237).
 
-#[cfg(not(feature = "std"))]
 use {alloc::string::String, alloc::string::ToString, alloc::vec, alloc::vec::Vec};
 
 use core::fmt::{Display, Formatter};

@@ -57,8 +57,10 @@ use ciborium::value::{Integer, Value};
 use ciborium_io::{Read, Write};
 use erased_serde::Serialize as ErasedSerialize;
 
+use {alloc::boxed::Box, alloc::format, alloc::vec::Vec};
+
 #[cfg(not(feature = "std"))]
-use {alloc::boxed::Box, alloc::format, alloc::vec::Vec, core::any::type_name};
+use core::any::type_name;
 
 use crate::common::scope::Scope;
 use crate::error::{TryFromCborMapError, ValueIsNotIntegerError};

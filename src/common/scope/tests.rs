@@ -11,7 +11,6 @@
 
 /// Tests for text encoded scopes.
 mod text {
-    #[cfg(not(feature = "std"))]
     use alloc::{string::ToString, vec, vec::Vec};
     use core::marker::PhantomData;
 

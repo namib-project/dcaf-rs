@@ -165,12 +165,12 @@
 //! #         target: &[u8],
 //! #         unprotected_header: &Header,
 //! #         protected_header: &Header,
-//! #     ) -> Vec<u8> {
+//! #     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
 //! #         // We simply append the key behind the data.
 //! #         let mut signature = target.to_vec();
 //! #         let k = get_k_from_key(key);
 //! #         signature.append(&mut k.expect("k must be present in key!"));
-//! #         signature
+//! #         Ok(signature)
 //! #     }
 //! #
 //! #     fn verify(
@@ -188,7 +188,7 @@
 //! #             signed_data,
 //! #             unprotected_header,
 //! #             &protected_header.header,
-//! #         )
+//! #         )?
 //! #         {
 //! #             Ok(())
 //! #         } else {
