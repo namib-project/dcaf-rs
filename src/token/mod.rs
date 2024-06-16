@@ -583,6 +583,9 @@ where
         .payload(claims.to_vec().map_err(AccessTokenError::from)?);
 
     for key in keys {
+        // TODO allow overriding the selected algorithm per signature (for consistency reasons with
+        //      sign_access_token, although this doesn't matter unless we have keys that can be used
+        //      for multiple different algorithms at once).
         let (rec_unprotected, rec_protected) = prepare_headers!(key, None, None, &mut rng, T)?;
         let signature = CoseSignatureBuilder::new()
             .unprotected(rec_unprotected.clone())
@@ -678,6 +681,8 @@ where
     let (unprotected, protected) =
         get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
     // TODO: Verify protected headers
+    // TODO: I'm not sure, but doesn't coset already take care of verifying the protected headers
+    //      alongside the rest?
     sign.verify_signature(external_aad.unwrap_or(&[0; 0]), |signature, signed_data| {
         T::verify(
             key,
@@ -823,7 +828,7 @@ where
         get_token_headers(token).ok_or(AccessTokenError::UnknownCoseStructure)?;
     let aad = external_aad.unwrap_or(&[0; 0]);
     let kek_id = kek.key_id.as_slice();
-    // One of the recipient structures should contain CEK encrypted with our KEK.
+    // One of the recipient structures should contain the CEK encrypted with our KEK.
     // TODO: Recipient structures can be encrypted themselves, and have nested recipient structures
     //       inside of them. We should probably search those as well (while still ensuring that
     //       there is a maximum recursion depth to avoid DoS or stack overflow.

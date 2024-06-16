@@ -241,7 +241,7 @@ impl Display for InvalidAifEncodedScopeError {
 /// fails to perform an operation.
 ///
 /// `T` is the type of the nested error represented by the [`Other`](CoseCipherError::Other) variant.
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Clone, Hash)]
 #[non_exhaustive]
 pub enum CoseCipherError<T>
 where

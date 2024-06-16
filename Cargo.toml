@@ -14,7 +14,7 @@ exclude = [
 ]
 
 [features]
-default = ["std"]
+default = ["std", "openssl"]
 std = ["serde/std", "ciborium/std", "serde_bytes/std", "erased-serde/std", "derive_builder/std"]
 
 [dependencies]
@@ -29,8 +29,9 @@ strum = { version = "0.26", default-features = false, features = ["derive"] }
 strum_macros = { version = "0.26", default-features = false }
 enumflags2 = { version = "^0.7", default-features = false }
 rand = { version = "^0.8", default-features = false }
-openssl = { version = "^0.10" }
+openssl = { version = "^0.10", optional = true }
 lazy_static = "1.4.0"
 
 [dev-dependencies]
 hex = { version = "^0.4" }
+base64 = "0.22.1"
