@@ -325,7 +325,12 @@ impl CoseSignCipher for Signer<'_> {
         unprotected_signature_header: Option<&Header>,
         protected_signature_header: Option<&ProtectedHeader>,
     ) -> Result<(), CoseCipherError<Self::Error>> {
-        match &protected_header.header.alg {
+        let algorithm = if protected_header.header.alg.is_some() {
+            &protected_header.header.alg
+        } else {
+            &unprotected_header.alg
+        };
+        match algorithm {
             Some(Algorithm::Assigned(iana::Algorithm::ES256)) => {
                 let p256group: EcGroup = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
                 let public_key =
@@ -423,13 +428,14 @@ mod tests {
         iana, AsCborValue, CborSerializable, CoseKeyBuilder, CoseSign1, CoseSign1Builder,
         HeaderBuilder, TaggedCborSerializable,
     };
-    use openssl::sign::Signer;
+    use openssl::sign::{Signer, Verifier};
     use serde::Serialize;
 
     /// Test case from the cose-wg/Examples repository - sign1-tests/sign-pass-01.json
+    /// Sign and Verify using OpenSSL backend.
     /// https://github.com/cose-wg/Examples/blob/master/sign1-tests/sign-pass-01.json
     #[test]
-    fn example_test_sign_pass_01() {
+    fn example_test_sign_verify_pass_01() {
         let key = CoseKeyBuilder::new_ec2_priv_key(
             iana::EllipticCurve::P_256,
             URL_SAFE_NO_PAD
@@ -452,6 +458,7 @@ mod tests {
 
         let sign_struct = CoseSign1Builder::new()
             .unprotected(unprotected.clone())
+            .protected(HeaderBuilder::new().build())
             .payload(Vec::from(plaintext));
 
         let sign_cbor = sign_struct
@@ -471,21 +478,105 @@ mod tests {
             .unwrap()
             .build();
 
-        let expected_cbor_raw = hex::decode("D28441A0A201260442313154546869732069732074686520636F6E74656E742E584087DB0D2E5571843B78AC33ECB2830DF7B6E0A4D5B7376DE336B23C591C90C425317E56127FBE04370097CE347087B233BF722B64072BEB4486BDA4031D27244F").unwrap();
-        let expected_cbor: ciborium::Value =
-            ciborium::from_reader(expected_cbor_raw.as_slice()).unwrap();
+        let output_cbor = sign_cbor.clone().to_tagged_vec().unwrap();
+        println!("Output CBOR of CoseSign1: {}", hex::encode(&output_cbor));
 
-        // TODO for some reason, the expected result has an additional byte in the protected header,
-        //      which causes a signature mismatch.
-        println!(
-            "Expected CoseSign1 struct:\n{:?}",
-            CoseSign1::from_tagged_slice(expected_cbor_raw.as_slice()).unwrap()
+        let reimported_sign = CoseSign1::from_tagged_slice(output_cbor.as_slice()).unwrap();
+        assert_eq!(
+            sign_cbor.to_cbor_value().unwrap(),
+            reimported_sign.clone().to_cbor_value().unwrap()
         );
-        println!("Output CoseSign1 struct:\n{:?}", sign_cbor);
-        println!(
-            "Output CBOR of CoseSign1: {}",
-            hex::encode_upper(sign_cbor.clone().to_tagged_vec().unwrap()).as_str()
-        );
-        assert_eq!(sign_cbor.to_cbor_value().unwrap(), expected_cbor)
+
+        reimported_sign
+            .verify_signature(&[], |signature, toverify| {
+                let intermediate_tobeverified = hex::decode(
+                    "846A5369676E617475726531404054546869732069732074686520636F6E74656E742E",
+                )
+                .unwrap();
+                assert_eq!(toverify, intermediate_tobeverified.as_slice());
+                <Signer as CoseSignCipher>::verify(
+                    &key,
+                    signature,
+                    toverify,
+                    &reimported_sign.unprotected,
+                    &reimported_sign.protected,
+                    None,
+                    None,
+                )
+            })
+            .unwrap();
+    }
+
+    /// Test case from the cose-wg/Examples repository - sign1-tests/sign-pass-01.json
+    /// Verify signature from given example using OpenSSL.
+    /// https://github.com/cose-wg/Examples/blob/master/sign1-tests/sign-pass-01.json
+    #[test]
+    fn example_test_verify_pass_01() {
+        let key = CoseKeyBuilder::new_ec2_priv_key(
+            iana::EllipticCurve::P_256,
+            URL_SAFE_NO_PAD
+                .decode("usWxHK2PmfnHKwXPS54m0kTcGJ90UiglWiGahtagnv8")
+                .unwrap(),
+            URL_SAFE_NO_PAD
+                .decode("IBOL-C3BttVivg-lSreASjpkttcsz-1rb7btKLv8EX4")
+                .unwrap(),
+            URL_SAFE_NO_PAD
+                .decode("V8kgd2ZBRuh2dgyVINBUqpPDr7BOMGcF22CQMIUHtNM")
+                .unwrap(),
+        )
+        .build();
+        let plaintext = "This is the content.";
+
+        let unprotected = HeaderBuilder::new()
+            .key_id("11".as_bytes().to_vec())
+            .algorithm(Algorithm::ES256)
+            .build();
+
+        let sign_struct = CoseSign1Builder::new()
+            .unprotected(unprotected.clone())
+            .protected(HeaderBuilder::new().build())
+            .payload(Vec::from(plaintext));
+
+        let sign_cbor = sign_struct
+            .try_create_signature(&[], |tosign| {
+                let intermediate_tobesigned = hex::decode(
+                    "846A5369676E617475726531404054546869732069732074686520636F6E74656E742E",
+                )
+                .unwrap();
+                assert_eq!(tosign, intermediate_tobesigned.as_slice());
+                <Signer as CoseSignCipher>::sign(
+                    &key,
+                    tosign,
+                    &unprotected,
+                    &HeaderBuilder::new().build(),
+                )
+            })
+            .unwrap()
+            .build();
+
+        let example_cbor_raw = hex::decode("D28441A0A201260442313154546869732069732074686520636F6E74656E742E584087DB0D2E5571843B78AC33ECB2830DF7B6E0A4D5B7376DE336B23C591C90C425317E56127FBE04370097CE347087B233BF722B64072BEB4486BDA4031D27244F").unwrap();
+        let example_cbor: ciborium::Value =
+            ciborium::from_reader(example_cbor_raw.as_slice()).unwrap();
+        let example_sign = CoseSign1::from_tagged_slice(example_cbor_raw.as_slice()).unwrap();
+
+        example_sign
+            .verify_signature(&[], |signature, toverify| {
+                let intermediate_tobeverified = hex::decode(
+                    "846A5369676E617475726531404054546869732069732074686520636F6E74656E742E",
+                )
+                .unwrap();
+                // TODO Value for which to verify signature for seems to be mismatched - presumably because the example token has this zero length string encoding with the A0 byte for the protected header.
+                assert_eq!(toverify, intermediate_tobeverified.as_slice());
+                <Signer as CoseSignCipher>::verify(
+                    &key,
+                    signature,
+                    toverify,
+                    &example_sign.unprotected,
+                    &example_sign.protected,
+                    None,
+                    None,
+                )
+            })
+            .unwrap();
     }
 }
