@@ -21,7 +21,7 @@ std = ["serde/std", "ciborium/std", "serde_bytes/std", "erased-serde/std", "deri
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 ciborium = { version = "^0.2", default-features = false }
 ciborium-io = { version = "^0.2", default-features = false }
-coset = { version = "^0.3", default-features = false }#, path = "../coset" }
+coset = { version = "^0.3", default-features = false, git = "https://github.com/namib-project/coset.git", branch = "fix_zero_length_map" }#, path = "../coset" }
 serde_bytes = { version = "^0.11", default-features = false, features = ["alloc"] }
 erased-serde = { version = "0.4.5", default-features = false, features = ["alloc"] }
 derive_builder = { version = "0.20", default-features = false, features = ["alloc"] }
@@ -35,3 +35,4 @@ lazy_static = "1.4.0"
 [dev-dependencies]
 hex = { version = "^0.4" }
 base64 = "0.22.1"
+parameterized = "2.0.0"
