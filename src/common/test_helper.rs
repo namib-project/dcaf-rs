@@ -27,8 +27,9 @@ use {
 
 use crate::common::cbor_map::ToCborMap;
 use crate::error::{AccessTokenError, CoseCipherError, MultipleCoseError};
-use crate::token::{CoseCipher, MultipleEncryptCipher, MultipleSignCipher};
-use crate::{CoseEncryptCipher, CoseMacCipher, CoseSignCipher};
+//use crate::token::MultipleEncryptCipher;
+//use crate::{CoseEncryptCipher, CoseMacCipher, CoseSignCipher};
+use crate::CoseSignCipher;
 
 /// Returns the value of the given symmetric [`key`].
 ///
@@ -98,7 +99,7 @@ where
         Err("Invalid value: Not a CBOR map!".to_string())
     }
 }
-
+/*
 /// Used to implement a basic `CipherProvider` for tests (obviously not secure in any way).
 #[derive(Copy, Clone)]
 pub(crate) struct FakeCrypto {}
@@ -277,7 +278,7 @@ impl MultipleEncryptCipher for FakeCrypto {
     }
 }
 
-impl MultipleSignCipher for FakeCrypto {}
+impl MultipleSignCipher for FakeCrypto {}*/
 
 #[derive(Clone, Copy)]
 pub(crate) struct FakeRng;
@@ -319,6 +320,30 @@ where
             CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
             CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
             CoseCipherError::Other(x) => CoseCipherError::Other(x.to_string()),
+            CoseCipherError::UnsupportedKeyType(v) => CoseCipherError::UnsupportedKeyType(v),
+            CoseCipherError::UnsupportedCurve(v) => CoseCipherError::UnsupportedCurve(v),
+            CoseCipherError::UnsupportedAlgorithm(v) => CoseCipherError::UnsupportedAlgorithm(v),
+            CoseCipherError::UnsupportedKeyDerivation => CoseCipherError::UnsupportedKeyDerivation,
+            CoseCipherError::NoDefaultAlgorithmForKey(v, w) => {
+                CoseCipherError::NoDefaultAlgorithmForKey(v, w)
+            }
+            CoseCipherError::KeyOperationNotPermitted(v, w) => {
+                CoseCipherError::KeyOperationNotPermitted(v, w)
+            }
+            CoseCipherError::KeyTypeCurveMismatch(v, w) => {
+                CoseCipherError::KeyTypeCurveMismatch(v, w)
+            }
+            CoseCipherError::KeyTypeAlgorithmMismatch(v, w) => {
+                CoseCipherError::KeyTypeAlgorithmMismatch(v, w)
+            }
+            CoseCipherError::KeyAlgorithmMismatch(v, w) => {
+                CoseCipherError::KeyAlgorithmMismatch(v, w)
+            }
+            CoseCipherError::DuplicateHeaders(v) => CoseCipherError::DuplicateHeaders(v),
+            CoseCipherError::InvalidKeyId(v) => CoseCipherError::InvalidKeyId(v),
+            CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
+            CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
+            CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
         }
     }
 }

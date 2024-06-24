@@ -35,4 +35,4 @@ lazy_static = "1.4.0"
 [dev-dependencies]
 hex = { version = "^0.4" }
 base64 = "0.22.1"
-parameterized = "2.0.0"
+rstest = "0.21.0"

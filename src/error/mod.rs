@@ -13,13 +13,16 @@
 
 use core::any::type_name;
 use core::fmt::{Display, Formatter};
+use std::collections::BTreeSet;
+use std::convert::Infallible;
 
 use ciborium::value::Value;
-use coset::{CoseError, Label};
+use coset::{iana, Algorithm, CoseError, KeyOperation, KeyType, Label};
 use strum_macros::IntoStaticStr;
 
 use {alloc::format, alloc::string::String, alloc::string::ToString};
 
+use crate::token::cose::key::{EllipticCurve, KeyParam};
 #[cfg(not(feature = "std"))]
 use {core::num::TryFromIntError, derive_builder::export::core::marker::PhantomData};
 #[cfg(feature = "std")]
@@ -241,7 +244,7 @@ impl Display for InvalidAifEncodedScopeError {
 /// fails to perform an operation.
 ///
 /// `T` is the type of the nested error represented by the [`Other`](CoseCipherError::Other) variant.
-#[derive(Debug, PartialEq, Clone, Hash)]
+#[derive(Debug, PartialEq, Clone)]
 #[non_exhaustive]
 pub enum CoseCipherError<T>
 where
@@ -258,6 +261,32 @@ where
     DecryptionFailure,
     /// A different error has occurred. Details are provided in the contained error.
     Other(T),
+    /// Key type is not supported.
+    UnsupportedKeyType(KeyType),
+    /// Curve is not supported by coset or the chosen cryptographic backend.
+    UnsupportedCurve(EllipticCurve),
+    /// Algorithm is not supported by coset or the chosen cryptographic backend.
+    UnsupportedAlgorithm(Algorithm),
+    /// The cryptographic backend does not support deriving the public key from the private key, and
+    /// your provided key does not provide the public key parts even though it is required for this
+    /// operation.
+    UnsupportedKeyDerivation,
+    /// The algorithm has not explicitly been specified and the given key does not have a
+    /// reasonable default algorithm to use, specify the algorithm in the headers explicitly to fix.
+    NoDefaultAlgorithmForKey(KeyType, Option<EllipticCurve>),
+    /// Your provided key does not support the given operation.
+    KeyOperationNotPermitted(BTreeSet<KeyOperation>, KeyOperation),
+    /// Key in given curve must be in different format.
+    KeyTypeCurveMismatch(KeyType, EllipticCurve),
+    /// Provided algorithm requires a different key type.
+    KeyTypeAlgorithmMismatch(KeyType, Algorithm),
+    /// Algorithm provided in key does not match algorithm selected for operation.
+    KeyAlgorithmMismatch(Algorithm, Algorithm),
+    DuplicateHeaders(Vec<Label>),
+    InvalidKeyId(Vec<u8>),
+    MissingKeyParam(KeyParam),
+    InvalidKeyParam(KeyParam, Value),
+    TypeMismatch(Value),
 }
 
 impl<T> CoseCipherError<T>
@@ -312,6 +341,30 @@ where
             },
             CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
             CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
+            CoseCipherError::UnsupportedKeyType(v) => CoseCipherError::UnsupportedKeyType(v),
+            CoseCipherError::UnsupportedCurve(v) => CoseCipherError::UnsupportedCurve(v),
+            CoseCipherError::UnsupportedAlgorithm(v) => CoseCipherError::UnsupportedAlgorithm(v),
+            CoseCipherError::UnsupportedKeyDerivation => CoseCipherError::UnsupportedKeyDerivation,
+            CoseCipherError::NoDefaultAlgorithmForKey(v, w) => {
+                CoseCipherError::NoDefaultAlgorithmForKey(v, w)
+            }
+            CoseCipherError::KeyOperationNotPermitted(v, w) => {
+                CoseCipherError::KeyOperationNotPermitted(v, w)
+            }
+            CoseCipherError::KeyTypeCurveMismatch(v, w) => {
+                CoseCipherError::KeyTypeCurveMismatch(v, w)
+            }
+            CoseCipherError::KeyTypeAlgorithmMismatch(v, w) => {
+                CoseCipherError::KeyTypeAlgorithmMismatch(v, w)
+            }
+            CoseCipherError::KeyAlgorithmMismatch(v, w) => {
+                CoseCipherError::KeyAlgorithmMismatch(v, w)
+            }
+            CoseCipherError::DuplicateHeaders(v) => CoseCipherError::DuplicateHeaders(v),
+            CoseCipherError::InvalidKeyId(v) => CoseCipherError::InvalidKeyId(v),
+            CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
+            CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
+            CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
         }
     }
 
@@ -327,6 +380,30 @@ where
             },
             CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
             CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
+            CoseCipherError::UnsupportedKeyType(v) => CoseCipherError::UnsupportedKeyType(v),
+            CoseCipherError::UnsupportedCurve(v) => CoseCipherError::UnsupportedCurve(v),
+            CoseCipherError::UnsupportedAlgorithm(v) => CoseCipherError::UnsupportedAlgorithm(v),
+            CoseCipherError::UnsupportedKeyDerivation => CoseCipherError::UnsupportedKeyDerivation,
+            CoseCipherError::NoDefaultAlgorithmForKey(v, w) => {
+                CoseCipherError::NoDefaultAlgorithmForKey(v, w)
+            }
+            CoseCipherError::KeyOperationNotPermitted(v, w) => {
+                CoseCipherError::KeyOperationNotPermitted(v, w)
+            }
+            CoseCipherError::KeyTypeCurveMismatch(v, w) => {
+                CoseCipherError::KeyTypeCurveMismatch(v, w)
+            }
+            CoseCipherError::KeyTypeAlgorithmMismatch(v, w) => {
+                CoseCipherError::KeyTypeAlgorithmMismatch(v, w)
+            }
+            CoseCipherError::KeyAlgorithmMismatch(v, w) => {
+                CoseCipherError::KeyAlgorithmMismatch(v, w)
+            }
+            CoseCipherError::DuplicateHeaders(v) => CoseCipherError::DuplicateHeaders(v),
+            CoseCipherError::InvalidKeyId(v) => CoseCipherError::InvalidKeyId(v),
+            CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
+            CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
+            CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
         }
     }
 }
@@ -337,6 +414,7 @@ where
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            // TODO this can probably be done better (use thiserror instead as soon as std::error::Error has been moved to core?)
             CoseCipherError::HeaderAlreadySet {
                 existing_header_name,
             } => write!(
@@ -346,6 +424,38 @@ where
             CoseCipherError::VerificationFailure => write!(f, "data verification failed"),
             CoseCipherError::DecryptionFailure => write!(f, "decryption failed"),
             CoseCipherError::Other(s) => write!(f, "{s}"),
+            CoseCipherError::UnsupportedKeyType(_) => write!(f, "unsupported key type"),
+            CoseCipherError::UnsupportedCurve(_) => write!(f, "unsupported curve"),
+            CoseCipherError::UnsupportedAlgorithm(_) => write!(f, "unsupported alorithm"),
+            CoseCipherError::UnsupportedKeyDerivation => write!(
+                f,
+                "backend does not support public key derivation from private key"
+            ),
+            CoseCipherError::NoDefaultAlgorithmForKey(_, _) => {
+                write!(
+                    f,
+                    "key type of key does not have a sensible default algorithm"
+                )
+            }
+            CoseCipherError::KeyOperationNotPermitted(_, _) => {
+                write!(f, "key does not permit the requested operation")
+            }
+            CoseCipherError::KeyTypeCurveMismatch(_, _) => {
+                write!(f, "key type is not supported for the given curve")
+            }
+            CoseCipherError::KeyTypeAlgorithmMismatch(_, _) => {
+                write!(f, "key type is not supported for the given algorithm")
+            }
+            CoseCipherError::KeyAlgorithmMismatch(_, _) => {
+                write!(f, "key does not support the given algorithm")
+            }
+            CoseCipherError::DuplicateHeaders(_) => write!(f, "duplicate headers"),
+            // TODO is this one still needed or maybe misnamed?
+            CoseCipherError::InvalidKeyId(_) => write!(f, "invalid key ID"),
+            CoseCipherError::MissingKeyParam(_) => write!(f, "required key parameter missing"),
+            CoseCipherError::InvalidKeyParam(_, _) => write!(f, "key parameter has invalid value"),
+            // TODO is this one still needed or maybe misnamed?
+            CoseCipherError::TypeMismatch(_) => write!(f, "key parameter has invalid type"),
         }
     }
 }

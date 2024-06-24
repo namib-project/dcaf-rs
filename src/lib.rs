@@ -316,9 +316,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #[macro_use]
 extern crate alloc;
-extern crate core;
 #[macro_use]
 extern crate derive_builder;
+extern crate core;
 
 #[doc(inline)]
 pub use common::cbor_map::ToCborMap;
@@ -339,11 +339,18 @@ pub use endpoints::token_req::{
 };
 #[doc(inline)]
 pub use token::{
-    decrypt_access_token, decrypt_access_token_multiple, encrypt_access_token,
-    encrypt_access_token_multiple, get_token_headers, sign_access_token,
-    sign_access_token_multiple, verify_access_token, verify_access_token_multiple,
-    CoseEncryptCipher, CoseMacCipher, CoseSignCipher, MultipleEncryptCipher, MultipleMacCipher,
-    MultipleSignCipher,
+    //decrypt_access_token, decrypt_access_token_multiple, encrypt_access_token,
+    //encrypt_access_token_multiple,
+    get_token_headers,
+    sign_access_token,
+    sign_access_token_multiple,
+    verify_access_token,
+    verify_access_token_multiple,
+    //CoseEncryptCipher,
+    //CoseMacCipher,
+    CoseSignCipher,
+    //MultipleEncryptCipher,
+    //MultipleMacCipher,
 };
 
 pub mod common;

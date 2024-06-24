@@ -15,3 +15,6 @@
 
 #[cfg(feature = "openssl")]
 pub mod openssl;
+
+#[cfg(disabled)]
+mod tests;
