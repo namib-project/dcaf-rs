@@ -50,7 +50,9 @@ impl<T: Into<CoseOpensslCipherError>> From<T> for CoseCipherError<CoseOpensslCip
     }
 }
 
-impl CoseSignCipher for Signer<'_> {
+pub struct OpensslContext {}
+
+impl CoseSignCipher for OpensslContext {
     type Error = CoseOpensslCipherError;
 
     fn sign_ecdsa(

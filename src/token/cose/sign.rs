@@ -361,8 +361,8 @@ fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
     for key in key_candidates {
         match try_verify_with_key(backend, key, protected, unprotected, signature, toverify) {
             Ok(()) => return Ok(()),
-            Err(_) => {
-                // TODO debug logging? Allow debugging why each verification failed?
+            Err(e) => {
+                dbg!(e);
             }
         }
     }
