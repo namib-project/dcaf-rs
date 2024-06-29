@@ -1,9 +1,15 @@
+mod encrypt0;
+
 use crate::error::CoseCipherError;
+use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey};
 use crate::CoseSignCipher;
 use core::fmt::{Debug, Display};
-use coset::{CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder, CoseEncryptBuilder};
+use coset::{
+    iana, Algorithm, CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder, CoseEncryptBuilder, Header,
+    HeaderBuilder,
+};
 
-/*/// Provides basic operations for encrypting and decrypting COSE structures.
+/// Provides basic operations for encrypting and decrypting COSE structures.
 ///
 /// This will be used by [`encrypt_access_token`] and [`decrypt_access_token`] (as well as the
 /// variants for multiple recipients: [`encrypt_access_token_multiple`]
@@ -15,28 +21,59 @@ pub trait CoseEncryptCipher {
     /// Error type that this cipher uses in [`Result`]s returned by cryptographic operations.
     type Error: Display + Debug;
 
-    /// Encrypts the `plaintext` and `aad` with the given `key`, returning the result.
-    fn encrypt(
-        key: &CoseKey,
+    /// Fill the given buffer with random bytes.
+    ///
+    /// Mainly used for IV generation if an IV is not provided by the application.
+    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>>;
+
+    fn encrypt_aes_gcm(
+        &mut self,
+        algorithm: Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
         plaintext: &[u8],
         aad: &[u8],
-        protected_header: &Header,
-        unprotected_header: &Header,
-    ) -> Vec<u8>;
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 
-    /// Decrypts the `ciphertext` and `aad` with the given `key`, returning the result.
-    ///
-    /// # Errors
-    /// If the `ciphertext` and `aad` are invalid, i.e., can't be decrypted.
-    fn decrypt(
-        key: &CoseKey,
-        ciphertext: &[u8],
+    fn decrypt_aes_gcm(
+        &mut self,
+        algorithm: Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext_with_tag: &[u8],
         aad: &[u8],
-        unprotected_header: &Header,
-        protected_header: &ProtectedHeader,
+        iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 }
 
+pub trait CoseKeyDistributionCipher: CoseEncryptCipher {}
+
+pub trait HeaderBuilderExt: Sized {
+    fn gen_iv<B: CoseEncryptCipher>(
+        self,
+        backend: &mut B,
+        alg: &Algorithm,
+    ) -> Result<Self, CoseCipherError<B::Error>>;
+}
+
+impl HeaderBuilderExt for HeaderBuilder {
+    fn gen_iv<B: CoseEncryptCipher>(
+        self,
+        backend: &mut B,
+        alg: &Algorithm,
+    ) -> Result<Self, CoseCipherError<B::Error>> {
+        let iv_size = match alg {
+            // AES-GCM: Nonce is fixed at 96 bits
+            Algorithm::Assigned(
+                iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM,
+            ) => 12,
+            v => return Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+        };
+        let mut iv = vec![0; iv_size];
+        backend.generate_rand(&mut iv)?;
+        Ok(self.iv(iv))
+    }
+}
+/*
 /// Intended for ciphers which can encrypt for multiple recipients.
 /// For this purpose, a method must be provided which generates the Content Encryption Key.
 ///
@@ -48,8 +85,6 @@ pub trait MultipleEncryptCipher: CoseEncryptCipher {
     /// of [`encrypt_access_token_multiple`].
     fn generate_cek<RNG: RngCore + CryptoRng>(rng: &mut RNG) -> CoseKey;
 }
-
-fn
 
 pub trait CoseEncrypt0BuilderExt {}
 

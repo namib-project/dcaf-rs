@@ -10,8 +10,9 @@
  */
 #![cfg(feature = "openssl")]
 use crate::error::CoseCipherError;
+use crate::token::cose::encrypt::CoseEncryptCipher;
 use crate::token::cose::header_util::find_param_by_label;
-use crate::token::cose::key::{CoseEc2Key, EllipticCurve};
+use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
 use crate::token::cose::sign::CoseSignCipher;
 use alloc::vec::Vec;
 use ciborium::value::Value;
@@ -26,21 +27,20 @@ use openssl::hash::MessageDigest;
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Private, Public};
 use openssl::sign::{Signer, Verifier};
+use openssl::symm::{decrypt_aead, encrypt_aead, Cipher};
 use std::convert::Infallible;
 use strum_macros::Display;
 
-#[derive(Debug, PartialEq, Clone, Display)]
+#[derive(Debug, Clone, Display)]
 #[non_exhaustive]
 pub enum CoseOpensslCipherError {
-    // TODO probably better to replace this with ErrorStack, but ErrorStack doesn't support
-    //      PartialEq and Eq
-    OpensslError(core::ffi::c_ulong),
+    OpensslError(ErrorStack),
     Other(&'static str),
 }
 
 impl From<ErrorStack> for CoseOpensslCipherError {
     fn from(value: ErrorStack) -> Self {
-        CoseOpensslCipherError::OpensslError(value.errors().first().unwrap().code())
+        CoseOpensslCipherError::OpensslError(value)
     }
 }
 
@@ -61,26 +61,10 @@ impl CoseSignCipher for OpensslContext {
         key: &CoseEc2Key<'_, Self::Error>,
         target: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        let (pad_size, group) = match &key.crv {
-            EllipticCurve::Assigned(iana::EllipticCurve::P_256) => {
-                (32, EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap())
-            }
-            EllipticCurve::Assigned(iana::EllipticCurve::P_384) => {
-                (48, EcGroup::from_curve_name(Nid::SECP384R1).unwrap())
-            }
-            EllipticCurve::Assigned(iana::EllipticCurve::P_521) => {
-                (66, EcGroup::from_curve_name(Nid::SECP521R1).unwrap())
-            }
-            v => return Err(CoseCipherError::UnsupportedCurve(v.clone())),
-        };
-        let hash = match alg {
-            Algorithm::Assigned(iana::Algorithm::ES256) => MessageDigest::sha256(),
-            Algorithm::Assigned(iana::Algorithm::ES384) => MessageDigest::sha384(),
-            Algorithm::Assigned(iana::Algorithm::ES512) => MessageDigest::sha512(),
-            _ => todo!(),
-        };
+        let (pad_size, group) = get_ecdsa_group_params(key)?;
+        let hash = get_ecdsa_hash_function(alg)?;
 
-        sign_ecdsa(&group, pad_size, hash, key, target)
+        sign_ecdsa(&group, pad_size as i32, hash, key, target)
     }
 
     fn verify_ecdsa(
@@ -90,26 +74,42 @@ impl CoseSignCipher for OpensslContext {
         signature: &[u8],
         target: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>> {
-        let (pad_size, group) = match &key.crv {
-            EllipticCurve::Assigned(iana::EllipticCurve::P_256) => {
-                (32, EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap())
-            }
-            EllipticCurve::Assigned(iana::EllipticCurve::P_384) => {
-                (48, EcGroup::from_curve_name(Nid::SECP384R1).unwrap())
-            }
-            EllipticCurve::Assigned(iana::EllipticCurve::P_521) => {
-                (66, EcGroup::from_curve_name(Nid::SECP521R1).unwrap())
-            }
-            v => return Err(CoseCipherError::UnsupportedCurve(v.clone())),
-        };
-        let hash = match alg {
-            Algorithm::Assigned(iana::Algorithm::ES256) => MessageDigest::sha256(),
-            Algorithm::Assigned(iana::Algorithm::ES384) => MessageDigest::sha384(),
-            Algorithm::Assigned(iana::Algorithm::ES512) => MessageDigest::sha512(),
-            _ => todo!(),
-        };
+        let (pad_size, group) = get_ecdsa_group_params(key)?;
+        let hash = get_ecdsa_hash_function(alg)?;
 
         verify_ecdsa(&group, pad_size, hash, key, signature, target)
+    }
+}
+
+fn get_ecdsa_group_params(
+    key: &CoseEc2Key<'_, CoseOpensslCipherError>,
+) -> Result<(usize, EcGroup), CoseCipherError<CoseOpensslCipherError>> {
+    match &key.crv {
+        EllipticCurve::Assigned(iana::EllipticCurve::P_256) => {
+            // ECDSA using P-256 curve, coordinates are padded to 256 bits
+            Ok((32, EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap()))
+        }
+        EllipticCurve::Assigned(iana::EllipticCurve::P_384) => {
+            // ECDSA using P-384 curve, coordinates are padded to 384 bits
+            Ok((48, EcGroup::from_curve_name(Nid::SECP384R1).unwrap()))
+        }
+        EllipticCurve::Assigned(iana::EllipticCurve::P_521) => {
+            // ECDSA using P-384 curve, coordinates are padded to 528 bits (521 bits rounded up
+            // to the nearest full bytes).
+            Ok((66, EcGroup::from_curve_name(Nid::SECP521R1).unwrap()))
+        }
+        v => return Err(CoseCipherError::UnsupportedCurve(v.clone())),
+    }
+}
+
+fn get_ecdsa_hash_function(
+    alg: Algorithm,
+) -> Result<MessageDigest, CoseCipherError<CoseOpensslCipherError>> {
+    match alg {
+        Algorithm::Assigned(iana::Algorithm::ES256) => Ok(MessageDigest::sha256()),
+        Algorithm::Assigned(iana::Algorithm::ES384) => Ok(MessageDigest::sha384()),
+        Algorithm::Assigned(iana::Algorithm::ES512) => Ok(MessageDigest::sha512()),
+        v => return Err(CoseCipherError::UnsupportedAlgorithm(v)),
     }
 }
 
@@ -229,4 +229,59 @@ fn cose_ec2_to_ec_public_key(
             .deref(),
     )
     .map_err(CoseCipherError::<CoseOpensslCipherError>::from)
+}
+
+const AES_GCM_TAG_LEN: usize = 16;
+
+impl CoseEncryptCipher for OpensslContext {
+    type Error = CoseOpensslCipherError;
+
+    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>> {
+        openssl::rand::rand_bytes(buf).map_err(CoseCipherError::from)
+    }
+
+    fn encrypt_aes_gcm(
+        &mut self,
+        algorithm: Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let cipher = get_aes_gcm_cipher(&algorithm)?;
+        let mut auth_tag = vec![0; AES_GCM_TAG_LEN];
+        let mut ciphertext = encrypt_aead(cipher, key.k, Some(iv), aad, plaintext, &mut auth_tag)
+            .map_err(CoseCipherError::from)?;
+
+        ciphertext.append(&mut auth_tag);
+        Ok(ciphertext)
+    }
+
+    fn decrypt_aes_gcm(
+        &mut self,
+        algorithm: Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext_with_tag: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let cipher = get_aes_gcm_cipher(&algorithm)?;
+
+        let auth_tag = &ciphertext_with_tag[(ciphertext_with_tag.len() - AES_GCM_TAG_LEN)..];
+        let ciphertext = &ciphertext_with_tag[..(ciphertext_with_tag.len() - AES_GCM_TAG_LEN)];
+
+        decrypt_aead(cipher, key.k, Some(iv), aad, ciphertext, auth_tag)
+            .map_err(CoseCipherError::from)
+    }
+}
+
+fn get_aes_gcm_cipher(
+    algorithm: &Algorithm,
+) -> Result<Cipher, CoseCipherError<CoseOpensslCipherError>> {
+    match algorithm {
+        Algorithm::Assigned(iana::Algorithm::A128GCM) => Ok(Cipher::aes_128_gcm()),
+        Algorithm::Assigned(iana::Algorithm::A192GCM) => Ok(Cipher::aes_192_gcm()),
+        Algorithm::Assigned(iana::Algorithm::A256GCM) => Ok(Cipher::aes_256_gcm()),
+        v => return Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+    }
 }

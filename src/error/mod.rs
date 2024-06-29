@@ -287,6 +287,8 @@ where
     MissingKeyParam(KeyParam),
     InvalidKeyParam(KeyParam, Value),
     TypeMismatch(Value),
+    NoKeyFound,
+    IvRequired,
 }
 
 impl<T> CoseCipherError<T>
@@ -365,6 +367,8 @@ where
             CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
             CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
             CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
+            CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
+            CoseCipherError::IvRequired => CoseCipherError::IvRequired,
         }
     }
 
@@ -404,6 +408,8 @@ where
             CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
             CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
             CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
+            CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
+            CoseCipherError::IvRequired => CoseCipherError::IvRequired,
         }
     }
 }
@@ -456,6 +462,15 @@ where
             CoseCipherError::InvalidKeyParam(_, _) => write!(f, "key parameter has invalid value"),
             // TODO is this one still needed or maybe misnamed?
             CoseCipherError::TypeMismatch(_) => write!(f, "key parameter has invalid type"),
+            CoseCipherError::NoKeyFound => {
+                write!(f, "no suitable key was found for this operation")
+            }
+            CoseCipherError::IvRequired => {
+                write!(
+                    f,
+                    "chosen algorithm requires an initialization vector, but none was provided"
+                )
+            }
         }
     }
 }

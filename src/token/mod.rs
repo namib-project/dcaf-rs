@@ -350,7 +350,7 @@ where
         .payload(claims.to_vec()?)
         .try_sign(
             backend,
-            key,
+            &mut &*key,
             protected_header,
             unprotected_header,
             &mut external_aad.unwrap_or(&[]),

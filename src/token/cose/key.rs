@@ -5,7 +5,7 @@ use core::borrow::{Borrow, BorrowMut};
 use core::fmt::Display;
 use coset::iana::EnumI64;
 use coset::{
-    iana, AsCborValue, CoseKey, CoseSignature, KeyType, Label, RegisteredLabelWithPrivate,
+    iana, AsCborValue, CoseKey, CoseSignature, Header, KeyType, Label, RegisteredLabelWithPrivate,
 };
 use std::convert::Infallible;
 use std::marker::PhantomData;
@@ -336,7 +336,7 @@ pub trait CoseKeyProvider<'a> {
     ///
     /// The iterator returned should contain all [CoseKey]s of the provider that have a key ID
     /// matching the one provided, or all [CoseKey]s available if key_id is None.
-    fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey>;
+    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = &'a CoseKey>;
 }
 
 // Unfortunately, this implementation is exclusive with the implementation for &CoseKey, because at
@@ -357,31 +357,32 @@ pub trait CoseKeyProvider<'a> {
 }*/
 
 impl<'a> CoseKeyProvider<'a> for &Vec<&'a CoseKey> {
-    fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
+    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = &'a CoseKey> {
         let mut iter: Box<dyn Iterator<Item = &'a CoseKey>> = Box::new(self.clone().into_iter());
-
         if let Some(kid) = key_id {
-            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == kid));
+            let test = Vec::from(kid);
+            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == test));
         }
         iter
     }
 }
 
 impl<'a> CoseKeyProvider<'a> for &'a Vec<CoseKey> {
-    fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
+    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = &'a CoseKey> {
         let mut iter: Box<dyn Iterator<Item = &'a CoseKey>> = Box::new(self.iter());
 
         if let Some(kid) = key_id {
-            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == kid));
+            let test = Vec::from(kid);
+            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == test));
         }
         iter
     }
 }
 
 impl<'a> CoseKeyProvider<'a> for Option<&'a CoseKey> {
-    fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
+    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = &'a CoseKey> {
         let ret: Box<dyn Iterator<Item = &'a CoseKey>> = match (self, &key_id) {
-            (Some(key), Some(key_id)) if key.key_id.as_slice() != key_id.as_slice() => {
+            (Some(key), Some(key_id)) if key.key_id.as_slice() != *key_id => {
                 Box::new(std::iter::empty())
             }
             (Some(key), Some(key_id)) => Box::new(std::iter::once(*key)),
@@ -392,14 +393,14 @@ impl<'a> CoseKeyProvider<'a> for Option<&'a CoseKey> {
 }
 
 impl<'a> CoseKeyProvider<'a> for &'a CoseKey {
-    fn lookup_key(&mut self, _key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
+    fn lookup_key(&mut self, _key_id: Option<&[u8]>) -> impl Iterator<Item = &'a CoseKey> {
         std::iter::once(*self)
     }
 }
 
 pub trait CoseAadProvider<'a>: BorrowMut<Self> {
     /// Look up the additional authenticated data to verify for a given signature.
-    fn lookup_aad(&mut self, signature: &CoseSignature) -> &'a [u8];
+    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8];
 }
 
 // See above, impossible due to missing specialization feature.
@@ -410,25 +411,25 @@ pub trait CoseAadProvider<'a>: BorrowMut<Self> {
 }*/
 
 impl<'a> CoseAadProvider<'a> for &'a [u8] {
-    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'a [u8] {
+    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8] {
         self
     }
 }
 
 impl<'a> CoseAadProvider<'a> for Option<&'a [u8]> {
-    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'a [u8] {
+    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8] {
         self.unwrap_or(&[] as &[u8])
     }
 }
 
 impl<'a> CoseAadProvider<'a> for &'a Option<&'a [u8]> {
-    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'a [u8] {
+    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8] {
         self.unwrap_or(&[] as &[u8])
     }
 }
 
 impl<'a, 'b: 'a> CoseAadProvider<'a> for std::slice::Iter<'a, &'b [u8]> {
-    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'b [u8] {
+    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8] {
         self.next().map(|v| *v).unwrap_or(&[] as &[u8])
     }
 }
@@ -437,7 +438,7 @@ impl<'a, 'b: 'a, I: Iterator, F> CoseAadProvider<'a> for std::iter::Map<I, F>
 where
     F: FnMut(I::Item) -> &'b [u8],
 {
-    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'b [u8] {
+    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8] {
         self.next().unwrap_or(&[] as &[u8])
     }
 }

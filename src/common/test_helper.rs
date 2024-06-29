@@ -344,6 +344,8 @@ where
             CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
             CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
             CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
+            CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
+            CoseCipherError::IvRequired => CoseCipherError::IvRequired,
         }
     }
 }
