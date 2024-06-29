@@ -4,6 +4,6 @@ pub mod header_util;
 pub mod key;
 pub mod sign;
 
-mod mac;
+pub mod mac;
 #[cfg(test)]
-mod tests;
+mod test_helper;

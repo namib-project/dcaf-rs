@@ -343,10 +343,9 @@ pub trait CoseKeyProvider<'a> {
 // some point, upstream coset may implement IntoIterator for &CoseKey, which would cause conflicting
 // implementations.
 // See https://github.com/rust-lang/rfcs/issues/2758
-// On nightly, we can avoid this issue by using the min_specialization feature.
+// One solution would be the specialization feature, which is unfortunately not stabilized yet.
 // See: https://rust-lang.github.io/rfcs/1210-impl-specialization.html
-#[cfg(feature = "nightly")]
-impl<'a, T: IntoIterator<Item = &'a CoseKey> + Clone + 'a> CoseKeyProvider<'a> for &T {
+/*impl<'a, T: IntoIterator<Item = &'a CoseKey> + Clone + 'a> CoseKeyProvider<'a> for &T {
     fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
         let mut iter: Box<dyn Iterator<Item = &'a CoseKey>> = Box::new(self.clone().into_iter());
 
@@ -355,19 +354,7 @@ impl<'a, T: IntoIterator<Item = &'a CoseKey> + Clone + 'a> CoseKeyProvider<'a> f
         }
         iter
     }
-}
-
-#[cfg(feature = "nightly")]
-impl<'a, U: AsRef<CoseKey>, T: IntoIterator<Item = U> + Clone + 'a> CoseKeyProvider<'a> for &T {
-    fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
-        let mut iter: Box<dyn Iterator<Item = &'a CoseKey>> = Box::new(self.clone().into_iter());
-
-        if let Some(kid) = key_id {
-            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == kid));
-        }
-        iter
-    }
-}
+}*/
 
 impl<'a> CoseKeyProvider<'a> for &Vec<&'a CoseKey> {
     fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
@@ -415,12 +402,12 @@ pub trait CoseAadProvider<'a>: BorrowMut<Self> {
     fn lookup_aad(&mut self, signature: &CoseSignature) -> &'a [u8];
 }
 
-#[cfg(feature = "nightly")]
-impl<'a, T: Iterator<Item = &'a [u8]>> CoseAadProvider<'a> for &mut T {
+// See above, impossible due to missing specialization feature.
+/*impl<'a, T: Iterator<Item = &'a [u8]>> CoseAadProvider<'a> for &mut T {
     fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'a [u8] {
         self.next().map(|v| v.as_ref()).unwrap_or(&[] as &[u8])
     }
-}
+}*/
 
 impl<'a> CoseAadProvider<'a> for &'a [u8] {
     fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'a [u8] {

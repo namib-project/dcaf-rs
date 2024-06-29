@@ -16,7 +16,6 @@ exclude = [
 [features]
 default = ["std", "openssl"]
 std = ["serde/std", "ciborium/std", "serde_bytes/std", "erased-serde/std", "derive_builder/std"]
-nightly = []
 
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["derive"] }

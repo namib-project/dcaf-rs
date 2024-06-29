@@ -153,24 +153,21 @@
 //! # Ok::<(), AccessTokenError<String>>(())
 //! ```
 
-use alloc::vec::Vec;
 use core::fmt::{Debug, Display};
 
+use crate::common::cbor_values::ByteString;
+use crate::error::AccessTokenError;
+use crate::token::cose::key::CoseKeyProvider;
+pub use crate::token::cose::sign::CoseSignCipher;
 use ciborium::value::Value;
+use cose::sign::{CoseSign1BuilderExt, CoseSign1Ext};
+use cose::sign::{CoseSignBuilderExt, CoseSignExt};
 use coset::cwt::ClaimsSet;
 use coset::{
-    AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder,
-    CoseEncryptBuilder, CoseKey, CoseRecipientBuilder, CoseSign, CoseSign1, CoseSign1Builder,
-    CoseSignBuilder, CoseSignature, CoseSignatureBuilder, EncryptionContext, Header, HeaderBuilder,
-    ProtectedHeader,
+    AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseKey, CoseSign, CoseSign1,
+    CoseSign1Builder, CoseSignBuilder, CoseSignature, Header, ProtectedHeader,
 };
 use rand::{CryptoRng, RngCore};
-
-use crate::common::cbor_values::ByteString;
-use crate::error::{AccessTokenError, CoseCipherError, MultipleCoseError};
-use crate::token::cose::key::CoseKeyProvider;
-pub use crate::token::cose::sign::{CoseSign1BuilderExt, CoseSignCipher};
-use crate::token::cose::sign::{CoseSign1Ext, CoseSignBuilderExt, CoseSignExt};
 
 pub mod cose;
 #[cfg(test)]
