@@ -42,32 +42,24 @@ pub trait CoseSignCipher {
     /// # Arguments
     ///
     /// * `alg` - The variant of ECDSA to use (determines the hash function).
-    ///
     ///           If unsupported by the backend, a [CoseCipherError::UnsupportedAlgorithm] error
     ///           should be returned.
-    ///
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
     ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
     ///           additional variants of ECDSA are ever added).
-    ///
     ///           If the algorithm is not an ECDSA algorithm, the implementation may return
     ///           [CoseCipherError::UnsupportedAlgorithm] or panic.
     /// * `key` - Elliptic curve key that should be used.
-    ///
     ///           Implementations may assume that if the [CoseEc2Key::crv] field is an IANA-assigned
     ///           value, it will always be a curve feasible for ECDSA.
-    ///
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
     ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
     ///           additional variants of ECDSA are ever added). If the algorithm is not an ECDSA
     ///           algorithm, the implementation may return [CoseCipherError::UnsupportedAlgorithm]
     ///           or panic.
-    ///
     ///           Note that curve and hash bit sizes do not necessarily match.
-    ///
     ///           Implementations may assume the struct field `d` (the private key) to always be set
     ///           and panic if this is not the case.
-    ///
     ///           The fields x and y (the public key) may be used by implementations if they are
     ///           set. If they are not, implementations may either derive the public key from `d` or
     ///           return a [CoseCipherError::UnsupportedKeyDerivation] if this derivation is
@@ -105,32 +97,24 @@ pub trait CoseSignCipher {
     /// # Arguments
     ///
     /// * `alg` - The variant of ECDSA to use (determines the hash function).
-    ///
     ///           If unsupported by the backend, a [CoseCipherError::UnsupportedAlgorithm] error
     ///           should be returned.
-    ///
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
     ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
     ///           additional variants of ECDSA are ever added).
-    ///
     ///           If the algorithm is not an ECDSA algorithm, the implementation may return
     ///           [CoseCipherError::UnsupportedAlgorithm] or panic.
     /// * `key` - Elliptic curve key that should be used.
-    ///
     ///           Implementations may assume that if the [CoseEc2Key::crv] field is an IANA-assigned
     ///           value, it will always be a curve feasible for ECDSA.
-    ///
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
     ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
     ///           additional variants of ECDSA are ever added). If the algorithm is not an ECDSA
     ///           algorithm, the implementation may return [CoseCipherError::UnsupportedAlgorithm]
     ///           or panic.
-    ///
     ///           Note that curve and hash bit sizes do not necessarily match.
-    ///
     ///           Implementations may assume the struct field `d` (the private key) to always be set
     ///           and panic if this is not the case.
-    ///
     ///           The fields x and y (the public key) may be used by implementations if they are
     ///           set. If they are not, implementations may either derive the public key from `d` or
     ///           return a [CoseCipherError::UnsupportedKeyDerivation] if this derivation is

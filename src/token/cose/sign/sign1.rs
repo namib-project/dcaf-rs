@@ -221,7 +221,8 @@ mod tests {
     use crate::token::cose::sign::CoseSign1Ext;
     use crate::token::cose::sign::{CoseSignBuilderExt, CoseSignExt};
     use crate::token::cose::test_helper::{
-        TestCase, TestCaseFailures, TestCaseInput, TestCaseSign, TestCaseSigner,
+        apply_attribute_failures, apply_header_failures, serialize_cose_with_failures, TestCase,
+        TestCaseFailures, TestCaseInput, TestCaseRecipient, TestCaseSign,
     };
     use crate::CoseSignCipher;
     use base64::Engine;
@@ -249,136 +250,19 @@ mod tests {
             *byte = byte.wrapping_add(1);
         }
 
-        if let Some(headers_to_remove) = &test_case_input.failures.remove_protected_headers {
-            if !headers_to_remove.key_id.is_empty() {
-                value.protected.header.key_id = Vec::new();
-            }
-            if !headers_to_remove.counter_signatures.is_empty() {
-                value.protected.header.counter_signatures = Vec::new();
-            }
-            if let Some(new_val) = &headers_to_remove.alg {
-                value.protected.header.alg = None
-            }
-            if let Some(new_val) = &headers_to_remove.content_type {
-                value.protected.header.content_type = None
-            }
-            if !headers_to_remove.crit.is_empty() {
-                value.protected.header.crit = Vec::new();
-            }
-            if !headers_to_remove.iv.is_empty() {
-                value.protected.header.iv = Vec::new();
-            }
-            if !headers_to_remove.partial_iv.is_empty() {
-                value.protected.header.partial_iv = Vec::new()
-            }
-            let removed_fields = headers_to_remove
-                .rest
-                .iter()
-                .map(|(label, _value)| label)
-                .cloned()
-                .collect::<Vec<Label>>();
-            let new_headers = value
-                .protected
-                .header
-                .rest
-                .iter()
-                .filter(|(label, _value)| !removed_fields.contains(label))
-                .cloned()
-                .collect::<Vec<(Label, ciborium::Value)>>();
-            value.protected.header.rest = new_headers
-        }
+        apply_header_failures(&mut value.protected.header, &test_case_input.failures);
+        let serialized_data = serialize_cose_with_failures(value, &test_case_input.failures);
 
-        if let Some(headers_to_add) = &test_case_input.failures.add_protected_headers {
-            if !headers_to_add.key_id.is_empty() {
-                value.protected.header.key_id = headers_to_add.key_id.clone();
-            }
-            if !headers_to_add.counter_signatures.is_empty() {
-                value.protected.header.counter_signatures =
-                    headers_to_add.counter_signatures.clone();
-            }
-            if let Some(new_val) = &headers_to_add.alg {
-                value.protected.header.alg = Some(new_val.clone())
-            }
-            if let Some(new_val) = &headers_to_add.content_type {
-                value.protected.header.content_type = Some(new_val.clone())
-            }
-            if !headers_to_add.crit.is_empty() {
-                value.protected.header.crit = headers_to_add.crit.clone();
-            }
-            if !headers_to_add.iv.is_empty() {
-                value.protected.header.iv = headers_to_add.iv.clone();
-            }
-            if !headers_to_add.partial_iv.is_empty() {
-                value.protected.header.partial_iv = headers_to_add.partial_iv.clone();
-            }
-
-            let removed_fields = headers_to_add
-                .rest
-                .iter()
-                .map(|(label, _value)| label)
-                .cloned()
-                .collect::<Vec<Label>>();
-            let mut new_headers = value
-                .protected
-                .header
-                .rest
-                .iter()
-                .filter(|(label, _value)| !removed_fields.contains(label))
-                .cloned()
-                .collect::<Vec<(Label, ciborium::Value)>>();
-            new_headers.append(&mut headers_to_add.rest.clone());
-            value.protected.header.rest = new_headers
-        }
-
-        let serialized_data = if let Some(new_tag) = &test_case_input.failures.change_cbor_tag {
-            let untagged_value = value
-                .to_cbor_value()
-                .expect("unable to generate CBOR value of CoseSign1");
-            ciborium::Value::Tag(*new_tag, Box::new(untagged_value))
-                .to_vec()
-                .expect("unable to serialize CBOR value")
-        } else {
-            value
-                .to_tagged_vec()
-                .expect("unable to generate CBOR value of CoseSign1")
-        };
-
-        if let Some(attribute_changes) = &test_case_input.failures.change_attribute {
-            match attribute_changes.get("alg") {
-                None => (None, serialized_data),
-                Some(Value::Number(v)) => {
-                    let cbor_value = ciborium::Value::Integer(ciborium::value::Integer::from(
-                        v.as_i64().expect("unable to parse algorithm number"),
-                    ));
-                    match coset::Algorithm::from_cbor_value(cbor_value) {
-                        Ok(value) => {
-                            key.alg = Some(value);
-                            (None, serialized_data)
-                        }
-                        Err(e) => (Some(e), serialized_data),
-                    }
-                }
-                Some(Value::String(v)) => {
-                    let cbor_value = ciborium::Value::Text(v.to_string());
-                    match coset::Algorithm::from_cbor_value(cbor_value) {
-                        Ok(value) => {
-                            key.alg = Some(value);
-                            (None, serialized_data)
-                        }
-                        Err(e) => (Some(e), serialized_data),
-                    }
-                }
-                v => panic!("unable to set algorithm to {:?}", v),
-            }
-        } else {
-            (None, serialized_data)
-        }
+        (
+            apply_attribute_failures(key, &test_case_input.failures),
+            serialized_data,
+        )
     }
 
     fn verify_sign1_test_case<T: CoseSignCipher>(
         backend: &mut T,
         sign1: &CoseSign1,
-        test_case: &TestCaseSigner,
+        test_case: &TestCaseRecipient,
         should_fail: bool,
         aad: &[u8],
     ) {

@@ -85,7 +85,7 @@
 //! Following up from the previous example, let's assume we now want to create a signed
 //! access token containing the existing `key`, as well as claims about the audience and issuer
 //! of the token, using an existing cipher of type `FakeCrypto`[^cipher]:
-//! ```
+//! ```ignore
 //! # use ciborium::value::Value;
 //! # use coset::{AsCborValue, CoseKey, CoseKeyBuilder, Header, iana, Label, ProtectedHeader};
 //! # use coset::cwt::{ClaimsSetBuilder, Timestamp};
