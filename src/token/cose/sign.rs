@@ -654,8 +654,8 @@ impl CoseSignExt for CoseSign {
                     try_verify(
                         backend,
                         key_provider,
-                        &self.protected.header,
-                        &self.unprotected,
+                        &self.signatures[sigindex].protected.header,
+                        &self.signatures[sigindex].unprotected,
                         try_all_keys,
                         signature,
                         toverify,
@@ -696,8 +696,8 @@ impl CoseSignExt for CoseSign {
                     try_verify(
                         backend,
                         key_provider,
-                        &self.protected.header,
-                        &self.unprotected,
+                        &self.signatures[sigindex].protected.header,
+                        &self.signatures[sigindex].unprotected,
                         try_all_keys,
                         signature,
                         toverify,

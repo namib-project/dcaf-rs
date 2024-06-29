@@ -1,5 +1,5 @@
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
-use crate::token::cose::sign::{CoseSign1Ext, CoseSignExt};
+use crate::token::cose::sign::{CoseSign1Ext, CoseSignBuilderExt, CoseSignExt};
 use crate::token::CoseSign1BuilderExt;
 use crate::CoseSignCipher;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -8,7 +8,8 @@ use core::fmt::Formatter;
 use coset::iana::{Algorithm, EnumI64};
 use coset::{
     iana, AsCborValue, CborSerializable, CoseError, CoseKey, CoseKeyBuilder, CoseSign, CoseSign1,
-    CoseSign1Builder, CoseSignature, Header, HeaderBuilder, Label, TaggedCborSerializable,
+    CoseSign1Builder, CoseSignBuilder, CoseSignature, CoseSignatureBuilder, Header, HeaderBuilder,
+    Label, TaggedCborSerializable,
 };
 use hex::FromHex;
 use openssl::sign::Signer;
@@ -158,7 +159,7 @@ pub struct TestCase {
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct TestCaseFailures {
     #[serde(rename = "ChangeTag")]
-    change_payload: Option<u64>,
+    change_tag: Option<u64>,
     #[serde(rename = "ChangeCBORTag")]
     change_cbor_tag: Option<u64>,
     #[serde(rename = "ChangeAttr")]
@@ -209,6 +210,8 @@ pub struct TestCaseSigner {
     alg: Option<Algorithm>,
     #[serde(deserialize_with = "hex::deserialize", default)]
     external: Vec<u8>,
+    #[serde(default)]
+    failures: TestCaseFailures,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -225,8 +228,9 @@ fn serialize_sign1_and_apply_failures(
     key: &mut CoseKey,
     mut value: CoseSign1,
 ) -> (Option<CoseError>, Vec<u8>) {
-    if let Some(1) = &test_case_input.failures.change_payload {
-        value.payload = Some("hi".to_string().into_bytes());
+    if let Some(1) = &test_case_input.failures.change_tag {
+        let byte = value.signature.first_mut().unwrap();
+        *byte = byte.wrapping_add(1);
     }
 
     if let Some(headers_to_remove) = &test_case_input.failures.remove_protected_headers {
@@ -523,14 +527,9 @@ fn cose_examples_sign1_self_signed(
 }
 
 fn serialize_sign_and_apply_failures(
-    test_case_input: &TestCaseInput,
-    key: &mut CoseKey,
+    test_case_input: &mut TestCaseInput,
     mut value: CoseSign,
 ) -> (Option<CoseError>, Vec<u8>) {
-    if let Some(1) = &test_case_input.failures.change_payload {
-        value.payload = Some("hi".to_string().into_bytes());
-    }
-
     if let Some(headers_to_remove) = &test_case_input.failures.remove_protected_headers {
         if !headers_to_remove.key_id.is_empty() {
             value.protected.header.key_id = Vec::new();
@@ -612,8 +611,15 @@ fn serialize_sign_and_apply_failures(
     }
 
     let mut alg_change_error = None;
-    for signature in &mut value.signatures {
-        if let Some(err) = apply_failures_to_signer(&test_case_input, key, signature) {
+    let mut signers = test_case_input
+        .sign
+        .as_mut()
+        .unwrap()
+        .signers
+        .iter_mut()
+        .zip(&mut value.signatures);
+    for (signer, signature) in signers {
+        if let Some(err) = apply_failures_to_signer(&signer.failures, &mut signer.key, signature) {
             alg_change_error = Some(err);
         };
     }
@@ -635,11 +641,16 @@ fn serialize_sign_and_apply_failures(
 }
 
 fn apply_failures_to_signer(
-    test_case_input: &TestCaseInput,
+    failures: &TestCaseFailures,
     key: &mut CoseKey,
     value: &mut CoseSignature,
 ) -> Option<CoseError> {
-    if let Some(headers_to_remove) = &test_case_input.failures.remove_protected_headers {
+    if let Some(1) = &failures.change_tag {
+        let byte = value.signature.first_mut().unwrap();
+        *byte = byte.wrapping_add(1);
+    }
+
+    if let Some(headers_to_remove) = &failures.remove_protected_headers {
         if !headers_to_remove.key_id.is_empty() {
             value.protected.header.key_id = Vec::new();
         }
@@ -678,7 +689,7 @@ fn apply_failures_to_signer(
         value.protected.header.rest = new_headers
     }
 
-    if let Some(headers_to_add) = &test_case_input.failures.add_protected_headers {
+    if let Some(headers_to_add) = &failures.add_protected_headers {
         if !headers_to_add.key_id.is_empty() {
             value.protected.header.key_id = headers_to_add.key_id.clone();
         }
@@ -719,7 +730,7 @@ fn apply_failures_to_signer(
         value.protected.header.rest = new_headers
     }
 
-    if let Some(attribute_changes) = &test_case_input.failures.change_attribute {
+    if let Some(attribute_changes) = &failures.change_attribute {
         match attribute_changes.get("alg") {
             None => None,
             Some(Value::Number(v)) => {
@@ -757,7 +768,17 @@ fn verify_sign_test_case<T: CoseSignCipher>(
     test_case: &TestCaseSign,
     should_fail: bool,
 ) {
-    let keys: Vec<&CoseKey> = test_case.signers.iter().map(|v| &v.key).collect();
+    let keys: Vec<CoseKey> = test_case
+        .signers
+        .iter()
+        .map(|v| {
+            let mut key_with_alg = v.key.clone();
+            if key_with_alg.alg.is_none() {
+                key_with_alg.alg = v.alg.map(|a| coset::Algorithm::Assigned(a));
+            }
+            key_with_alg
+        })
+        .collect();
     let mut aads = test_case.signers.iter().map(|v| v.external.as_slice());
 
     let verify_result = sign.try_verify(backend, &mut &keys, false, &mut aads);
@@ -827,35 +848,47 @@ fn perform_sign_reference_output_test(test_path: PathBuf, mut backend: impl Cose
 }
 
 fn perform_sign_self_signed_test(test_path: PathBuf, mut backend: impl CoseSignCipher) {
-    let test_case_description: TestCase =
+    let mut test_case_description: TestCase =
         serde_json::from_reader(std::fs::File::open(test_path).expect("unable to open test case"))
             .expect("invalid test case");
 
-    let mut sign1_cfg = test_case_description
+    let mut sign_cfg = test_case_description
         .input
-        .clone()
-        .sign0
-        .expect("expected a CoseSign1 test case, but it was not found");
+        .sign
+        .as_mut()
+        .expect("expected a CoseSign test case, but it was not found");
 
-    let mut builder = CoseSign1Builder::new();
+    let mut builder = CoseSignBuilder::new();
 
-    let sign1 = builder
-        .payload(test_case_description.input.plaintext.clone().into_bytes())
-        .try_sign(
-            &mut backend,
-            &sign1_cfg.key,
-            sign1_cfg.protected.clone(),
-            sign1_cfg.unprotected.clone(),
-            &mut sign1_cfg.external.as_slice(),
-        )
-        .expect("unable to sign Sign1 object")
-        .build();
+    let mut sign = builder.payload(test_case_description.input.plaintext.clone().into_bytes());
 
-    let (failure, sign1_serialized) = serialize_sign1_and_apply_failures(
-        &test_case_description.input,
-        &mut sign1_cfg.key,
-        sign1.clone(),
-    );
+    if let Some(unprotected) = &sign_cfg.unprotected {
+        sign = sign.unprotected(unprotected.clone())
+    }
+    if let Some(protected) = &sign_cfg.protected {
+        sign = sign.protected(protected.clone())
+    }
+    for signer in &mut sign_cfg.signers {
+        let mut signature = CoseSignatureBuilder::new();
+
+        if let Some(unprotected) = &signer.unprotected {
+            signature = signature.unprotected(unprotected.clone())
+        }
+        if let Some(protected) = &signer.protected {
+            signature = signature.protected(protected.clone())
+        }
+        sign = sign
+            .try_add_sign::<_, &CoseKey, &[u8]>(
+                &mut backend,
+                &mut &signer.key,
+                signature.build(),
+                &mut signer.external.as_slice(),
+            )
+            .expect("unable to sign Sign object")
+    }
+
+    let (failure, sign_serialized) =
+        serialize_sign_and_apply_failures(&mut test_case_description.input, sign.build());
 
     if failure.is_some() && test_case_description.fail {
         println!(
@@ -870,29 +903,32 @@ fn perform_sign_self_signed_test(test_path: PathBuf, mut backend: impl CoseSignC
         )
     }
 
-    let sign1_redeserialized = match CoseSign1::from_tagged_slice(sign1_serialized.as_slice())
-        .or_else(|e1| {
-            CoseSign1::from_slice(sign1_serialized.as_slice())
-                .map_err(|e2| Result::<CoseSign1, (CoseError, CoseError)>::Err((e1, e2)))
+    let sign_redeserialized =
+        match CoseSign::from_tagged_slice(sign_serialized.as_slice()).or_else(|e1| {
+            CoseSign::from_slice(sign_serialized.as_slice())
+                .map_err(|e2| Result::<CoseSign, (CoseError, CoseError)>::Err((e1, e2)))
         }) {
-        Ok(v) => v,
-        e => {
-            if test_case_description.fail {
-                println!("test case failed as expected. Error: {:?}", e);
-                return;
-            } else {
-                e.expect("unable to deserialize test case data");
-                unreachable!()
+            Ok(v) => v,
+            e => {
+                if test_case_description.fail {
+                    println!("test case failed as expected. Error: {:?}", e);
+                    return;
+                } else {
+                    e.expect("unable to deserialize test case data");
+                    unreachable!()
+                }
             }
-        }
-    };
+        };
 
-    verify_sign1_test_case(
+    verify_sign_test_case(
         &mut backend,
-        &sign1_redeserialized,
-        &sign1_cfg,
+        &sign_redeserialized,
+        &test_case_description
+            .input
+            .sign
+            .as_ref()
+            .expect("expected a CoseSign test case, but it was not found"),
         test_case_description.fail,
-        sign1_cfg.external.as_slice(),
     )
 }
 
