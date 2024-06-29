@@ -11,7 +11,7 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -22,25 +22,27 @@ jobs:
           command: check
 
   check_nostd:
-   name: Check (no_std)
-   runs-on: ubuntu-latest
-   steps:
-     - uses: actions/checkout@v2
-     - uses: actions-rs/toolchain@v1
-       with:
-         profile: minimal
-         toolchain: stable
-         override: true
-     - uses: actions-rs/cargo@v1
-       with:
-         command: check
-         args: --no-default-features
+    name: Check (no_std)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --no-default-features
 
   test:
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -51,25 +53,25 @@ jobs:
           command: test
 
   test_nostd:
-   name: Test Suite (no_std)
-   runs-on: ubuntu-latest
-   steps:
-     - uses: actions/checkout@v2
-     - uses: actions-rs/toolchain@v1
-       with:
-         profile: minimal
-         toolchain: stable
-         override: true
-     - uses: actions-rs/cargo@v1
-       with:
-         command: test
-         args: --no-default-features
+    name: Test Suite (no_std)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features
 
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -84,7 +86,7 @@ jobs:
   clippy_check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - run: rustup component add clippy
       - uses: actions-rs/clippy-check@v1
         with:
@@ -94,7 +96,9 @@ jobs:
   test_coverage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
