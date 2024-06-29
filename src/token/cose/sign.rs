@@ -8,18 +8,19 @@
  *
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
-
 use crate::error::CoseCipherError;
 use crate::token::cose::header_util;
 use crate::token::cose::header_util::check_for_duplicate_headers;
 use crate::token::cose::key::{
-    CoseEc2Key, CoseKeyProvider, CoseParsedKey, EllipticCurve, KeyParam,
+    CoseAadProvider, CoseEc2Key, CoseKeyProvider, CoseParsedKey, EllipticCurve, KeyParam,
 };
+use core::borrow::BorrowMut;
 use core::fmt::{Debug, Display};
 use coset::iana::{Ec2KeyParameter, EnumI64};
 use coset::{
     iana, Algorithm, CoseKey, CoseSign, CoseSign1, CoseSign1Builder, CoseSignBuilder,
-    CoseSignature, Header, KeyOperation, KeyType, Label, ProtectedHeader, RegisteredLabel,
+    CoseSignature, CoseSignatureBuilder, Header, KeyOperation, KeyType, Label, ProtectedHeader,
+    RegisteredLabel,
 };
 
 /// Provides basic operations for signing and verifying COSE structures.
@@ -141,59 +142,6 @@ fn determine_algorithm<CE: Display>(
             )),
         }
     }
-}
-
-/// Extension trait that enables signing using predefined backends instead of by providing signature
-/// functions.
-pub trait CoseSign1BuilderExt: Sized {
-    /// Creates the signature for the CoseSign1 object using the given backend.
-    ///
-    /// Will also set potentially required headers and check whether the given key is appropriate
-    /// for signing and matches the header information.
-    ///
-    /// Parameters:
-    /// - `backend`: cryptographic backend to use
-    /// - `key`: Key to use for signing.
-    /// - `protected`: protected headers, will override the previously set ones.
-    /// - `unprotected`: unprotected headers, will override the previously set ones.
-    ///
-    /// TODO: Setting all of these options at once kind of defeats the purpose of
-    ///       the builder pattern, but it is necessary here, as we lack access to the `protected`
-    ///       and `unprotected` headers that were previously set (the field is private).
-    ///       This should be fixed when porting all of this to coset.
-    fn try_sign<B: CoseSignCipher>(
-        self,
-        backend: &mut B,
-        key: &CoseKey,
-        protected: Option<Header>,
-        unprotected: Option<Header>,
-        aad: &[u8],
-    ) -> Result<Self, CoseCipherError<B::Error>>;
-
-    /// Builds the CoseSign1 object with a detached payload using the given backend.
-    ///
-    /// Will also set potentially required headers and check whether the given key is appropriate
-    /// for signing and matches the header information.
-    ///
-    /// Parameters:
-    /// - `backend`: cryptographic backend to use
-    /// - `key`: Key to use for signing.
-    /// - `protected`: protected headers, will override the previously set ones.
-    /// - `unprotected`: unprotected headers, will override the previously set ones.
-    ///
-    /// TODO: Setting all of these options at once kind of defeats the purpose of
-    ///       the builder pattern, but it is necessary here, as we lack access to the `protected`
-    ///       and `unprotected` headers that were previously set (the field is private).
-    ///       This should be fixed when porting all of this to coset.
-    fn try_sign_detached<B: CoseSignCipher>(
-        self,
-        backend: &mut B,
-        key: &CoseKey,
-        protected: Option<Header>,
-        unprotected: Option<Header>,
-        payload: &[u8],
-        aad: &[u8],
-    ) -> Result<Self, CoseCipherError<B::Error>>;
 }
 
 fn is_valid_ecdsa_key<'a, B: CoseSignCipher>(
@@ -339,7 +287,7 @@ fn try_verify_with_key<B: CoseSignCipher>(
 
 fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
     backend: &mut B,
-    key_provider: &CKP,
+    key_provider: &mut CKP,
     protected: &'b Header,
     unprotected: &'b Header,
     try_all_keys: bool,
@@ -371,23 +319,82 @@ fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
     Err(CoseCipherError::VerificationFailure)
 }
 
-impl CoseSign1BuilderExt for CoseSign1Builder {
-    fn try_sign<B: CoseSignCipher>(
+/// Extension trait that enables signing using predefined backends instead of by providing signature
+/// functions.
+pub trait CoseSign1BuilderExt: Sized {
+    /// Creates the signature for the CoseSign1 object using the given backend.
+    ///
+    /// Will also set potentially required headers and check whether the given key is appropriate
+    /// for signing and matches the header information.
+    ///
+    /// Parameters:
+    /// - `backend`: cryptographic backend to use
+    /// - `key`: Key to use for signing.
+    /// - `protected`: protected headers, will override the previously set ones.
+    /// - `unprotected`: unprotected headers, will override the previously set ones.
+    ///
+    /// TODO: Setting all of these options at once kind of defeats the purpose of
+    ///       the builder pattern, but it is necessary here, as we lack access to the `protected`
+    ///       and `unprotected` headers that were previously set (the field is private).
+    ///       This should be fixed when porting all of this to coset.
+    fn try_sign<'a, 'b, B: CoseSignCipher, CAP: CoseAadProvider<'b>>(
         self,
         backend: &mut B,
         key: &CoseKey,
         protected: Option<Header>,
         unprotected: Option<Header>,
-        aad: &[u8],
+        aad: &mut CAP,
+    ) -> Result<Self, CoseCipherError<B::Error>>;
+
+    /// Builds the CoseSign1 object with a detached payload using the given backend.
+    ///
+    /// Will also set potentially required headers and check whether the given key is appropriate
+    /// for signing and matches the header information.
+    ///
+    /// Parameters:
+    /// - `backend`: cryptographic backend to use
+    /// - `key`: Key to use for signing.
+    /// - `protected`: protected headers, will override the previously set ones.
+    /// - `unprotected`: unprotected headers, will override the previously set ones.
+    ///
+    /// TODO: Setting all of these options at once kind of defeats the purpose of
+    ///       the builder pattern, but it is necessary here, as we lack access to the `protected`
+    ///       and `unprotected` headers that were previously set (the field is private).
+    ///       This should be fixed when porting all of this to coset.
+    fn try_sign_detached<'a, 'b, B: CoseSignCipher, CAP: CoseAadProvider<'b>>(
+        self,
+        backend: &mut B,
+        key: &CoseKey,
+        protected: Option<Header>,
+        unprotected: Option<Header>,
+        payload: &[u8],
+        aad: &mut CAP,
+    ) -> Result<Self, CoseCipherError<B::Error>>;
+}
+
+impl CoseSign1BuilderExt for CoseSign1Builder {
+    fn try_sign<'a, 'b, B: CoseSignCipher, CAP: CoseAadProvider<'b>>(
+        self,
+        backend: &mut B,
+        key: &CoseKey,
+        protected: Option<Header>,
+        unprotected: Option<Header>,
+        mut aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let mut builder = self;
+        let aad = aad.borrow_mut();
+        // Create a CoseSignature that has all the headers of the CoseSign1 object, in order to
+        // provide that to our AAD provider.
+        let mut sig = CoseSignatureBuilder::new();
         if let Some(protected) = &protected {
-            builder = builder.protected(protected.clone())
+            builder = builder.protected(protected.clone());
+            sig = sig.protected(protected.clone());
         }
         if let Some(unprotected) = &unprotected {
-            builder = builder.unprotected(unprotected.clone())
+            builder = builder.unprotected(unprotected.clone());
+            sig = sig.unprotected(unprotected.clone());
         }
-        builder.try_create_signature(aad, |tosign| {
+        builder.try_create_signature(aad.lookup_aad(&sig.build()), |tosign| {
             try_sign(
                 backend,
                 key,
@@ -397,23 +404,29 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
             )
         })
     }
-    fn try_sign_detached<B: CoseSignCipher>(
+    fn try_sign_detached<'a, 'b, B: CoseSignCipher, CAP: CoseAadProvider<'b>>(
         self,
         backend: &mut B,
         key: &CoseKey,
         protected: Option<Header>,
         unprotected: Option<Header>,
         payload: &[u8],
-        aad: &[u8],
+        mut aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let mut builder = self;
+        let aad = aad.borrow_mut();
+        // Create a CoseSignature that has all the headers of the CoseSign1 object, in order to
+        // provide that to our AAD provider.
+        let mut sig = CoseSignatureBuilder::new();
         if let Some(protected) = &protected {
-            builder = builder.protected(protected.clone())
+            builder = builder.protected(protected.clone());
+            sig = sig.protected(protected.clone());
         }
         if let Some(unprotected) = &unprotected {
-            builder = builder.unprotected(unprotected.clone())
+            builder = builder.unprotected(unprotected.clone());
+            sig = sig.unprotected(unprotected.clone());
         }
-        builder.try_create_detached_signature(payload, aad, |tosign| {
+        builder.try_create_detached_signature(payload, aad.lookup_aad(&sig.build()), |tosign| {
             try_sign(
                 backend,
                 key,
@@ -426,40 +439,52 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
 }
 
 pub trait CoseSign1Ext {
-    fn try_verify<'a, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
+    fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider<'a>, CAP: CoseAadProvider<'b>>(
         &self,
         backend: &mut B,
-        key_provider: &CKP,
+        key_provider: &mut CKP,
         try_all_keys: bool,
-        aad: &[u8],
+        aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>>;
 
-    fn try_verify_detached<'a, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
+    fn try_verify_detached<
+        'a,
+        'b,
+        B: CoseSignCipher,
+        CKP: CoseKeyProvider<'a>,
+        CAP: CoseAadProvider<'b>,
+    >(
         &self,
         backend: &mut B,
-        key_provider: &CKP,
+        key_provider: &mut CKP,
         try_all_keys: bool,
         payload: &[u8],
-        aad: &[u8],
+        aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>>;
 }
 
 impl CoseSign1Ext for CoseSign1 {
-    fn try_verify<'a, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
+    fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider<'a>, CAP: CoseAadProvider<'b>>(
         &self,
         backend: &mut B,
-        key_provider: &CKP,
+        key_provider: &mut CKP,
         try_all_keys: bool,
-        aad: &[u8],
+        aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
-        let prot = self.protected.header.clone();
-        let unprot = self.unprotected.clone();
-        let verify = self.verify_signature(aad, |signature, toverify| {
+        let aad = aad.borrow_mut();
+        // Create a CoseSignature that has all the headers of the CoseSign1 object, in order to
+        // provide that to our AAD provider.
+        let sig = CoseSignatureBuilder::new()
+            .signature(self.signature.clone())
+            .protected(self.protected.header.clone())
+            .unprotected(self.unprotected.clone())
+            .build();
+        self.verify_signature(aad.lookup_aad(&sig), |signature, toverify| {
             try_verify(
                 backend,
                 key_provider,
-                &prot,
-                &unprot,
+                &self.protected.header,
+                &self.unprotected,
                 try_all_keys,
                 signature,
                 toverify,
@@ -469,15 +494,29 @@ impl CoseSign1Ext for CoseSign1 {
         Ok(())
     }
 
-    fn try_verify_detached<'a, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
+    fn try_verify_detached<
+        'a,
+        'b,
+        B: CoseSignCipher,
+        CKP: CoseKeyProvider<'a>,
+        CAP: CoseAadProvider<'b>,
+    >(
         &self,
         backend: &mut B,
-        key_provider: &CKP,
+        mut key_provider: &mut CKP,
         try_all_keys: bool,
         payload: &[u8],
-        aad: &[u8],
+        mut aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
-        self.verify_detached_signature(payload, aad, |signature, toverify| {
+        let aad = aad.borrow_mut();
+        // Create a CoseSignature that has all the headers of the CoseSign1 object, in order to
+        // provide that to our AAD provider.
+        let sig = CoseSignatureBuilder::new()
+            .signature(self.signature.clone())
+            .protected(self.protected.header.clone())
+            .unprotected(self.unprotected.clone())
+            .build();
+        self.verify_detached_signature(payload, aad.lookup_aad(&sig), |signature, toverify| {
             try_verify(
                 backend,
                 key_provider,
@@ -494,33 +533,46 @@ impl CoseSign1Ext for CoseSign1 {
 /// Extension trait that enables signing using predefined backends instead of by providing signature
 /// functions.
 pub trait CoseSignBuilderExt: Sized {
-    fn try_add_sign<B: CoseSignCipher>(
+    fn try_add_sign<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider<'a>, CAP: CoseAadProvider<'b>>(
         self,
         backend: &mut B,
         key: &CoseKey,
         sig: CoseSignature,
-        aad: &[u8],
+        aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>>;
 
-    fn try_add_sign_detached<B: CoseSignCipher>(
+    fn try_add_sign_detached<
+        'a,
+        'b,
+        B: CoseSignCipher,
+        CKP: CoseKeyProvider<'a>,
+        CAP: CoseAadProvider<'b>,
+    >(
         self,
         backend: &mut B,
         key: &CoseKey,
         sig: CoseSignature,
         payload: &[u8],
-        aad: &[u8],
+        aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>>;
 }
 
 impl CoseSignBuilderExt for CoseSignBuilder {
-    fn try_add_sign<B: CoseSignCipher>(
+    fn try_add_sign<
+        'a,
+        'b,
+        B: CoseSignCipher,
+        CKP: CoseKeyProvider<'a>,
+        CAP: CoseAadProvider<'b>,
+    >(
         self,
         backend: &mut B,
         key: &CoseKey,
         sig: CoseSignature,
-        aad: &[u8],
+        mut aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
-        self.try_add_created_signature(sig.clone(), aad, |tosign| {
+        let aad = aad.borrow_mut();
+        self.try_add_created_signature(sig.clone(), aad.lookup_aad(&sig), |tosign| {
             try_sign(
                 backend,
                 key,
@@ -531,15 +583,22 @@ impl CoseSignBuilderExt for CoseSignBuilder {
         })
     }
 
-    fn try_add_sign_detached<B: CoseSignCipher>(
+    fn try_add_sign_detached<
+        'a,
+        'b,
+        B: CoseSignCipher,
+        CKP: CoseKeyProvider<'a>,
+        CAP: CoseAadProvider<'b>,
+    >(
         self,
         backend: &mut B,
         key: &CoseKey,
         sig: CoseSignature,
         payload: &[u8],
-        aad: &[u8],
+        mut aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
-        self.try_add_detached_signature(sig.clone(), payload, aad, |tosign| {
+        let aad = aad.borrow_mut();
+        self.try_add_detached_signature(sig.clone(), payload, aad.lookup_aad(&sig), |tosign| {
             try_sign(
                 backend,
                 key,
@@ -555,44 +614,54 @@ impl CoseSignBuilderExt for CoseSignBuilder {
 ///      successful. However, some environments may have other policies, see
 ///      https://datatracker.ietf.org/doc/html/rfc9052#section-4.1.
 pub trait CoseSignExt {
-    fn try_verify<'a, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
+    fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider<'a>, CAP: CoseAadProvider<'b>>(
         &self,
         backend: &mut B,
-        key_provider: &CKP,
+        key_provider: &mut CKP,
         try_all_keys: bool,
-        aad: &[u8],
+        aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>>;
 
-    fn try_verify_detached<'a, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
+    fn try_verify_detached<
+        'a,
+        'b,
+        B: CoseSignCipher,
+        CKP: CoseKeyProvider<'a>,
+        CAP: CoseAadProvider<'b>,
+    >(
         &self,
         backend: &mut B,
-        key_provider: &CKP,
+        key_provider: &mut CKP,
         try_all_keys: bool,
         payload: &[u8],
-        aad: &[u8],
+        aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>>;
 }
 
 impl CoseSignExt for CoseSign {
-    fn try_verify<'a, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
+    fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider<'a>, CAP: CoseAadProvider<'b>>(
         &self,
         backend: &mut B,
-        key_provider: &CKP,
+        mut key_provider: &mut CKP,
         try_all_keys: bool,
-        aad: &[u8],
+        mut aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
         for sigindex in 0..self.signatures.len() {
-            match self.verify_signature(sigindex, aad, |signature, toverify| {
-                try_verify(
-                    backend,
-                    key_provider,
-                    &self.protected.header,
-                    &self.unprotected,
-                    try_all_keys,
-                    signature,
-                    toverify,
-                )
-            }) {
+            match self.verify_signature(
+                sigindex,
+                aad.borrow_mut().lookup_aad(&self.signatures[sigindex]),
+                |signature, toverify| {
+                    try_verify(
+                        backend,
+                        key_provider,
+                        &self.protected.header,
+                        &self.unprotected,
+                        try_all_keys,
+                        signature,
+                        toverify,
+                    )
+                },
+            ) {
                 Ok(()) => return Ok(()),
                 Err(_) => {
                     // TODO debug logging? Allow debugging why each verification failed?
@@ -603,26 +672,38 @@ impl CoseSignExt for CoseSign {
         Err(CoseCipherError::VerificationFailure)
     }
 
-    fn try_verify_detached<'a, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
+    fn try_verify_detached<
+        'a,
+        'b,
+        B: CoseSignCipher,
+        CKP: CoseKeyProvider<'a>,
+        CAP: CoseAadProvider<'b>,
+    >(
         &self,
         backend: &mut B,
-        key_provider: &CKP,
+        mut key_provider: &mut CKP,
         try_all_keys: bool,
         payload: &[u8],
-        aad: &[u8],
+        mut aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
+        let aad = aad.borrow_mut();
         for sigindex in 0..self.signatures.len() {
-            match self.verify_detached_signature(sigindex, payload, aad, |signature, toverify| {
-                try_verify(
-                    backend,
-                    key_provider,
-                    &self.protected.header,
-                    &self.unprotected,
-                    try_all_keys,
-                    signature,
-                    toverify,
-                )
-            }) {
+            match self.verify_detached_signature(
+                sigindex,
+                payload,
+                aad.lookup_aad(&self.signatures[sigindex]),
+                |signature, toverify| {
+                    try_verify(
+                        backend,
+                        key_provider,
+                        &self.protected.header,
+                        &self.unprotected,
+                        try_all_keys,
+                        signature,
+                        toverify,
+                    )
+                },
+            ) {
                 Ok(()) => return Ok(()),
                 Err(_) => {
                     // TODO debug logging? Allow debugging why each verification failed?

@@ -1,9 +1,12 @@
 use crate::error::CoseCipherError;
 use crate::token::cose::header_util::find_param_by_label;
 use ciborium::Value;
+use core::borrow::{Borrow, BorrowMut};
 use core::fmt::Display;
 use coset::iana::EnumI64;
-use coset::{iana, AsCborValue, CoseKey, KeyType, Label, RegisteredLabelWithPrivate};
+use coset::{
+    iana, AsCborValue, CoseKey, CoseSignature, KeyType, Label, RegisteredLabelWithPrivate,
+};
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
@@ -329,15 +332,22 @@ impl<'a, OE: Display> AsRef<CoseKey> for CoseSymmetricKey<'a, OE> {
 }
 
 pub trait CoseKeyProvider<'a> {
-    /// Look up a key based on the provided Key ID hint.
+    /// Look up a key for the signature based on the provided Key ID hint.
     ///
     /// The iterator returned should contain all [CoseKey]s of the provider that have a key ID
     /// matching the one provided, or all [CoseKey]s available if key_id is None.
-    fn lookup_key(&self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey>;
+    fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey>;
 }
 
-impl<'a, T: IntoIterator<Item = &'a CoseKey> + Clone + 'a> CoseKeyProvider<'a> for T {
-    fn lookup_key(&self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
+// Unfortunately, this implementation is exclusive with the implementation for &CoseKey, because at
+// some point, upstream coset may implement IntoIterator for &CoseKey, which would cause conflicting
+// implementations.
+// See https://github.com/rust-lang/rfcs/issues/2758
+// On nightly, we can avoid this issue by using the min_specialization feature.
+// See: https://rust-lang.github.io/rfcs/1210-impl-specialization.html
+#[cfg(feature = "nightly")]
+impl<'a, T: IntoIterator<Item = &'a CoseKey> + Clone + 'a> CoseKeyProvider<'a> for &T {
+    fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
         let mut iter: Box<dyn Iterator<Item = &'a CoseKey>> = Box::new(self.clone().into_iter());
 
         if let Some(kid) = key_id {
@@ -347,13 +357,100 @@ impl<'a, T: IntoIterator<Item = &'a CoseKey> + Clone + 'a> CoseKeyProvider<'a> f
     }
 }
 
-//pub struct KeyIdMatchingProvider<'a, T: CoseKeyProvider<'a>> {
-//    key_provider: T,
-//    _provider_lifetime: PhantomData<&'a T>,
-//}
-//
-//impl<'a, T: CoseKeyProvider<'a>> CoseKeyProvider<'a> for KeyIdMatchingProvider<'a, T> {
-//    fn lookup_key(&self, key_id: &'a [u8]) -> impl Iterator<Item = &'a CoseKey> {
-//        self.key_provider.lookup_key(key_id)
-//    }
-//}
+#[cfg(feature = "nightly")]
+impl<'a, U: AsRef<CoseKey>, T: IntoIterator<Item = U> + Clone + 'a> CoseKeyProvider<'a> for &T {
+    fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
+        let mut iter: Box<dyn Iterator<Item = &'a CoseKey>> = Box::new(self.clone().into_iter());
+
+        if let Some(kid) = key_id {
+            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == kid));
+        }
+        iter
+    }
+}
+
+impl<'a> CoseKeyProvider<'a> for &Vec<&'a CoseKey> {
+    fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
+        let mut iter: Box<dyn Iterator<Item = &'a CoseKey>> = Box::new(self.clone().into_iter());
+
+        if let Some(kid) = key_id {
+            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == kid));
+        }
+        iter
+    }
+}
+
+impl<'a> CoseKeyProvider<'a> for &'a Vec<CoseKey> {
+    fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
+        let mut iter: Box<dyn Iterator<Item = &'a CoseKey>> = Box::new(self.iter());
+
+        if let Some(kid) = key_id {
+            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == kid));
+        }
+        iter
+    }
+}
+
+impl<'a> CoseKeyProvider<'a> for Option<&'a CoseKey> {
+    fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
+        let ret: Box<dyn Iterator<Item = &'a CoseKey>> = match (self, &key_id) {
+            (Some(key), Some(key_id)) if key.key_id.as_slice() != key_id.as_slice() => {
+                Box::new(std::iter::empty())
+            }
+            (Some(key), Some(key_id)) => Box::new(std::iter::once(*key)),
+            (v, _) => Box::new(v.iter().map(|v| *v)),
+        };
+        ret
+    }
+}
+
+impl<'a> CoseKeyProvider<'a> for &'a CoseKey {
+    fn lookup_key(&mut self, _key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
+        std::iter::once(*self)
+    }
+}
+
+pub trait CoseAadProvider<'a>: BorrowMut<Self> {
+    /// Look up the additional authenticated data to verify for a given signature.
+    fn lookup_aad(&mut self, signature: &CoseSignature) -> &'a [u8];
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, T: Iterator<Item = &'a [u8]>> CoseAadProvider<'a> for &mut T {
+    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'a [u8] {
+        self.next().map(|v| v.as_ref()).unwrap_or(&[] as &[u8])
+    }
+}
+
+impl<'a> CoseAadProvider<'a> for &'a [u8] {
+    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'a [u8] {
+        self
+    }
+}
+
+impl<'a> CoseAadProvider<'a> for Option<&'a [u8]> {
+    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'a [u8] {
+        self.unwrap_or(&[] as &[u8])
+    }
+}
+
+impl<'a> CoseAadProvider<'a> for &'a Option<&'a [u8]> {
+    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'a [u8] {
+        self.unwrap_or(&[] as &[u8])
+    }
+}
+
+impl<'a, 'b: 'a> CoseAadProvider<'a> for std::slice::Iter<'a, &'b [u8]> {
+    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'b [u8] {
+        self.next().map(|v| *v).unwrap_or(&[] as &[u8])
+    }
+}
+
+impl<'a, 'b: 'a, I: Iterator, F> CoseAadProvider<'a> for std::iter::Map<I, F>
+where
+    F: FnMut(I::Item) -> &'b [u8],
+{
+    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'b [u8] {
+        self.next().unwrap_or(&[] as &[u8])
+    }
+}

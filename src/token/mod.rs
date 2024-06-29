@@ -176,79 +176,6 @@ pub mod cose;
 #[cfg(test)]
 #[cfg(disabled)]
 mod tests;
-/*
-/// Provides basic operations for encrypting and decrypting COSE structures.
-///
-/// This will be used by [`encrypt_access_token`] and [`decrypt_access_token`] (as well as the
-/// variants for multiple recipients: [`encrypt_access_token_multiple`]
-/// and [`decrypt_access_token_multiple`]) to apply the
-/// corresponding cryptographic operations to the constructed token bytestring.
-/// The [`set_headers` method](CoseCipher::set_headers) can be used to set parameters this
-/// cipher requires to be set.
-pub trait CoseEncryptCipher {
-    /// Encrypts the `plaintext` and `aad` with the given `key`, returning the result.
-    fn encrypt(
-        key: &CoseKey,
-        plaintext: &[u8],
-        aad: &[u8],
-        protected_header: &Header,
-        unprotected_header: &Header,
-    ) -> Vec<u8>;
-
-    /// Decrypts the `ciphertext` and `aad` with the given `key`, returning the result.
-    ///
-    /// # Errors
-    /// If the `ciphertext` and `aad` are invalid, i.e., can't be decrypted.
-    fn decrypt(
-        key: &CoseKey,
-        ciphertext: &[u8],
-        aad: &[u8],
-        unprotected_header: &Header,
-        protected_header: &ProtectedHeader,
-    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
-}
-
-/// Intended for ciphers which can encrypt for multiple recipients.
-/// For this purpose, a method must be provided which generates the Content Encryption Key.
-///
-/// If these recipients each use different key types, you can use an enum to represent them.
-pub trait MultipleEncryptCipher: CoseEncryptCipher {
-    /// Randomly generates a new Content Encryption Key (CEK) using the given `rng`.
-    /// The content of the `CoseEncrypt` will then be encrypted with the key, while each recipient
-    /// will be encrypted with a corresponding Key Encryption Key (KEK) provided by the caller
-    /// of [`encrypt_access_token_multiple`].
-    fn generate_cek<RNG: RngCore + CryptoRng>(rng: &mut RNG) -> CoseKey;
-}
-
-/// Provides basic operations for generating and verifying MAC tags for COSE structures.
-///
-/// This trait is currently not used by any access token function.
-pub trait CoseMacCipher {
-    /// Generates a MAC tag for the given `target` with the given `key` and returns it.
-    fn compute(
-        key: &CoseKey,
-        target: &[u8],
-        unprotected_header: &Header,
-        protected_header: &Header,
-    ) -> Vec<u8>;
-
-    /// Verifies the `tag` of the `maced_data` with the `key`.
-    ///
-    /// # Errors
-    /// If the `tag` is invalid or does not belong to the `maced_data`.
-    fn verify(
-        key: &CoseKey,
-        tag: &[u8],
-        maced_data: &[u8],
-        unprotected_header: &Header,
-        protected_header: &ProtectedHeader,
-    ) -> Result<(), CoseCipherError<Self::Error>>;
-}
-
-/// Marker trait intended for ciphers which can create MAC tags for multiple recipients.
-///
-/// If these recipients each use different key types, you can use an enum to represent them.
-pub trait MultipleMacCipher: CoseMacCipher {}*/
 
 /// Creates new headers if `unprotected_header` or `protected_header` is `None`, respectively,
 /// and passes them to the `cipher`'s `header` function, returning the mutated result.
@@ -429,7 +356,7 @@ where
             key,
             protected_header,
             unprotected_header,
-            external_aad.unwrap_or(&[]),
+            &mut external_aad.unwrap_or(&[]),
         )?
         .build()
         .to_vec()
@@ -481,7 +408,12 @@ where
         builder = builder.protected(protected);
     }
     for (key, signature) in keys.into_iter() {
-        builder = builder.try_add_sign(backend, key, signature, external_aad.unwrap_or(&[]))?;
+        builder = builder.try_add_sign::<T, &CoseKey, &[u8]>(
+            backend,
+            &mut &*key,
+            signature,
+            &mut external_aad.unwrap_or(&[]),
+        )?;
     }
 
     builder.build().to_vec().map_err(AccessTokenError::from)
@@ -558,22 +490,17 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
 ///   (e.g., if the `token`'s data does not match its signature).
 pub fn verify_access_token<'a, T, CKP>(
     backend: &mut T,
-    key_provider: &CKP,
+    key_provider: &mut CKP,
     try_all_keys: bool,
     token: &ByteString,
-    external_aad: Option<&[u8]>,
+    mut external_aad: Option<&[u8]>,
 ) -> Result<(), AccessTokenError<T::Error>>
 where
     T: CoseSignCipher,
     CKP: CoseKeyProvider<'a>,
 {
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
-    let result = sign.try_verify(
-        backend,
-        key_provider,
-        try_all_keys,
-        external_aad.unwrap_or(&[0; 0]),
-    );
+    let result = sign.try_verify(backend, key_provider, try_all_keys, &mut external_aad);
     result?;
 
     Ok(())
@@ -596,22 +523,17 @@ where
 ///   (e.g., if the `token`'s data does not match its signature).
 pub fn verify_access_token_multiple<'a, T, CKP>(
     backend: &mut T,
-    key_provider: &CKP,
+    key_provider: &mut CKP,
     try_all_keys: bool,
     token: &ByteString,
-    external_aad: Option<&[u8]>,
+    mut external_aad: Option<&[u8]>,
 ) -> Result<(), AccessTokenError<T::Error>>
 where
     T: CoseSignCipher,
     CKP: CoseKeyProvider<'a>,
 {
     let sign = CoseSign::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
-    sign.try_verify(
-        backend,
-        key_provider,
-        try_all_keys,
-        external_aad.unwrap_or(&[0; 0]),
-    )?;
+    sign.try_verify(backend, key_provider, try_all_keys, &mut &external_aad)?;
 
     // TODO NoMatchingRecipient error (probably requires CoseCipherError to have a variant for this
     //      as well)
