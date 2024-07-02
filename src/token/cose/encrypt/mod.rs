@@ -1,3 +1,4 @@
+mod encrypt;
 mod encrypt0;
 
 use crate::error::CoseCipherError;
@@ -45,7 +46,25 @@ pub trait CoseEncryptCipher {
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 }
 
-pub trait CoseKeyDistributionCipher: CoseEncryptCipher {}
+pub trait CoseKeyDistributionCipher: CoseEncryptCipher {
+    fn encrypt_aes_ecb(
+        &mut self,
+        algorithm: Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
+
+    fn decrypt_aes_ecb(
+        &mut self,
+        algorithm: Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
+}
 
 pub trait HeaderBuilderExt: Sized {
     fn gen_iv<B: CoseEncryptCipher>(

@@ -6,11 +6,14 @@ use crate::token::cose::header_util::{
 use crate::token::cose::key::{
     CoseAadProvider, CoseEc2Key, CoseKeyProvider, CoseParsedKey, CoseSymmetricKey, KeyParam,
 };
+use alloc::rc::Rc;
 use ciborium::Value;
 use core::fmt::Display;
 use coset::{iana, Algorithm, CoseEncrypt0, CoseEncrypt0Builder, Header, KeyOperation};
+use std::cell::RefCell;
+use std::collections::BTreeSet;
 
-fn is_valid_aes_key<'a, BE: Display>(
+pub(crate) fn is_valid_aes_key<'a, BE: Display>(
     algorithm: &Algorithm,
     parsed_key: CoseParsedKey<'a, BE>,
 ) -> Result<CoseSymmetricKey<'a, BE>, CoseCipherError<BE>> {
@@ -43,15 +46,17 @@ fn is_valid_aes_key<'a, BE: Display>(
             | iana::Algorithm::AES_CCM_16_64_128
             | iana::Algorithm::AES_CCM_64_64_128
             | iana::Algorithm::AES_CCM_16_128_128
-            | iana::Algorithm::AES_CCM_64_128_128,
+            | iana::Algorithm::AES_CCM_64_128_128
+            | iana::Algorithm::A128KW,
         ) => Some(16),
-        Algorithm::Assigned(iana::Algorithm::A192GCM) => Some(24),
+        Algorithm::Assigned(iana::Algorithm::A192GCM | iana::Algorithm::A192KW) => Some(24),
         Algorithm::Assigned(
             iana::Algorithm::A256GCM
             | iana::Algorithm::AES_CCM_16_64_256
             | iana::Algorithm::AES_CCM_64_64_256
             | iana::Algorithm::AES_CCM_16_128_256
-            | iana::Algorithm::AES_CCM_64_128_256,
+            | iana::Algorithm::AES_CCM_64_128_256
+            | iana::Algorithm::A256KW,
         ) => Some(32),
         _ => None,
     };
@@ -67,7 +72,7 @@ fn is_valid_aes_key<'a, BE: Display>(
     Ok(symm_key)
 }
 
-fn try_encrypt_single<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider<'a>>(
+fn try_encrypt_single<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
     key_provider: &mut CKP,
     protected: Option<&Header>,
@@ -77,17 +82,18 @@ fn try_encrypt_single<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider<'a>>(
     // NOTE: aad ist not the external AAD provided by the user, but the Enc_structure as defined in RFC 9052, Section 5.3
     aad: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    let parsed_key = determine_key_candidates(
+    let key = determine_key_candidates(
         key_provider,
         protected,
         unprotected,
-        &KeyOperation::Assigned(iana::KeyOperation::Sign),
-        false,
+        BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Encrypt)]),
+        try_all_keys,
     )?
     .into_iter()
     .next()
     .ok_or(CoseCipherError::NoKeyFound)?;
-    let algorithm = determine_algorithm(&parsed_key, protected, unprotected)?;
+    let parsed_key = CoseParsedKey::try_from(&key)?;
+    let algorithm = determine_algorithm(Some(&parsed_key), protected, unprotected)?;
 
     match algorithm {
         Algorithm::Assigned(
@@ -124,7 +130,7 @@ fn try_decrypt_with_key<B: CoseEncryptCipher>(
     // NOTE: aad ist not the external AAD provided by the user, but the Enc_structure as defined in RFC 9052, Section 5.3
     aad: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    let algorithm = determine_algorithm(&key, Some(protected), Some(unprotected))?;
+    let algorithm = determine_algorithm(Some(&key), Some(protected), Some(unprotected))?;
 
     match algorithm {
         Algorithm::Assigned(
@@ -157,9 +163,9 @@ fn try_decrypt_with_key<B: CoseEncryptCipher>(
     }
 }
 
-fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider<'a>>(
-    backend: &mut B,
-    key_provider: &mut CKP,
+pub(crate) fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider>(
+    backend: Rc<RefCell<&mut B>>,
+    key_provider: Rc<RefCell<&mut CKP>>,
     protected: &Header,
     unprotected: &Header,
     try_all_keys: bool,
@@ -168,13 +174,20 @@ fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider<'a>>(
     aad: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
     for key in determine_key_candidates(
-        key_provider,
+        *key_provider.borrow_mut(),
         Some(protected),
         Some(unprotected),
-        &KeyOperation::Assigned(iana::KeyOperation::Decrypt),
+        BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Decrypt)]),
         try_all_keys,
     )? {
-        match try_decrypt_with_key(backend, key, protected, unprotected, ciphertext, aad) {
+        match try_decrypt_with_key(
+            *backend.borrow_mut(),
+            CoseParsedKey::try_from(&key)?,
+            protected,
+            unprotected,
+            ciphertext,
+            aad,
+        ) {
             Ok(v) => return Ok(v),
             Err(e) => {
                 dbg!(e);
@@ -186,13 +199,7 @@ fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider<'a>>(
 }
 
 pub trait CoseEncrypt0Ext {
-    fn try_decrypt<
-        'a,
-        'b,
-        B: CoseEncryptCipher,
-        CKP: CoseKeyProvider<'a>,
-        CAP: CoseAadProvider<'b>,
-    >(
+    fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -202,19 +209,15 @@ pub trait CoseEncrypt0Ext {
 }
 
 impl CoseEncrypt0Ext for CoseEncrypt0 {
-    fn try_decrypt<
-        'a,
-        'b,
-        B: CoseEncryptCipher,
-        CKP: CoseKeyProvider<'a>,
-        CAP: CoseAadProvider<'b>,
-    >(
+    fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
         try_all_keys: bool,
         external_aad: &mut CAP,
     ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
+        let backend = Rc::new(RefCell::new(backend));
+        let key_provider = Rc::new(RefCell::new(key_provider));
         self.decrypt(
             external_aad.lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
             |ciphertext, aad| {
@@ -233,13 +236,7 @@ impl CoseEncrypt0Ext for CoseEncrypt0 {
 }
 
 pub trait CoseEncrypt0BuilderExt: Sized {
-    fn try_encrypt<
-        'a,
-        'b,
-        B: CoseEncryptCipher,
-        CKP: CoseKeyProvider<'a>,
-        CAP: CoseAadProvider<'b>,
-    >(
+    fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -252,13 +249,7 @@ pub trait CoseEncrypt0BuilderExt: Sized {
 }
 
 impl CoseEncrypt0BuilderExt for CoseEncrypt0Builder {
-    fn try_encrypt<
-        'a,
-        'b,
-        B: CoseEncryptCipher,
-        CKP: CoseKeyProvider<'a>,
-        CAP: CoseAadProvider<'b>,
-    >(
+    fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,

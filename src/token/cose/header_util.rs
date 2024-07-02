@@ -5,7 +5,7 @@ use crate::CoseSignCipher;
 use ciborium::Value;
 use core::fmt::Display;
 use coset::iana::EnumI64;
-use coset::{iana, Algorithm, Header, KeyOperation, Label};
+use coset::{iana, Algorithm, CoseKey, Header, KeyOperation, Label};
 use std::collections::BTreeSet;
 
 pub(crate) fn create_header_parameter_set(header_bucket: &Header) -> BTreeSet<Label> {
@@ -38,15 +38,19 @@ pub(crate) fn create_header_parameter_set(header_bucket: &Header) -> BTreeSet<La
     return header_bucket_fields;
 }
 
+pub(crate) fn find_param_index_by_label(
+    label: &Label,
+    param_vec: &Vec<(Label, Value)>,
+) -> Option<usize> {
+    // TODO assert that parameters are sorted (Vec::is_sorted is unstable rn).
+    param_vec.binary_search_by(|(v, _)| v.cmp(label)).ok()
+}
+
 pub(crate) fn find_param_by_label<'a>(
     label: &Label,
     param_vec: &'a Vec<(Label, Value)>,
 ) -> Option<&'a Value> {
-    // TODO assert that parameters are sorted (Vec::is_sorted is unstable rn).
-    param_vec
-        .binary_search_by(|(v, _)| v.cmp(label))
-        .map(|i| &param_vec.get(i).unwrap().1)
-        .ok()
+    find_param_index_by_label(label, param_vec).map(|i| &param_vec.get(i).unwrap().1)
 }
 
 pub(crate) fn check_for_duplicate_headers<E: Display>(
@@ -72,7 +76,7 @@ pub(crate) fn check_for_duplicate_headers<E: Display>(
 
 /// Determines the algorithm to use for the signing operation based on the supplied key and headers.
 pub(crate) fn determine_algorithm<CE: Display>(
-    parsed_key: &CoseParsedKey<'_, CE>,
+    parsed_key: Option<&CoseParsedKey<'_, CE>>,
     unprotected_header: Option<&Header>,
     protected_header: Option<&Header>,
 ) -> Result<Algorithm, CoseCipherError<CE>> {
@@ -83,60 +87,22 @@ pub(crate) fn determine_algorithm<CE: Display>(
     } else if let Some(Some(alg)) = unprotected_header.map(|v| &v.alg) {
         // ...in the unprotected header...
         Ok(alg.clone())
-    } else if let Some(alg) = &parsed_key.as_ref().alg {
+    } else if let Some(alg) = &parsed_key.map(|v| v.as_ref().alg.clone()).flatten() {
         // ...or the key itself.
         Ok(alg.clone())
     } else {
-        // Otherwise, determine a reasonable default from the key type.
-        match parsed_key {
-            CoseParsedKey::Ec2(ec2_key) => {
-                match &ec2_key.crv {
-                    // RFC 9053
-                    EllipticCurve::Assigned(iana::EllipticCurve::P_256) => {
-                        Ok(Algorithm::Assigned(iana::Algorithm::ES256))
-                    }
-                    EllipticCurve::Assigned(iana::EllipticCurve::P_384) => {
-                        Ok(Algorithm::Assigned(iana::Algorithm::ES384))
-                    }
-                    EllipticCurve::Assigned(iana::EllipticCurve::P_521) => {
-                        Ok(Algorithm::Assigned(iana::Algorithm::ES512))
-                    }
-                    // RFC 8812
-                    EllipticCurve::Assigned(iana::EllipticCurve::Secp256k1) => {
-                        Ok(Algorithm::Assigned(iana::Algorithm::ES256K))
-                    }
-                    // TODO brainpool curves (see IANA registry)
-                    // For all others, we don't know which algorithm to use.
-                    v => Err(CoseCipherError::NoDefaultAlgorithmForKey(
-                        ec2_key.as_ref().kty.clone(),
-                        Some(v.clone()),
-                    )),
-                }
-            }
-            CoseParsedKey::Okp(okp_key) => match &okp_key.crv {
-                EllipticCurve::Assigned(
-                    iana::EllipticCurve::Ed448 | iana::EllipticCurve::Ed25519,
-                ) => Ok(Algorithm::Assigned(iana::Algorithm::EdDSA)),
-                v => Err(CoseCipherError::NoDefaultAlgorithmForKey(
-                    okp_key.as_ref().kty.clone(),
-                    Some(v.clone()),
-                )),
-            },
-            CoseParsedKey::Symmetric(symm_key) => Err(CoseCipherError::NoDefaultAlgorithmForKey(
-                symm_key.as_ref().kty.clone(),
-                None,
-            )),
-        }
+        Err(CoseCipherError::NoAlgorithmDeterminable)
     }
 }
 
-pub(crate) fn determine_key_candidates<'a, CE: Display, CKP: CoseKeyProvider<'a>>(
-    key_provider: &mut CKP,
-    protected: Option<&Header>,
-    unprotected: Option<&Header>,
-    operation: &KeyOperation,
+pub(crate) fn determine_key_candidates<'a, CE: Display, CKP: CoseKeyProvider>(
+    key_provider: &'a mut CKP,
+    protected: Option<&'a Header>,
+    unprotected: Option<&'a Header>,
+    operation: BTreeSet<KeyOperation>,
     try_all_keys: bool,
-) -> Result<Vec<CoseParsedKey<'a, CE>>, CoseCipherError<CE>> {
+    // TODO could the return value be an iterator here? Would avoid parsing some of the keys.
+) -> Result<Box<dyn Iterator<Item = CoseKey> + 'a>, CoseCipherError<CE>> {
     let key_id = if try_all_keys {
         None
     } else {
@@ -147,9 +113,7 @@ pub(crate) fn determine_key_candidates<'a, CE: Display, CKP: CoseKeyProvider<'a>
             .filter(|v| !v.is_empty())
     };
 
-    key_provider
-        .lookup_key(key_id)
-        .filter(|k| k.key_ops.is_empty() || k.key_ops.contains(operation))
-        .map(CoseParsedKey::try_from)
-        .collect()
+    Ok(Box::new(key_provider.lookup_key(key_id).filter(move |k| {
+        k.key_ops.is_empty() || k.key_ops.intersection(&operation).next().is_some()
+    })))
 }

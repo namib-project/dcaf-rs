@@ -271,9 +271,9 @@ where
     /// your provided key does not provide the public key parts even though it is required for this
     /// operation.
     UnsupportedKeyDerivation,
-    /// The algorithm has not explicitly been specified and the given key does not have a
-    /// reasonable default algorithm to use, specify the algorithm in the headers explicitly to fix.
-    NoDefaultAlgorithmForKey(KeyType, Option<EllipticCurve>),
+    /// The algorithm has not explicitly been specified anywhere (protected headers, unprotected
+    /// headers or the key itself).
+    NoAlgorithmDeterminable,
     /// Your provided key does not support the given operation.
     KeyOperationNotPermitted(BTreeSet<KeyOperation>, KeyOperation),
     /// Key in given curve must be in different format.
@@ -347,9 +347,7 @@ where
             CoseCipherError::UnsupportedCurve(v) => CoseCipherError::UnsupportedCurve(v),
             CoseCipherError::UnsupportedAlgorithm(v) => CoseCipherError::UnsupportedAlgorithm(v),
             CoseCipherError::UnsupportedKeyDerivation => CoseCipherError::UnsupportedKeyDerivation,
-            CoseCipherError::NoDefaultAlgorithmForKey(v, w) => {
-                CoseCipherError::NoDefaultAlgorithmForKey(v, w)
-            }
+            CoseCipherError::NoAlgorithmDeterminable => CoseCipherError::NoAlgorithmDeterminable,
             CoseCipherError::KeyOperationNotPermitted(v, w) => {
                 CoseCipherError::KeyOperationNotPermitted(v, w)
             }
@@ -388,9 +386,7 @@ where
             CoseCipherError::UnsupportedCurve(v) => CoseCipherError::UnsupportedCurve(v),
             CoseCipherError::UnsupportedAlgorithm(v) => CoseCipherError::UnsupportedAlgorithm(v),
             CoseCipherError::UnsupportedKeyDerivation => CoseCipherError::UnsupportedKeyDerivation,
-            CoseCipherError::NoDefaultAlgorithmForKey(v, w) => {
-                CoseCipherError::NoDefaultAlgorithmForKey(v, w)
-            }
+            CoseCipherError::NoAlgorithmDeterminable => CoseCipherError::NoAlgorithmDeterminable,
             CoseCipherError::KeyOperationNotPermitted(v, w) => {
                 CoseCipherError::KeyOperationNotPermitted(v, w)
             }
@@ -437,11 +433,8 @@ where
                 f,
                 "backend does not support public key derivation from private key"
             ),
-            CoseCipherError::NoDefaultAlgorithmForKey(_, _) => {
-                write!(
-                    f,
-                    "key type of key does not have a sensible default algorithm"
-                )
+            CoseCipherError::NoAlgorithmDeterminable => {
+                write!(f, "no algorithm was provided in headers or key")
             }
             CoseCipherError::KeyOperationNotPermitted(_, _) => {
                 write!(f, "key does not permit the requested operation")

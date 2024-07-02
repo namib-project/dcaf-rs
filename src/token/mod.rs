@@ -485,7 +485,7 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
 ///   (e.g., if it's not in fact a [`CoseSign1`] structure but rather something else).
 /// - When there's a verification error coming from the cipher `T`
 ///   (e.g., if the `token`'s data does not match its signature).
-pub fn verify_access_token<'a, T, CKP>(
+pub fn verify_access_token<T, CKP>(
     backend: &mut T,
     key_provider: &mut CKP,
     try_all_keys: bool,
@@ -494,7 +494,7 @@ pub fn verify_access_token<'a, T, CKP>(
 ) -> Result<(), AccessTokenError<T::Error>>
 where
     T: CoseSignCipher,
-    CKP: CoseKeyProvider<'a>,
+    CKP: CoseKeyProvider,
 {
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
     let result = sign.try_verify(backend, key_provider, try_all_keys, &mut external_aad);
@@ -518,7 +518,7 @@ where
 ///   (e.g., if it's not in fact a [`CoseSign`] structure but rather something else).
 /// - When there's a verification error coming from the cipher `T`
 ///   (e.g., if the `token`'s data does not match its signature).
-pub fn verify_access_token_multiple<'a, T, CKP>(
+pub fn verify_access_token_multiple<T, CKP>(
     backend: &mut T,
     key_provider: &mut CKP,
     try_all_keys: bool,
@@ -527,10 +527,10 @@ pub fn verify_access_token_multiple<'a, T, CKP>(
 ) -> Result<(), AccessTokenError<T::Error>>
 where
     T: CoseSignCipher,
-    CKP: CoseKeyProvider<'a>,
+    CKP: CoseKeyProvider,
 {
     let sign = CoseSign::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
-    sign.try_verify(backend, key_provider, try_all_keys, &mut &external_aad)?;
+    sign.try_verify(backend, key_provider, try_all_keys, &mut external_aad)?;
 
     // TODO NoMatchingRecipient error (probably requires CoseCipherError to have a variant for this
     //      as well)

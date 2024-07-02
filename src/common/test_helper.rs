@@ -324,9 +324,7 @@ where
             CoseCipherError::UnsupportedCurve(v) => CoseCipherError::UnsupportedCurve(v),
             CoseCipherError::UnsupportedAlgorithm(v) => CoseCipherError::UnsupportedAlgorithm(v),
             CoseCipherError::UnsupportedKeyDerivation => CoseCipherError::UnsupportedKeyDerivation,
-            CoseCipherError::NoDefaultAlgorithmForKey(v, w) => {
-                CoseCipherError::NoDefaultAlgorithmForKey(v, w)
-            }
+            CoseCipherError::NoAlgorithmDeterminable => CoseCipherError::NoAlgorithmDeterminable,
             CoseCipherError::KeyOperationNotPermitted(v, w) => {
                 CoseCipherError::KeyOperationNotPermitted(v, w)
             }

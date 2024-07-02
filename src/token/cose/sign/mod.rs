@@ -19,6 +19,7 @@ use core::borrow::BorrowMut;
 use core::fmt::{Debug, Display};
 use coset::iana::{Ec2KeyParameter, EnumI64};
 use coset::{iana, Algorithm, CoseKey, Header, KeyOperation, RegisteredLabel};
+use std::collections::BTreeSet;
 
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
 pub use sign::{CoseSignBuilderExt, CoseSignExt};
@@ -191,24 +192,25 @@ fn is_valid_ecdsa_key<'a, BE: Display>(
     Ok(ec2_key)
 }
 
-fn try_sign<'a, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
+fn try_sign<'a, B: CoseSignCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
     key_provider: &mut CKP,
     protected: Option<&Header>,
     unprotected: Option<&Header>,
     tosign: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    let parsed_key = determine_key_candidates(
+    let key = determine_key_candidates(
         key_provider,
         protected,
         unprotected,
-        &KeyOperation::Assigned(iana::KeyOperation::Sign),
+        BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Sign)]),
         false,
     )?
     .into_iter()
     .next()
     .ok_or(CoseCipherError::NoKeyFound)?;
-    let algorithm = determine_algorithm(&parsed_key, protected, unprotected)?;
+    let parsed_key = CoseParsedKey::try_from(&key)?;
+    let algorithm = determine_algorithm(Some(&parsed_key), protected, unprotected)?;
 
     let sign_fn = match algorithm {
         Algorithm::Assigned(
@@ -244,7 +246,7 @@ fn try_verify_with_key<B: CoseSignCipher>(
     signature: &[u8],
     toverify: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
-    let algorithm = determine_algorithm(&key, Some(protected), Some(unprotected))?;
+    let algorithm = determine_algorithm(Some(&key), Some(protected), Some(unprotected))?;
 
     match algorithm {
         Algorithm::Assigned(
@@ -267,7 +269,7 @@ fn try_verify_with_key<B: CoseSignCipher>(
     }
 }
 
-fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
+fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
     key_provider: &mut CKP,
     protected: &'b Header,
@@ -280,10 +282,18 @@ fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider<'a>>(
         key_provider,
         Some(protected),
         Some(unprotected),
-        &KeyOperation::Assigned(iana::KeyOperation::Verify),
+        BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Verify)]),
         try_all_keys,
     )? {
-        match try_verify_with_key(backend, key, protected, unprotected, signature, toverify) {
+        let parsed_key = CoseParsedKey::try_from(&key)?;
+        match try_verify_with_key(
+            backend,
+            parsed_key,
+            protected,
+            unprotected,
+            signature,
+            toverify,
+        ) {
             Ok(()) => return Ok(()),
             Err(e) => {
                 dbg!(e);

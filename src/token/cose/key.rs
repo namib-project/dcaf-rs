@@ -331,12 +331,12 @@ impl<'a, OE: Display> AsRef<CoseKey> for CoseSymmetricKey<'a, OE> {
     }
 }
 
-pub trait CoseKeyProvider<'a> {
+pub trait CoseKeyProvider {
     /// Look up a key for the signature based on the provided Key ID hint.
     ///
     /// The iterator returned should contain all [CoseKey]s of the provider that have a key ID
     /// matching the one provided, or all [CoseKey]s available if key_id is None.
-    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = &'a CoseKey>;
+    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey>;
 }
 
 // Unfortunately, this implementation is exclusive with the implementation for &CoseKey, because at
@@ -345,7 +345,7 @@ pub trait CoseKeyProvider<'a> {
 // See https://github.com/rust-lang/rfcs/issues/2758
 // One solution would be the specialization feature, which is unfortunately not stabilized yet.
 // See: https://rust-lang.github.io/rfcs/1210-impl-specialization.html
-/*impl<'a, T: IntoIterator<Item = &'a CoseKey> + Clone + 'a> CoseKeyProvider<'a> for &T {
+/*impl<'a, T: IntoIterator<Item = &'a CoseKey> + Clone + 'a> CoseKeyProvider for &T {
     fn lookup_key(&mut self, key_id: Option<Vec<u8>>) -> impl Iterator<Item = &'a CoseKey> {
         let mut iter: Box<dyn Iterator<Item = &'a CoseKey>> = Box::new(self.clone().into_iter());
 
@@ -356,85 +356,79 @@ pub trait CoseKeyProvider<'a> {
     }
 }*/
 
-impl<'a> CoseKeyProvider<'a> for &Vec<&'a CoseKey> {
-    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = &'a CoseKey> {
-        let mut iter: Box<dyn Iterator<Item = &'a CoseKey>> = Box::new(self.clone().into_iter());
+impl CoseKeyProvider for &Vec<&CoseKey> {
+    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
+        let mut iter: Box<dyn Iterator<Item = &CoseKey>> = Box::new(self.clone().into_iter());
         if let Some(kid) = key_id {
             let test = Vec::from(kid);
             iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == test));
         }
-        iter
+        iter.cloned()
     }
 }
 
-impl<'a> CoseKeyProvider<'a> for &'a Vec<CoseKey> {
-    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = &'a CoseKey> {
-        let mut iter: Box<dyn Iterator<Item = &'a CoseKey>> = Box::new(self.iter());
+impl CoseKeyProvider for &Vec<CoseKey> {
+    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
+        let mut iter: Box<dyn Iterator<Item = &CoseKey>> = Box::new(self.iter());
 
         if let Some(kid) = key_id {
-            let test = Vec::from(kid);
-            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == test));
+            let kid = Vec::from(kid);
+            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == kid));
         }
-        iter
+        iter.cloned()
     }
 }
 
-impl<'a> CoseKeyProvider<'a> for Option<&'a CoseKey> {
-    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = &'a CoseKey> {
-        let ret: Box<dyn Iterator<Item = &'a CoseKey>> = match (self, &key_id) {
+impl CoseKeyProvider for Option<&CoseKey> {
+    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
+        let ret: Box<dyn Iterator<Item = &CoseKey>> = match (self, &key_id) {
             (Some(key), Some(key_id)) if key.key_id.as_slice() != *key_id => {
                 Box::new(std::iter::empty())
             }
             (Some(key), Some(key_id)) => Box::new(std::iter::once(*key)),
             (v, _) => Box::new(v.iter().map(|v| *v)),
         };
-        ret
+        ret.cloned()
     }
 }
 
-impl<'a> CoseKeyProvider<'a> for &'a CoseKey {
-    fn lookup_key(&mut self, _key_id: Option<&[u8]>) -> impl Iterator<Item = &'a CoseKey> {
-        std::iter::once(*self)
+impl CoseKeyProvider for &CoseKey {
+    fn lookup_key(&mut self, _key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
+        std::iter::once(self.clone())
     }
 }
 
-pub trait CoseAadProvider<'a>: BorrowMut<Self> {
+pub trait CoseAadProvider: BorrowMut<Self> {
     /// Look up the additional authenticated data to verify for a given signature.
-    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8];
+    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &[u8];
 }
 
 // See above, impossible due to missing specialization feature.
-/*impl<'a, T: Iterator<Item = &'a [u8]>> CoseAadProvider<'a> for &mut T {
+/*impl<'a, T: Iterator<Item = &'a [u8]>> CoseAadProvider for &mut T {
     fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'a [u8] {
         self.next().map(|v| v.as_ref()).unwrap_or(&[] as &[u8])
     }
 }*/
 
-impl<'a> CoseAadProvider<'a> for &'a [u8] {
-    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8] {
+impl CoseAadProvider for &[u8] {
+    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &[u8] {
         self
     }
 }
 
-impl<'a> CoseAadProvider<'a> for Option<&'a [u8]> {
-    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8] {
+impl CoseAadProvider for Option<&[u8]> {
+    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &[u8] {
         self.unwrap_or(&[] as &[u8])
     }
 }
 
-impl<'a> CoseAadProvider<'a> for &'a Option<&'a [u8]> {
-    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8] {
-        self.unwrap_or(&[] as &[u8])
-    }
-}
-
-impl<'a, 'b: 'a> CoseAadProvider<'a> for std::slice::Iter<'a, &'b [u8]> {
-    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8] {
+impl<'a, 'b: 'a> CoseAadProvider for std::slice::Iter<'a, &'b [u8]> {
+    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &[u8] {
         self.next().map(|v| *v).unwrap_or(&[] as &[u8])
     }
 }
 
-impl<'a, 'b: 'a, I: Iterator, F> CoseAadProvider<'a> for std::iter::Map<I, F>
+impl<'a, 'b: 'a, I: Iterator, F> CoseAadProvider for &'a mut std::iter::Map<I, F>
 where
     F: FnMut(I::Item) -> &'b [u8],
 {
