@@ -1,6 +1,7 @@
 use crate::error::CoseCipherError;
 use crate::token::cose::encrypt::CoseEncryptCipher;
 use crate::token::cose::key::CoseSymmetricKey;
+use crate::token::cose::CoseCipher;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use coset::iana::{Algorithm, EnumI64};
@@ -393,9 +394,11 @@ pub struct RngMockCipher<T: CoseEncryptCipher> {
     cipher: T,
 }
 
-impl<T: CoseEncryptCipher> CoseEncryptCipher for RngMockCipher<T> {
-    type Error = T::Error;
+impl<T: CoseEncryptCipher> CoseCipher for RngMockCipher<T> {
+    type Error = <T as CoseCipher>::Error;
+}
 
+impl<T: CoseEncryptCipher> CoseEncryptCipher for RngMockCipher<T> {
     // TODO reproducible outputs by mocking the RNG
     fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>> {
         todo!()

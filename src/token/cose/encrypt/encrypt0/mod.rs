@@ -80,14 +80,14 @@ impl CoseEncrypt0BuilderExt for CoseEncrypt0Builder {
         builder.try_create_ciphertext(
             plaintext,
             external_aad.lookup_aad(protected.as_ref(), unprotected.as_ref()),
-            |ciphertext, aad| {
-                encrypt::try_encrypt_single(
+            |plaintext, aad| {
+                encrypt::try_encrypt(
                     backend,
                     key_provider,
                     protected.as_ref(),
                     unprotected.as_ref(),
                     try_all_keys,
-                    ciphertext,
+                    plaintext,
                     aad,
                 )
             },

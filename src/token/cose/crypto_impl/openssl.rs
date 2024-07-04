@@ -10,10 +10,12 @@
  */
 #![cfg(feature = "openssl")]
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypt::CoseEncryptCipher;
+use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher};
 use crate::token::cose::header_util::find_param_by_label;
 use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
+use crate::token::cose::mac::CoseMacCipher;
 use crate::token::cose::sign::CoseSignCipher;
+use crate::token::cose::CoseCipher;
 use alloc::vec::Vec;
 use ciborium::value::Value;
 use core::ops::Deref;
@@ -27,7 +29,7 @@ use openssl::hash::MessageDigest;
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Private, Public};
 use openssl::sign::{Signer, Verifier};
-use openssl::symm::{decrypt_aead, encrypt_aead, Cipher};
+use openssl::symm::{decrypt, decrypt_aead, encrypt, encrypt_aead, Cipher};
 use std::convert::Infallible;
 use strum_macros::Display;
 
@@ -52,9 +54,11 @@ impl<T: Into<CoseOpensslCipherError>> From<T> for CoseCipherError<CoseOpensslCip
 
 pub struct OpensslContext {}
 
-impl CoseSignCipher for OpensslContext {
+impl CoseCipher for OpensslContext {
     type Error = CoseOpensslCipherError;
+}
 
+impl CoseSignCipher for OpensslContext {
     fn sign_ecdsa(
         &mut self,
         alg: Algorithm,
@@ -62,7 +66,7 @@ impl CoseSignCipher for OpensslContext {
         target: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         let (pad_size, group) = get_ecdsa_group_params(key)?;
-        let hash = get_ecdsa_hash_function(alg)?;
+        let hash = get_algorithm_hash_function(&alg)?;
 
         sign_ecdsa(&group, pad_size as i32, hash, key, target)
     }
@@ -75,7 +79,7 @@ impl CoseSignCipher for OpensslContext {
         target: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>> {
         let (pad_size, group) = get_ecdsa_group_params(key)?;
-        let hash = get_ecdsa_hash_function(alg)?;
+        let hash = get_algorithm_hash_function(&alg)?;
 
         verify_ecdsa(&group, pad_size, hash, key, signature, target)
     }
@@ -102,14 +106,18 @@ fn get_ecdsa_group_params(
     }
 }
 
-fn get_ecdsa_hash_function(
-    alg: Algorithm,
+fn get_algorithm_hash_function(
+    alg: &Algorithm,
 ) -> Result<MessageDigest, CoseCipherError<CoseOpensslCipherError>> {
     match alg {
         Algorithm::Assigned(iana::Algorithm::ES256) => Ok(MessageDigest::sha256()),
         Algorithm::Assigned(iana::Algorithm::ES384) => Ok(MessageDigest::sha384()),
         Algorithm::Assigned(iana::Algorithm::ES512) => Ok(MessageDigest::sha512()),
-        v => return Err(CoseCipherError::UnsupportedAlgorithm(v)),
+        Algorithm::Assigned(iana::Algorithm::HMAC_256_64) => Ok(MessageDigest::sha256()),
+        Algorithm::Assigned(iana::Algorithm::HMAC_256_256) => Ok(MessageDigest::sha256()),
+        Algorithm::Assigned(iana::Algorithm::HMAC_384_384) => Ok(MessageDigest::sha384()),
+        Algorithm::Assigned(iana::Algorithm::HMAC_512_512) => Ok(MessageDigest::sha512()),
+        v => return Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
     }
 }
 
@@ -234,8 +242,6 @@ fn cose_ec2_to_ec_public_key(
 const AES_GCM_TAG_LEN: usize = 16;
 
 impl CoseEncryptCipher for OpensslContext {
-    type Error = CoseOpensslCipherError;
-
     fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>> {
         openssl::rand::rand_bytes(buf).map_err(CoseCipherError::from)
     }
@@ -248,7 +254,7 @@ impl CoseEncryptCipher for OpensslContext {
         aad: &[u8],
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        let cipher = get_aes_gcm_cipher(&algorithm)?;
+        let cipher = algorithm_to_cipher(&algorithm)?;
         let mut auth_tag = vec![0; AES_GCM_TAG_LEN];
         let mut ciphertext = encrypt_aead(cipher, key.k, Some(iv), aad, plaintext, &mut auth_tag)
             .map_err(CoseCipherError::from)?;
@@ -265,7 +271,7 @@ impl CoseEncryptCipher for OpensslContext {
         aad: &[u8],
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        let cipher = get_aes_gcm_cipher(&algorithm)?;
+        let cipher = algorithm_to_cipher(&algorithm)?;
 
         let auth_tag = &ciphertext_with_tag[(ciphertext_with_tag.len() - AES_GCM_TAG_LEN)..];
         let ciphertext = &ciphertext_with_tag[..(ciphertext_with_tag.len() - AES_GCM_TAG_LEN)];
@@ -275,13 +281,83 @@ impl CoseEncryptCipher for OpensslContext {
     }
 }
 
-fn get_aes_gcm_cipher(
+fn algorithm_to_cipher(
     algorithm: &Algorithm,
 ) -> Result<Cipher, CoseCipherError<CoseOpensslCipherError>> {
     match algorithm {
         Algorithm::Assigned(iana::Algorithm::A128GCM) => Ok(Cipher::aes_128_gcm()),
         Algorithm::Assigned(iana::Algorithm::A192GCM) => Ok(Cipher::aes_192_gcm()),
         Algorithm::Assigned(iana::Algorithm::A256GCM) => Ok(Cipher::aes_256_gcm()),
+        Algorithm::Assigned(iana::Algorithm::A128KW) => Ok(Cipher::aes_128_ecb()),
+        Algorithm::Assigned(iana::Algorithm::A192KW) => Ok(Cipher::aes_192_ecb()),
+        Algorithm::Assigned(iana::Algorithm::A256KW) => Ok(Cipher::aes_256_ecb()),
         v => return Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+    }
+}
+
+impl CoseKeyDistributionCipher for OpensslContext {
+    fn encrypt_aes_single_block(
+        &mut self,
+        algorithm: Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let cipher = algorithm_to_cipher(&algorithm)?;
+        let ciphertext =
+            encrypt(cipher, key.k, Some(iv), plaintext).map_err(CoseCipherError::from)?;
+        Ok(ciphertext)
+    }
+
+    fn decrypt_aes_single_block(
+        &mut self,
+        algorithm: Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let cipher = algorithm_to_cipher(&algorithm)?;
+        let ciphertext =
+            decrypt(cipher, key.k, Some(iv), ciphertext).map_err(CoseCipherError::from)?;
+        Ok(ciphertext)
+    }
+}
+
+fn compute_hmac(
+    algorithm: Algorithm,
+    key: CoseSymmetricKey<'_, CoseOpensslCipherError>,
+    input: &[u8],
+) -> Result<Vec<u8>, CoseCipherError<CoseOpensslCipherError>> {
+    let hash = get_algorithm_hash_function(&algorithm)?;
+    let hmac_key = PKey::hmac(key.k)?;
+    let mut signer = Signer::new(hash, &hmac_key)?;
+    signer
+        .sign_oneshot_to_vec(input)
+        .map_err(CoseCipherError::from)
+}
+
+impl CoseMacCipher for OpensslContext {
+    fn compute_hmac(
+        &mut self,
+        algorithm: Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        data: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        compute_hmac(algorithm, key, data)
+    }
+
+    fn verify_hmac(
+        &mut self,
+        algorithm: Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        tag: &[u8],
+        data: &[u8],
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        let hmac = compute_hmac(algorithm, key, data)?;
+        // Use openssl::memcmp::eq to prevent timing attacks.
+        match openssl::memcmp::eq(hmac.as_slice(), tag) {
+            true => Ok(()),
+            false => Err(CoseCipherError::VerificationFailure),
+        }
     }
 }

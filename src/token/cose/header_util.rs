@@ -8,6 +8,24 @@ use coset::iana::EnumI64;
 use coset::{iana, Algorithm, CoseKey, Header, KeyOperation, Label};
 use std::collections::BTreeSet;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeaderParam {
+    Generic(iana::HeaderParameter),
+    Algorithm(iana::HeaderAlgorithmParameter),
+}
+
+impl From<iana::HeaderParameter> for HeaderParam {
+    fn from(value: iana::HeaderParameter) -> Self {
+        HeaderParam::Generic(value)
+    }
+}
+
+impl From<iana::HeaderAlgorithmParameter> for HeaderParam {
+    fn from(value: iana::HeaderAlgorithmParameter) -> Self {
+        HeaderParam::Algorithm(value)
+    }
+}
+
 pub(crate) fn create_header_parameter_set(header_bucket: &Header) -> BTreeSet<Label> {
     let mut header_bucket_fields = BTreeSet::new();
 

@@ -17,11 +17,13 @@ use std::collections::BTreeSet;
 use std::convert::Infallible;
 
 use ciborium::value::Value;
+use coset::iana::HeaderParameter;
 use coset::{iana, Algorithm, CoseError, KeyOperation, KeyType, Label};
 use strum_macros::IntoStaticStr;
 
 use {alloc::format, alloc::string::String, alloc::string::ToString};
 
+use crate::token::cose::header_util::HeaderParam;
 use crate::token::cose::key::{EllipticCurve, KeyParam};
 #[cfg(not(feature = "std"))]
 use {core::num::TryFromIntError, derive_builder::export::core::marker::PhantomData};
@@ -286,7 +288,12 @@ where
     InvalidKeyId(Vec<u8>),
     MissingKeyParam(KeyParam),
     InvalidKeyParam(KeyParam, Value),
+    MissingHeaderParam(HeaderParam),
+    InvalidHeaderParam(HeaderParam, Value),
     TypeMismatch(Value),
+    /// Provided algorithm does not support additional authenticated data (which also includes
+    /// protected headers).
+    AadUnsupported,
     NoKeyFound,
     IvRequired,
 }
@@ -367,6 +374,9 @@ where
             CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
             CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
             CoseCipherError::IvRequired => CoseCipherError::IvRequired,
+            CoseCipherError::MissingHeaderParam(v) => CoseCipherError::MissingHeaderParam(v),
+            CoseCipherError::InvalidHeaderParam(v, w) => CoseCipherError::InvalidHeaderParam(v, w),
+            CoseCipherError::AadUnsupported => CoseCipherError::AadUnsupported,
         }
     }
 
@@ -406,6 +416,9 @@ where
             CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
             CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
             CoseCipherError::IvRequired => CoseCipherError::IvRequired,
+            CoseCipherError::MissingHeaderParam(v) => CoseCipherError::MissingHeaderParam(v),
+            CoseCipherError::InvalidHeaderParam(v, w) => CoseCipherError::InvalidHeaderParam(v, w),
+            CoseCipherError::AadUnsupported => CoseCipherError::AadUnsupported,
         }
     }
 }
@@ -462,6 +475,18 @@ where
                 write!(
                     f,
                     "chosen algorithm requires an initialization vector, but none was provided"
+                )
+            }
+            CoseCipherError::MissingHeaderParam(_) => {
+                write!(f, "header parameter missing")
+            }
+            CoseCipherError::InvalidHeaderParam(_, _) => {
+                write!(f, "header parameter invalid")
+            }
+            CoseCipherError::AadUnsupported => {
+                write!(
+                    f,
+                    "algorithm does not support additional authenticated data"
                 )
             }
         }

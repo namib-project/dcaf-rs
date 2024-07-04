@@ -1,7 +1,7 @@
 use crate::error::CoseCipherError;
 use crate::token::cose::encrypt::is_valid_aes_key;
 use crate::token::cose::encrypt::CoseKeyDistributionCipher;
-use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
+use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates, HeaderParam};
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider, CoseParsedKey};
 use alloc::rc::Rc;
 use core::fmt::Display;
@@ -13,15 +13,38 @@ use std::cell::RefCell;
 use std::collections::{BTreeSet, VecDeque};
 use std::marker::PhantomData;
 
-pub struct CoseNestedRecipientSearchContext<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
-{
+pub(crate) struct CoseNestedRecipientSearchContext<
+    'a,
+    B: CoseKeyDistributionCipher,
+    CKP: CoseKeyProvider,
+> {
     recipient_iter: &'a Vec<CoseRecipient>,
     backend: Rc<RefCell<&'a mut B>>,
     key_provider: Rc<RefCell<&'a mut CKP>>,
     try_all_keys: bool,
     context: EncryptionContext,
-    iterator_store: Vec<CoseNestedRecipientIterator<'a, B, CKP>>,
     _key_lifetime_marker: PhantomData<&'a CKP>,
+}
+
+impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
+    CoseNestedRecipientSearchContext<'a, B, CKP>
+{
+    pub(crate) fn new(
+        recipient_iter: &'a Vec<CoseRecipient>,
+        backend: Rc<RefCell<&'a mut B>>,
+        key_provider: Rc<RefCell<&'a mut CKP>>,
+        try_all_keys: bool,
+        context: EncryptionContext,
+    ) -> CoseNestedRecipientSearchContext<'a, B, CKP> {
+        CoseNestedRecipientSearchContext {
+            recipient_iter,
+            backend,
+            key_provider,
+            try_all_keys,
+            context,
+            _key_lifetime_marker: Default::default(),
+        }
+    }
 }
 
 impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider> CoseKeyProvider
@@ -149,6 +172,7 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
             *self.key_provider.borrow_mut(),
             self.try_all_keys,
             self.context,
+            &mut (&[] as &[u8]),
         )?;
 
         for recipient in self.recipient_stack.iter().map(|v| *v).rev() {
@@ -158,6 +182,7 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
                 // Use all keys in current_keys for intermediates.
                 true,
                 self.context,
+                &mut (&[] as &[u8]),
             ) {
                 Ok(v) => current_keys = v,
                 Err(e @ CoseCipherError::UnsupportedAlgorithm(_)) => return Err(e),
@@ -340,11 +365,14 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
                     plaintext,
                     external_aad.lookup_aad(protected.as_ref(), unprotected.as_ref()),
                     |plaintext, aad| {
-                        backend.encrypt_aes_ecb(
+                        if !aad.is_empty() {
+                            return Err(CoseCipherError::AadUnsupported);
+                        }
+
+                        backend.encrypt_aes_single_block(
                             alg.clone(),
                             symm_key,
                             plaintext,
-                            aad,
                             // Fixed IV, see RFC 9053, Section 6.2.1
                             &[0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6],
                         )
@@ -364,22 +392,24 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
 }
 
 pub trait CoseRecipientExt {
-    fn try_decrypt<B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>(
+    fn try_decrypt<B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
         try_all_keys: bool,
         context: EncryptionContext,
+        external_aad: &mut CAP,
     ) -> Result<Vec<CoseKey>, CoseCipherError<B::Error>>;
 }
 
 impl CoseRecipientExt for CoseRecipient {
-    fn try_decrypt<B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>(
+    fn try_decrypt<B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
         try_all_keys: bool,
         context: EncryptionContext,
+        external_aad: &mut CAP,
     ) -> Result<Vec<CoseKey>, CoseCipherError<B::Error>> {
         let alg = match determine_algorithm::<B::Error>(
             None,
@@ -427,16 +457,23 @@ impl CoseRecipientExt for CoseRecipient {
                             continue;
                         }
                     };
-                    match self.decrypt(context, &[] as &[u8], |ciphertext, aad| {
-                        backend.decrypt_aes_ecb(
-                            alg.clone(),
-                            symm_key,
-                            ciphertext,
-                            aad,
-                            // Fixed IV, see RFC 9053, Section 6.2.1
-                            &[0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6],
-                        )
-                    }) {
+                    match self.decrypt(
+                        context,
+                        external_aad
+                            .lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
+                        |ciphertext, aad| {
+                            if !aad.is_empty() {
+                                return Err(CoseCipherError::AadUnsupported);
+                            }
+                            backend.decrypt_aes_single_block(
+                                alg.clone(),
+                                symm_key,
+                                ciphertext,
+                                // Fixed IV, see RFC 9053, Section 6.2.1
+                                &[0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6],
+                            )
+                        },
+                    ) {
                         Ok(v) => return Ok(vec![CoseKeyBuilder::new_symmetric_key(v).build()]),
                         Err(_e) => {
                             // Decryption using key failed, skip.

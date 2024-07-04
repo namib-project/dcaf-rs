@@ -3,34 +3,35 @@ use crate::token::cose::encrypt;
 use crate::token::cose::encrypt::try_decrypt;
 use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher};
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
+use crate::token::cose::mac::{try_compute, try_verify, CoseMacCipher};
 use crate::token::cose::recipient::CoseNestedRecipientSearchContext;
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use core::fmt::Display;
-use coset::{CoseEncrypt, CoseEncryptBuilder, EncryptionContext, Header};
+use coset::{CoseEncrypt, CoseEncryptBuilder, CoseMac, CoseMacBuilder, EncryptionContext, Header};
 
-pub trait CoseEncryptBuilderExt: Sized {
-    fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+pub trait CoseMacBuilderExt: Sized {
+    fn try_compute<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,
         try_all_keys: bool,
         protected: Option<Header>,
         unprotected: Option<Header>,
-        plaintext: &[u8],
+        payload: Vec<u8>,
         external_aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>>;
 }
 
-impl CoseEncryptBuilderExt for CoseEncryptBuilder {
-    fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+impl CoseMacBuilderExt for CoseMacBuilder {
+    fn try_compute<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,
         try_all_keys: bool,
         protected: Option<Header>,
         unprotected: Option<Header>,
-        plaintext: &[u8],
+        payload: Vec<u8>,
         external_aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let mut builder = self;
@@ -40,37 +41,38 @@ impl CoseEncryptBuilderExt for CoseEncryptBuilder {
         if let Some(unprotected) = &unprotected {
             builder = builder.unprotected(unprotected.clone());
         }
-        builder.try_create_ciphertext(
-            plaintext,
+        builder = builder.payload(payload);
+        Ok(builder.create_tag(
             external_aad.lookup_aad(protected.as_ref(), unprotected.as_ref()),
-            |plaintext, aad| {
-                encrypt::try_encrypt(
+            |input| {
+                // TODO proper error handling here
+                try_compute(
                     backend,
                     key_provider,
                     protected.as_ref(),
                     unprotected.as_ref(),
                     try_all_keys,
-                    plaintext,
-                    aad,
+                    input,
                 )
+                .expect("computing MAC failed")
             },
-        )
+        ))
     }
 }
 
-pub trait CoseEncryptExt {
-    fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+pub trait CoseMacExt {
+    fn try_verify<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
         try_all_keys: bool,
         external_aad: &mut CAP,
-    ) -> Result<Vec<u8>, CoseCipherError<B::Error>>;
+    ) -> Result<(), CoseCipherError<B::Error>>;
 
-    fn try_decrypt_with_recipients<
+    fn try_verify_with_recipients<
         'a,
         'b,
-        B: CoseKeyDistributionCipher + CoseEncryptCipher,
+        B: CoseKeyDistributionCipher + CoseMacCipher,
         CKP: CoseKeyProvider,
         CAP: CoseAadProvider,
     >(
@@ -79,39 +81,39 @@ pub trait CoseEncryptExt {
         key_provider: &mut CKP,
         try_all_keys: bool,
         external_aad: &mut CAP,
-    ) -> Result<Vec<u8>, CoseCipherError<B::Error>>;
+    ) -> Result<(), CoseCipherError<B::Error>>;
 }
 
-impl CoseEncryptExt for CoseEncrypt {
-    fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+impl CoseMacExt for CoseMac {
+    fn try_verify<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
         try_all_keys: bool,
         external_aad: &mut CAP,
-    ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
+    ) -> Result<(), CoseCipherError<B::Error>> {
         let backend = Rc::new(RefCell::new(backend));
         let key_provider = Rc::new(RefCell::new(key_provider));
-        self.decrypt(
+        self.verify_tag(
             external_aad.lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
-            |ciphertext, aad| {
-                encrypt::try_decrypt(
+            |tag, input| {
+                try_verify(
                     backend,
                     key_provider,
                     &self.protected.header,
                     &self.unprotected,
                     try_all_keys,
-                    ciphertext,
-                    aad,
+                    tag,
+                    input,
                 )
             },
         )
     }
 
-    fn try_decrypt_with_recipients<
+    fn try_verify_with_recipients<
         'a,
         'b,
-        B: CoseKeyDistributionCipher + CoseEncryptCipher,
+        B: CoseKeyDistributionCipher + CoseMacCipher,
         CKP: CoseKeyProvider,
         CAP: CoseAadProvider,
     >(
@@ -120,7 +122,7 @@ impl CoseEncryptExt for CoseEncrypt {
         key_provider: &mut CKP,
         try_all_keys: bool,
         external_aad: &mut CAP,
-    ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
+    ) -> Result<(), CoseCipherError<B::Error>> {
         let backend = Rc::new(RefCell::new(backend));
         let key_provider = Rc::new(RefCell::new(key_provider));
         let mut nested_recipient_key_provider = CoseNestedRecipientSearchContext::new(
@@ -130,17 +132,17 @@ impl CoseEncryptExt for CoseEncrypt {
             try_all_keys,
             EncryptionContext::CoseEncrypt,
         );
-        self.decrypt(
+        self.verify_tag(
             external_aad.lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
-            |ciphertext, aad| {
-                try_decrypt(
+            |tag, input| {
+                try_verify(
                     backend,
                     Rc::new(RefCell::new(&mut nested_recipient_key_provider)),
                     &self.protected.header,
                     &self.unprotected,
                     true,
-                    ciphertext,
-                    aad,
+                    tag,
+                    input,
                 )
             },
         )

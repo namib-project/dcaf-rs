@@ -22,6 +22,7 @@ use coset::{iana, Algorithm, CoseKey, Header, KeyOperation, RegisteredLabel};
 use std::collections::BTreeSet;
 
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
+use crate::token::cose::CoseCipher;
 pub use sign::{CoseSignBuilderExt, CoseSignExt};
 pub use sign1::{CoseSign1BuilderExt, CoseSign1Ext};
 
@@ -33,10 +34,7 @@ pub use sign1::{CoseSign1BuilderExt, CoseSign1Ext};
 /// corresponding cryptographic operations to the constructed token bytestring.
 /// The [`set_headers` method](CoseCipher::set_headers) can be used to set parameters
 /// this cipher requires to be set.
-pub trait CoseSignCipher {
-    /// Error type that this cipher uses in [`Result`]s returned by cryptographic operations.
-    type Error: Display + Debug;
-
+pub trait CoseSignCipher: CoseCipher {
     /// Cryptographically signs the `target` value with the `key` using ECDSA and returns the
     /// signature.
     ///

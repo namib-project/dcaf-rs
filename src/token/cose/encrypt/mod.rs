@@ -1,9 +1,10 @@
-//mod encrypt;
+mod encrypt;
 mod encrypt0;
 
 use crate::error::CoseCipherError;
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
 use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey, KeyParam};
+use crate::token::cose::CoseCipher;
 use crate::CoseSignCipher;
 use alloc::rc::Rc;
 use ciborium::Value;
@@ -20,10 +21,7 @@ use std::collections::BTreeSet;
 /// corresponding cryptographic operations to the constructed token bytestring.
 /// The [`set_headers` method](CoseCipher::set_headers) can be used to set parameters this
 /// cipher requires to be set.
-pub trait CoseEncryptCipher {
-    /// Error type that this cipher uses in [`Result`]s returned by cryptographic operations.
-    type Error: Display + Debug;
-
+pub trait CoseEncryptCipher: CoseCipher {
     /// Fill the given buffer with random bytes.
     ///
     /// Mainly used for IV generation if an IV is not provided by the application.
@@ -48,22 +46,20 @@ pub trait CoseEncryptCipher {
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 }
 
-pub trait CoseKeyDistributionCipher: CoseEncryptCipher {
-    fn encrypt_aes_ecb(
+pub trait CoseKeyDistributionCipher: CoseCipher {
+    fn encrypt_aes_single_block(
         &mut self,
         algorithm: Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         plaintext: &[u8],
-        aad: &[u8],
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 
-    fn decrypt_aes_ecb(
+    fn decrypt_aes_single_block(
         &mut self,
         algorithm: Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         ciphertext: &[u8],
-        aad: &[u8],
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 }
@@ -195,7 +191,7 @@ pub(crate) fn is_valid_aes_key<'a, BE: Display>(
     Ok(symm_key)
 }
 
-fn try_encrypt_single<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider>(
+fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
     key_provider: &mut CKP,
     protected: Option<&Header>,

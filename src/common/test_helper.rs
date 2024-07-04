@@ -344,6 +344,9 @@ where
             CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
             CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
             CoseCipherError::IvRequired => CoseCipherError::IvRequired,
+            CoseCipherError::MissingHeaderParam(v) => CoseCipherError::MissingHeaderParam(v),
+            CoseCipherError::InvalidHeaderParam(v, w) => CoseCipherError::InvalidHeaderParam(v, w),
+            CoseCipherError::AadUnsupported => CoseCipherError::AadUnsupported,
         }
     }
 }
