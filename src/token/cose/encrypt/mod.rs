@@ -47,7 +47,7 @@ pub trait CoseEncryptCipher: CoseCipher {
 }
 
 pub trait CoseKeyDistributionCipher: CoseCipher {
-    fn encrypt_aes_single_block(
+    fn aes_key_wrap(
         &mut self,
         algorithm: Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
@@ -55,7 +55,7 @@ pub trait CoseKeyDistributionCipher: CoseCipher {
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 
-    fn decrypt_aes_single_block(
+    fn aes_key_unwrap(
         &mut self,
         algorithm: Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,

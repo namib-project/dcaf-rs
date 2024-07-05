@@ -10,6 +10,7 @@ use coset::{
     EncryptionContext, Header, KeyOperation,
 };
 use std::cell::RefCell;
+use std::cmp::min;
 use std::collections::{BTreeSet, VecDeque};
 use std::marker::PhantomData;
 
@@ -112,8 +113,15 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider> Iterator
                     // respective stacks and proceed with next iteration.
                     self.iteration_state
                         .truncate(self.iteration_state.len() - 1);
-                    self.recipient_stack
-                        .truncate(self.recipient_stack.len() - 1);
+                    if self.recipient_stack.len() > 0 {
+                        self.recipient_stack
+                            .truncate(self.recipient_stack.len() - 1);
+                    } else {
+                        // If the recipient stack was already empty, we should have now removed the
+                        // last iterator from the stack (will cause loop exit on next iteration).
+                        debug_assert!(self.iteration_state.len() == 0)
+                    }
+
                     continue;
                 }
                 Some(r) => r,
@@ -159,6 +167,16 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider> Iterator
     }
 }
 
+pub(crate) fn struct_to_recipient_context(ctx: EncryptionContext) -> EncryptionContext {
+    match ctx {
+        EncryptionContext::CoseEncrypt => EncryptionContext::EncRecipient,
+        EncryptionContext::CoseEncrypt0 => EncryptionContext::EncRecipient, // TODO this shouldn't be possible - panic?
+        EncryptionContext::EncRecipient => EncryptionContext::RecRecipient,
+        EncryptionContext::MacRecipient => EncryptionContext::RecRecipient,
+        EncryptionContext::RecRecipient => EncryptionContext::RecRecipient,
+    }
+}
+
 impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
     CoseNestedRecipientIterator<'a, B, CKP>
 {
@@ -166,22 +184,35 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
         &mut self,
         leaf_recipient: &CoseRecipient,
     ) -> Result<VecDeque<CoseKey>, CoseCipherError<B::Error>> {
+        let ctx = if self.recipient_stack.len() > 0 {
+            EncryptionContext::RecRecipient
+        } else {
+            self.context
+        };
         // Attempt to decrypt leaf node, return (non-search-terminating) error if that doesn't work.
         let mut current_keys: Vec<CoseKey> = leaf_recipient.try_decrypt(
             *self.backend.borrow_mut(),
             *self.key_provider.borrow_mut(),
             self.try_all_keys,
-            self.context,
+            ctx,
             &mut (&[] as &[u8]),
         )?;
 
-        for recipient in self.recipient_stack.iter().map(|v| *v).rev() {
+        let mut iter = self.recipient_stack.iter().map(|v| *v).rev();
+
+        for (rpos, recipient) in iter.enumerate() {
+            let ctx = if self.recipient_stack.len() - 1 > rpos {
+                EncryptionContext::RecRecipient
+            } else {
+                struct_to_recipient_context(self.context)
+            };
+
             match recipient.try_decrypt(
                 *self.backend.borrow_mut(),
                 *self.key_provider.borrow_mut(),
                 // Use all keys in current_keys for intermediates.
                 true,
-                self.context,
+                ctx,
                 &mut (&[] as &[u8]),
             ) {
                 Ok(v) => current_keys = v,
@@ -360,16 +391,21 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
             ) => {
                 let symm_key = is_valid_aes_key(&alg, parsed_key)?;
 
+                if protected.is_some() && !protected.as_ref().unwrap().is_empty() {
+                    return Err(CoseCipherError::AadUnsupported);
+                }
+
                 self.try_create_ciphertext(
                     context,
                     plaintext,
-                    external_aad.lookup_aad(protected.as_ref(), unprotected.as_ref()),
-                    |plaintext, aad| {
-                        if !aad.is_empty() {
-                            return Err(CoseCipherError::AadUnsupported);
-                        }
-
-                        backend.encrypt_aes_single_block(
+                    external_aad.lookup_aad(
+                        Some(context),
+                        protected.as_ref(),
+                        unprotected.as_ref(),
+                    ),
+                    |plaintext, _aad| {
+                        // Ignore AAD as this is not an AEAD algorithm, just an AE algorithm.
+                        backend.aes_key_wrap(
                             alg.clone(),
                             symm_key,
                             plaintext,
@@ -457,15 +493,20 @@ impl CoseRecipientExt for CoseRecipient {
                             continue;
                         }
                     };
+                    if !self.protected.is_empty() {
+                        return Err(CoseCipherError::AadUnsupported);
+                    }
+                    dbg!(&self);
                     match self.decrypt(
                         context,
-                        external_aad
-                            .lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
-                        |ciphertext, aad| {
-                            if !aad.is_empty() {
-                                return Err(CoseCipherError::AadUnsupported);
-                            }
-                            backend.decrypt_aes_single_block(
+                        external_aad.lookup_aad(
+                            Some(context),
+                            Some(&self.protected.header),
+                            Some(&self.unprotected),
+                        ),
+                        |ciphertext, _aad| {
+                            // Ignore AAD as this is not an AEAD algorithm, just an AE algorithm.
+                            backend.aes_key_unwrap(
                                 alg.clone(),
                                 symm_key,
                                 ciphertext,
@@ -475,7 +516,8 @@ impl CoseRecipientExt for CoseRecipient {
                         },
                     ) {
                         Ok(v) => return Ok(vec![CoseKeyBuilder::new_symmetric_key(v).build()]),
-                        Err(_e) => {
+                        Err(e) => {
+                            dbg!(e);
                             // Decryption using key failed, skip.
                             continue;
                         }

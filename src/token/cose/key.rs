@@ -5,12 +5,13 @@ use core::borrow::{Borrow, BorrowMut};
 use core::fmt::Display;
 use coset::iana::EnumI64;
 use coset::{
-    iana, AsCborValue, CoseKey, CoseSignature, Header, KeyType, Label, RegisteredLabelWithPrivate,
+    iana, AsCborValue, CoseKey, CoseSignature, EncryptionContext, Header, KeyType, Label,
+    RegisteredLabelWithPrivate,
 };
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum KeyParam {
     Common(iana::KeyParameter),
     Ec2(iana::Ec2KeyParameter),
@@ -41,6 +42,8 @@ impl From<iana::SymmetricKeyParameter> for KeyParam {
         KeyParam::Symmetric(value)
     }
 }
+
+#[derive(Clone, Debug, PartialEq)]
 
 pub enum CoseParsedKey<'a, OE: Display> {
     Ec2(CoseEc2Key<'a, OE>),
@@ -93,6 +96,7 @@ impl<'a, OE: Display> From<CoseSymmetricKey<'a, OE>> for CoseParsedKey<'a, OE> {
 
 pub type EllipticCurve = RegisteredLabelWithPrivate<iana::EllipticCurve>;
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct CoseEc2Key<'a, OE: Display> {
     generic: &'a CoseKey,
     pub crv: EllipticCurve,
@@ -208,6 +212,7 @@ impl<'a, OE: Display> AsRef<CoseKey> for CoseEc2Key<'a, OE> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct CoseOkpKey<'a, OE: Display> {
     generic: &'a CoseKey,
     pub crv: EllipticCurve,
@@ -290,6 +295,7 @@ impl<'a, OE: Display> AsRef<CoseKey> for CoseOkpKey<'a, OE> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct CoseSymmetricKey<'a, OE: Display> {
     generic: &'a CoseKey,
     pub k: &'a [u8],
@@ -400,7 +406,12 @@ impl CoseKeyProvider for &CoseKey {
 
 pub trait CoseAadProvider: BorrowMut<Self> {
     /// Look up the additional authenticated data to verify for a given signature.
-    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &[u8];
+    fn lookup_aad(
+        &mut self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> &[u8];
 }
 
 // See above, impossible due to missing specialization feature.
@@ -411,20 +422,60 @@ pub trait CoseAadProvider: BorrowMut<Self> {
 }*/
 
 impl CoseAadProvider for &[u8] {
-    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &[u8] {
-        self
+    fn lookup_aad(
+        &mut self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> &[u8] {
+        match context {
+            Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => self,
+            Some(
+                EncryptionContext::EncRecipient
+                | EncryptionContext::MacRecipient
+                | EncryptionContext::RecRecipient,
+            ) => &[] as &[u8],
+        }
     }
 }
 
 impl CoseAadProvider for Option<&[u8]> {
-    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &[u8] {
-        self.unwrap_or(&[] as &[u8])
+    fn lookup_aad(
+        &mut self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> &[u8] {
+        match context {
+            Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => {
+                self.unwrap_or(&[] as &[u8])
+            }
+            Some(
+                EncryptionContext::EncRecipient
+                | EncryptionContext::MacRecipient
+                | EncryptionContext::RecRecipient,
+            ) => &[] as &[u8],
+        }
     }
 }
 
 impl<'a, 'b: 'a> CoseAadProvider for std::slice::Iter<'a, &'b [u8]> {
-    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &[u8] {
-        self.next().map(|v| *v).unwrap_or(&[] as &[u8])
+    fn lookup_aad(
+        &mut self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> &[u8] {
+        match context {
+            Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => {
+                self.next().map(|v| *v).unwrap_or(&[] as &[u8])
+            }
+            Some(
+                EncryptionContext::EncRecipient
+                | EncryptionContext::MacRecipient
+                | EncryptionContext::RecRecipient,
+            ) => &[] as &[u8],
+        }
     }
 }
 
@@ -432,7 +483,21 @@ impl<'a, 'b: 'a, I: Iterator, F> CoseAadProvider for &'a mut std::iter::Map<I, F
 where
     F: FnMut(I::Item) -> &'b [u8],
 {
-    fn lookup_aad(&mut self, protected: Option<&Header>, unprotected: Option<&Header>) -> &'a [u8] {
-        self.next().unwrap_or(&[] as &[u8])
+    fn lookup_aad(
+        &mut self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> &[u8] {
+        match context {
+            Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => {
+                self.next().unwrap_or(&[] as &[u8])
+            }
+            Some(
+                EncryptionContext::EncRecipient
+                | EncryptionContext::MacRecipient
+                | EncryptionContext::RecRecipient,
+            ) => &[] as &[u8],
+        }
     }
 }

@@ -5,6 +5,7 @@ use crate::CoseSignCipher;
 use core::borrow::BorrowMut;
 use coset::{CoseSign1, CoseSign1Builder, Header};
 
+#[cfg(all(test, feature = "std"))]
 mod tests;
 
 /// Extension trait that enables signing using predefined backends instead of by providing signature
@@ -77,7 +78,7 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
             builder = builder.unprotected(unprotected.clone());
         }
         builder.try_create_signature(
-            aad.lookup_aad(protected.as_ref(), unprotected.as_ref()),
+            aad.lookup_aad(None, protected.as_ref(), unprotected.as_ref()),
             |tosign| {
                 sign::try_sign(
                     backend,
@@ -107,7 +108,7 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
         }
         builder.try_create_detached_signature(
             payload,
-            aad.lookup_aad(protected.as_ref(), unprotected.as_ref()),
+            aad.lookup_aad(None, protected.as_ref(), unprotected.as_ref()),
             |tosign| {
                 sign::try_sign(
                     backend,
@@ -149,7 +150,7 @@ impl CoseSign1Ext for CoseSign1 {
         aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
         self.verify_signature(
-            aad.lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
+            aad.lookup_aad(None, Some(&self.protected.header), Some(&self.unprotected)),
             |signature, toverify| {
                 sign::try_verify(
                     backend,
@@ -182,7 +183,7 @@ impl CoseSign1Ext for CoseSign1 {
     ) -> Result<(), CoseCipherError<B::Error>> {
         self.verify_detached_signature(
             payload,
-            aad.lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
+            aad.lookup_aad(None, Some(&self.protected.header), Some(&self.unprotected)),
             |signature, toverify| {
                 sign::try_verify(
                     backend,

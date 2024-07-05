@@ -6,8 +6,8 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use coset::iana::{Algorithm, EnumI64};
 use coset::{
-    iana, AsCborValue, CborSerializable, CoseError, CoseKey, CoseKeyBuilder, Header, HeaderBuilder,
-    Label, TaggedCborSerializable,
+    iana, AsCborValue, CborSerializable, CoseError, CoseKey, CoseKeyBuilder, CoseRecipient,
+    CoseRecipientBuilder, Header, HeaderBuilder, Label, TaggedCborSerializable,
 };
 use serde::de::Error;
 use serde::{de, Deserialize, Deserializer};
@@ -96,6 +96,25 @@ where
     }
 }
 
+fn string_to_algorithm<'de, D: Deserializer<'de>>(
+    alg: Option<&str>,
+) -> Result<Option<Algorithm>, D::Error> {
+    match alg {
+        Some("ES256") => Ok(Some(Algorithm::ES256)),
+        Some("ES384") => Ok(Some(Algorithm::ES384)),
+        Some("ES512") => Ok(Some(Algorithm::ES512)),
+        Some("A128GCM") => Ok(Some(Algorithm::A128GCM)),
+        Some("A192GCM") => Ok(Some(Algorithm::A192GCM)),
+        Some("A256GCM") => Ok(Some(Algorithm::A256GCM)),
+        Some("A128KW") => Ok(Some(Algorithm::A128KW)),
+        Some("A192KW") => Ok(Some(Algorithm::A192KW)),
+        Some("A256KW") => Ok(Some(Algorithm::A256KW)),
+        Some("direct") => Ok(Some(Algorithm::Direct)),
+        None => Ok(None),
+        _ => Err(de::Error::custom("could not parse test case algorithm")),
+    }
+}
+
 fn deserialize_header<'de, D>(deserializer: D) -> Result<Option<Header>, D::Error>
 where
     D: Deserializer<'de>,
@@ -122,22 +141,15 @@ where
             .key_id(v.map_err(|e| de::Error::custom("could not parse test case key ID hex"))?);
     }
 
-    builder = match hdr_obj.get("alg").map(Value::as_str).flatten() {
-        Some("ES256") => builder.algorithm(Algorithm::ES256),
-        Some("ES384") => builder.algorithm(Algorithm::ES384),
-        Some("ES512") => builder.algorithm(Algorithm::ES512),
-        Some("A128GCM") => builder.algorithm(Algorithm::A128GCM),
-        Some("A192GCM") => builder.algorithm(Algorithm::A192GCM),
-        Some("A256GCM") => builder.algorithm(Algorithm::A256GCM),
-        Some("direct") => builder.algorithm(Algorithm::Direct),
-        Some(_) => return Err(de::Error::custom("could not parse test case algorithm")),
-        None => builder,
-    };
+    if let Some(alg) = string_to_algorithm::<D>(hdr_obj.get("alg").map(Value::as_str).flatten())? {
+        builder = builder.algorithm(alg);
+    }
 
     builder = match hdr_obj.get("ctyp").map(Value::as_i64).flatten() {
         Some(v) => {
-            let content_format = iana::CoapContentFormat::from_i64(v)
-                .ok_or(de::Error::custom("could not parse test case algorithm"))?;
+            let content_format = iana::CoapContentFormat::from_i64(v).ok_or(de::Error::custom(
+                "could not parse test case content format",
+            ))?;
             builder.content_format(content_format)
         }
         None => builder,
@@ -155,16 +167,7 @@ where
     } else {
         return Ok(None);
     };
-    match alg.as_str() {
-        Some("ES256") => Ok(Some(Algorithm::ES256)),
-        Some("ES384") => Ok(Some(Algorithm::ES384)),
-        Some("ES512") => Ok(Some(Algorithm::ES512)),
-        Some("A128GCM") => Ok(Some(Algorithm::A128GCM)),
-        Some("A192GCM") => Ok(Some(Algorithm::A192GCM)),
-        Some("A256GCM") => Ok(Some(Algorithm::A256GCM)),
-        Some("direct") => Ok(Some(Algorithm::Direct)),
-        _ => Err(de::Error::custom("could not parse test case algorithm")),
-    }
+    string_to_algorithm::<D>(alg.as_str())
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -208,6 +211,7 @@ pub struct TestCaseInput {
     pub sign0: Option<TestCaseRecipient>,
     pub sign: Option<TestCaseSign>,
     pub encrypted: Option<TestCaseEncrypted>,
+    pub enveloped: Option<TestCaseEncrypted>,
     #[serde(default)]
     pub failures: TestCaseFailures,
 }
@@ -248,8 +252,24 @@ pub struct TestCaseRecipient {
     pub failures: TestCaseFailures,
 }
 
+impl From<TestCaseRecipient> for CoseRecipientBuilder {
+    fn from(value: TestCaseRecipient) -> Self {
+        let mut builder = CoseRecipientBuilder::new();
+        if let Some(hdr) = value.unprotected {
+            builder = builder.unprotected(hdr);
+        }
+        if let Some(hdr) = value.protected {
+            builder = builder.protected(hdr);
+        }
+        builder
+    }
+}
+
 #[derive(Deserialize, Debug, Clone)]
-pub struct TestCaseIntermediates {}
+pub struct TestCaseIntermediates {
+    #[serde(rename = "CEK_hex", deserialize_with = "hex::deserialize", default)]
+    pub cek: Vec<u8>,
+}
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCaseOutput {

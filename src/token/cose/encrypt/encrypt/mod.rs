@@ -3,11 +3,16 @@ use crate::token::cose::encrypt;
 use crate::token::cose::encrypt::try_decrypt;
 use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher};
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
-use crate::token::cose::recipient::CoseNestedRecipientSearchContext;
+use crate::token::cose::recipient::{
+    struct_to_recipient_context, CoseNestedRecipientSearchContext,
+};
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use core::fmt::Display;
 use coset::{CoseEncrypt, CoseEncryptBuilder, EncryptionContext, Header};
+
+#[cfg(all(test, feature = "std"))]
+mod tests;
 
 pub trait CoseEncryptBuilderExt: Sized {
     fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
@@ -42,7 +47,11 @@ impl CoseEncryptBuilderExt for CoseEncryptBuilder {
         }
         builder.try_create_ciphertext(
             plaintext,
-            external_aad.lookup_aad(protected.as_ref(), unprotected.as_ref()),
+            external_aad.lookup_aad(
+                Some(EncryptionContext::CoseEncrypt),
+                protected.as_ref(),
+                unprotected.as_ref(),
+            ),
             |plaintext, aad| {
                 encrypt::try_encrypt(
                     backend,
@@ -93,7 +102,11 @@ impl CoseEncryptExt for CoseEncrypt {
         let backend = Rc::new(RefCell::new(backend));
         let key_provider = Rc::new(RefCell::new(key_provider));
         self.decrypt(
-            external_aad.lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
+            external_aad.lookup_aad(
+                Some(EncryptionContext::CoseEncrypt),
+                Some(&self.protected.header),
+                Some(&self.unprotected),
+            ),
             |ciphertext, aad| {
                 encrypt::try_decrypt(
                     backend,
@@ -128,10 +141,14 @@ impl CoseEncryptExt for CoseEncrypt {
             Rc::clone(&backend),
             Rc::clone(&key_provider),
             try_all_keys,
-            EncryptionContext::CoseEncrypt,
+            struct_to_recipient_context(EncryptionContext::CoseEncrypt),
         );
         self.decrypt(
-            external_aad.lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
+            external_aad.lookup_aad(
+                Some(EncryptionContext::CoseEncrypt),
+                Some(&self.protected.header),
+                Some(&self.unprotected),
+            ),
             |ciphertext, aad| {
                 try_decrypt(
                     backend,

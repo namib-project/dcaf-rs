@@ -4,9 +4,10 @@ use crate::token::cose::encrypt::CoseEncryptCipher;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
 use alloc::rc::Rc;
 use core::fmt::Display;
-use coset::{CoseEncrypt0, CoseEncrypt0Builder, Header};
+use coset::{CoseEncrypt0, CoseEncrypt0Builder, EncryptionContext, Header};
 use std::cell::RefCell;
 
+#[cfg(all(test, feature = "std"))]
 mod tests;
 
 pub trait CoseEncrypt0Ext {
@@ -30,7 +31,11 @@ impl CoseEncrypt0Ext for CoseEncrypt0 {
         let backend = Rc::new(RefCell::new(backend));
         let key_provider = Rc::new(RefCell::new(key_provider));
         self.decrypt(
-            external_aad.lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
+            external_aad.lookup_aad(
+                Some(EncryptionContext::CoseEncrypt0),
+                Some(&self.protected.header),
+                Some(&self.unprotected),
+            ),
             |ciphertext, aad| {
                 encrypt::try_decrypt(
                     backend,
@@ -79,7 +84,11 @@ impl CoseEncrypt0BuilderExt for CoseEncrypt0Builder {
         }
         builder.try_create_ciphertext(
             plaintext,
-            external_aad.lookup_aad(protected.as_ref(), unprotected.as_ref()),
+            external_aad.lookup_aad(
+                Some(EncryptionContext::CoseEncrypt0),
+                protected.as_ref(),
+                unprotected.as_ref(),
+            ),
             |plaintext, aad| {
                 encrypt::try_encrypt(
                     backend,

@@ -43,7 +43,7 @@ impl CoseMacBuilderExt for CoseMacBuilder {
         }
         builder = builder.payload(payload);
         Ok(builder.create_tag(
-            external_aad.lookup_aad(protected.as_ref(), unprotected.as_ref()),
+            external_aad.lookup_aad(None, protected.as_ref(), unprotected.as_ref()),
             |input| {
                 // TODO proper error handling here
                 try_compute(
@@ -95,7 +95,7 @@ impl CoseMacExt for CoseMac {
         let backend = Rc::new(RefCell::new(backend));
         let key_provider = Rc::new(RefCell::new(key_provider));
         self.verify_tag(
-            external_aad.lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
+            external_aad.lookup_aad(None, Some(&self.protected.header), Some(&self.unprotected)),
             |tag, input| {
                 try_verify(
                     backend,
@@ -133,7 +133,7 @@ impl CoseMacExt for CoseMac {
             EncryptionContext::CoseEncrypt,
         );
         self.verify_tag(
-            external_aad.lookup_aad(Some(&self.protected.header), Some(&self.unprotected)),
+            external_aad.lookup_aad(None, Some(&self.protected.header), Some(&self.unprotected)),
             |tag, input| {
                 try_verify(
                     backend,

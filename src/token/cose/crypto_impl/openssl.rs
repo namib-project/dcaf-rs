@@ -11,7 +11,7 @@
 #![cfg(feature = "openssl")]
 use crate::error::CoseCipherError;
 use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher};
-use crate::token::cose::header_util::find_param_by_label;
+use crate::token::cose::header_util::{find_param_by_label, HeaderParam};
 use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
 use crate::token::cose::mac::CoseMacCipher;
 use crate::token::cose::sign::CoseSignCipher;
@@ -21,6 +21,7 @@ use ciborium::value::Value;
 use core::ops::Deref;
 use coset::iana::EnumI64;
 use coset::{iana, Algorithm, CoseKey, Header, Label, ProtectedHeader};
+use openssl::aes::{unwrap_key, wrap_key, AesKey, KeyError};
 use openssl::bn::BigNum;
 use openssl::ec::{EcGroup, EcKey};
 use openssl::ecdsa::EcdsaSig;
@@ -33,16 +34,23 @@ use openssl::symm::{decrypt, decrypt_aead, encrypt, encrypt_aead, Cipher};
 use std::convert::Infallible;
 use strum_macros::Display;
 
-#[derive(Debug, Clone, Display)]
+#[derive(Debug, Display)]
 #[non_exhaustive]
 pub enum CoseOpensslCipherError {
     OpensslError(ErrorStack),
+    AesKeyError(openssl::aes::KeyError),
     Other(&'static str),
 }
 
 impl From<ErrorStack> for CoseOpensslCipherError {
     fn from(value: ErrorStack) -> Self {
         CoseOpensslCipherError::OpensslError(value)
+    }
+}
+
+impl From<openssl::aes::KeyError> for CoseOpensslCipherError {
+    fn from(value: openssl::aes::KeyError) -> Self {
+        CoseOpensslCipherError::AesKeyError(value)
     }
 }
 
@@ -277,7 +285,7 @@ impl CoseEncryptCipher for OpensslContext {
         let ciphertext = &ciphertext_with_tag[..(ciphertext_with_tag.len() - AES_GCM_TAG_LEN)];
 
         decrypt_aead(cipher, key.k, Some(iv), aad, ciphertext, auth_tag)
-            .map_err(CoseCipherError::from)
+            .map_err(|_e| CoseCipherError::DecryptionFailure)
     }
 }
 
@@ -296,30 +304,44 @@ fn algorithm_to_cipher(
 }
 
 impl CoseKeyDistributionCipher for OpensslContext {
-    fn encrypt_aes_single_block(
+    fn aes_key_wrap(
         &mut self,
-        algorithm: Algorithm,
+        _algorithm: Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         plaintext: &[u8],
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        let cipher = algorithm_to_cipher(&algorithm)?;
-        let ciphertext =
-            encrypt(cipher, key.k, Some(iv), plaintext).map_err(CoseCipherError::from)?;
-        Ok(ciphertext)
+        let key = AesKey::new_encrypt(key.k)?;
+        let iv: [u8; 8] = iv.clone().try_into().map_err(|_e| {
+            CoseCipherError::InvalidHeaderParam(
+                HeaderParam::Generic(iana::HeaderParameter::Iv),
+                Value::Bytes(iv.clone().to_vec()),
+            )
+        })?;
+        let mut output = vec![0u8; plaintext.len() + 8];
+        let output_len = wrap_key(&key, Some(iv), output.as_mut_slice(), plaintext.as_ref())?;
+        output.truncate(output_len);
+        Ok(output)
     }
 
-    fn decrypt_aes_single_block(
+    fn aes_key_unwrap(
         &mut self,
         algorithm: Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         ciphertext: &[u8],
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        let cipher = algorithm_to_cipher(&algorithm)?;
-        let ciphertext =
-            decrypt(cipher, key.k, Some(iv), ciphertext).map_err(CoseCipherError::from)?;
-        Ok(ciphertext)
+        let key = AesKey::new_decrypt(key.k)?;
+        let iv: [u8; 8] = iv.clone().try_into().map_err(|e| {
+            CoseCipherError::InvalidHeaderParam(
+                HeaderParam::Generic(iana::HeaderParameter::Iv),
+                Value::Bytes(iv.clone().to_vec()),
+            )
+        })?;
+        let mut output = vec![0u8; ciphertext.len() - 8];
+        let output_len = unwrap_key(&key, Some(iv), output.as_mut_slice(), ciphertext.as_ref())?;
+        output.truncate(output_len);
+        Ok(output)
     }
 }
 
