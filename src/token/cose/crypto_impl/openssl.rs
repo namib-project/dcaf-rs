@@ -64,6 +64,10 @@ pub struct OpensslContext {}
 
 impl CoseCipher for OpensslContext {
     type Error = CoseOpensslCipherError;
+
+    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>> {
+        openssl::rand::rand_bytes(buf).map_err(CoseCipherError::from)
+    }
 }
 
 impl CoseSignCipher for OpensslContext {
@@ -250,10 +254,6 @@ fn cose_ec2_to_ec_public_key(
 const AES_GCM_TAG_LEN: usize = 16;
 
 impl CoseEncryptCipher for OpensslContext {
-    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>> {
-        openssl::rand::rand_bytes(buf).map_err(CoseCipherError::from)
-    }
-
     fn encrypt_aes_gcm(
         &mut self,
         algorithm: Algorithm,

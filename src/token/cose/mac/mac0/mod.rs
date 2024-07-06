@@ -8,12 +8,15 @@ use crate::token::cose::recipient::CoseNestedRecipientSearchContext;
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use core::fmt::Display;
-use coset::{CoseEncrypt, CoseEncryptBuilder, CoseMac, CoseMacBuilder, EncryptionContext, Header};
+use coset::{
+    CoseEncrypt, CoseEncryptBuilder, CoseMac, CoseMac0, CoseMac0Builder, CoseMacBuilder,
+    EncryptionContext, Header,
+};
 
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
-pub trait CoseMacBuilderExt: Sized {
+pub trait CoseMac0BuilderExt: Sized {
     fn try_compute<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
@@ -26,7 +29,7 @@ pub trait CoseMacBuilderExt: Sized {
     ) -> Result<Self, CoseCipherError<B::Error>>;
 }
 
-impl CoseMacBuilderExt for CoseMacBuilder {
+impl CoseMac0BuilderExt for CoseMac0Builder {
     fn try_compute<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
@@ -63,22 +66,8 @@ impl CoseMacBuilderExt for CoseMacBuilder {
     }
 }
 
-pub trait CoseMacExt {
+pub trait CoseMac0Ext {
     fn try_verify<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
-        &self,
-        backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
-        external_aad: &mut CAP,
-    ) -> Result<(), CoseCipherError<B::Error>>;
-
-    fn try_verify_with_recipients<
-        'a,
-        'b,
-        B: CoseKeyDistributionCipher + CoseMacCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider,
-    >(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -87,7 +76,7 @@ pub trait CoseMacExt {
     ) -> Result<(), CoseCipherError<B::Error>>;
 }
 
-impl CoseMacExt for CoseMac {
+impl CoseMac0Ext for CoseMac0 {
     fn try_verify<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
@@ -106,44 +95,6 @@ impl CoseMacExt for CoseMac {
                     &self.protected.header,
                     &self.unprotected,
                     try_all_keys,
-                    tag,
-                    input,
-                )
-            },
-        )
-    }
-
-    fn try_verify_with_recipients<
-        'a,
-        'b,
-        B: CoseKeyDistributionCipher + CoseMacCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider,
-    >(
-        &self,
-        backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
-        external_aad: &mut CAP,
-    ) -> Result<(), CoseCipherError<B::Error>> {
-        let backend = Rc::new(RefCell::new(backend));
-        let key_provider = Rc::new(RefCell::new(key_provider));
-        let mut nested_recipient_key_provider = CoseNestedRecipientSearchContext::new(
-            &self.recipients,
-            Rc::clone(&backend),
-            Rc::clone(&key_provider),
-            try_all_keys,
-            EncryptionContext::MacRecipient,
-        );
-        self.verify_tag(
-            external_aad.lookup_aad(None, Some(&self.protected.header), Some(&self.unprotected)),
-            |tag, input| {
-                try_verify(
-                    backend,
-                    Rc::new(RefCell::new(&mut nested_recipient_key_provider)),
-                    &self.protected.header,
-                    &self.unprotected,
-                    true,
                     tag,
                     input,
                 )

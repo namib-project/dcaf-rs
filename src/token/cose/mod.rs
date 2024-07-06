@@ -1,3 +1,4 @@
+use crate::error::CoseCipherError;
 use core::fmt::{Debug, Display};
 
 pub mod crypto_impl;
@@ -14,4 +15,9 @@ mod test_helper;
 pub trait CoseCipher {
     /// Error type that this cipher uses in [`Result`]s returned by cryptographic operations.
     type Error: Display + Debug;
+
+    /// Fill the given buffer with random bytes.
+    ///
+    /// Mainly used for IV generation if an IV is not provided by the application.
+    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>>;
 }

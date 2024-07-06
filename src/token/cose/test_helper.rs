@@ -109,6 +109,9 @@ fn string_to_algorithm<'de, D: Deserializer<'de>>(
         Some("A128KW") => Ok(Some(Algorithm::A128KW)),
         Some("A192KW") => Ok(Some(Algorithm::A192KW)),
         Some("A256KW") => Ok(Some(Algorithm::A256KW)),
+        Some("HS256") => Ok(Some(Algorithm::HMAC_256_256)),
+        Some("HS384") => Ok(Some(Algorithm::HMAC_384_384)),
+        Some("HS512") => Ok(Some(Algorithm::HMAC_512_512)),
         Some("direct") => Ok(Some(Algorithm::Direct)),
         None => Ok(None),
         _ => Err(de::Error::custom("could not parse test case algorithm")),
@@ -212,6 +215,8 @@ pub struct TestCaseInput {
     pub sign: Option<TestCaseSign>,
     pub encrypted: Option<TestCaseEncrypted>,
     pub enveloped: Option<TestCaseEncrypted>,
+    pub mac0: Option<TestCaseMac>,
+    pub mac: Option<TestCaseMac>,
     #[serde(default)]
     pub failures: TestCaseFailures,
 }
@@ -227,6 +232,17 @@ pub struct TestCaseSign {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCaseEncrypted {
+    #[serde(deserialize_with = "deserialize_header", default)]
+    pub unprotected: Option<Header>,
+    #[serde(deserialize_with = "deserialize_header", default)]
+    pub protected: Option<Header>,
+    #[serde(deserialize_with = "hex::deserialize", default)]
+    pub external: Vec<u8>,
+    pub recipients: Vec<TestCaseRecipient>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct TestCaseMac {
     #[serde(deserialize_with = "deserialize_header", default)]
     pub unprotected: Option<Header>,
     #[serde(deserialize_with = "deserialize_header", default)]
@@ -416,14 +432,13 @@ pub struct RngMockCipher<T: CoseEncryptCipher> {
 
 impl<T: CoseEncryptCipher> CoseCipher for RngMockCipher<T> {
     type Error = <T as CoseCipher>::Error;
-}
-
-impl<T: CoseEncryptCipher> CoseEncryptCipher for RngMockCipher<T> {
     // TODO reproducible outputs by mocking the RNG
     fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>> {
         todo!()
     }
+}
 
+impl<T: CoseEncryptCipher> CoseEncryptCipher for RngMockCipher<T> {
     fn encrypt_aes_gcm(
         &mut self,
         algorithm: coset::Algorithm,

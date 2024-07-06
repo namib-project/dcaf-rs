@@ -31,6 +31,7 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 
 mod mac;
+mod mac0;
 
 pub(crate) fn is_valid_hmac_key<'a, BE: Display>(
     algorithm: &Algorithm,
@@ -126,9 +127,7 @@ fn try_verify_with_key<B: CoseMacCipher>(
     let algorithm = determine_algorithm(Some(&key), Some(protected), Some(unprotected))?;
 
     match algorithm {
-        Algorithm::Assigned(
-            iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM,
-        ) => {
+        Algorithm::Assigned(iana::Algorithm::HMAC_256_256) => {
             let symm_key = is_valid_hmac_key(&algorithm, key)?;
             backend.verify_hmac(algorithm, symm_key, tag, data)
         }

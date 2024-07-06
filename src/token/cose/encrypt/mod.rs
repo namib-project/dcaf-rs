@@ -22,11 +22,6 @@ use std::collections::BTreeSet;
 /// The [`set_headers` method](CoseCipher::set_headers) can be used to set parameters this
 /// cipher requires to be set.
 pub trait CoseEncryptCipher: CoseCipher {
-    /// Fill the given buffer with random bytes.
-    ///
-    /// Mainly used for IV generation if an IV is not provided by the application.
-    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>>;
-
     fn encrypt_aes_gcm(
         &mut self,
         algorithm: Algorithm,
@@ -73,7 +68,7 @@ pub trait HeaderBuilderExt: Sized {
 }
 
 impl HeaderBuilderExt for HeaderBuilder {
-    fn gen_iv<B: CoseEncryptCipher>(
+    fn gen_iv<B: CoseCipher>(
         self,
         backend: &mut B,
         alg: &Algorithm,
