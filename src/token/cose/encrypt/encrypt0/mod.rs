@@ -1,16 +1,18 @@
+use alloc::rc::Rc;
+use core::cell::RefCell;
+
+use coset::{CoseEncrypt0, CoseEncrypt0Builder, EncryptionContext, Header};
+
 use crate::error::CoseCipherError;
 use crate::token::cose::encrypt;
 use crate::token::cose::encrypt::CoseEncryptCipher;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
-use alloc::rc::Rc;
-use coset::{CoseEncrypt0, CoseEncrypt0Builder, EncryptionContext, Header};
-use std::cell::RefCell;
 
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
 pub trait CoseEncrypt0Ext {
-    fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -20,7 +22,7 @@ pub trait CoseEncrypt0Ext {
 }
 
 impl CoseEncrypt0Ext for CoseEncrypt0 {
-    fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -37,8 +39,8 @@ impl CoseEncrypt0Ext for CoseEncrypt0 {
             ),
             |ciphertext, aad| {
                 encrypt::try_decrypt(
-                    backend,
-                    key_provider,
+                    &backend,
+                    &key_provider,
                     &self.protected.header,
                     &self.unprotected,
                     try_all_keys,
@@ -51,7 +53,7 @@ impl CoseEncrypt0Ext for CoseEncrypt0 {
 }
 
 pub trait CoseEncrypt0BuilderExt: Sized {
-    fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -64,7 +66,7 @@ pub trait CoseEncrypt0BuilderExt: Sized {
 }
 
 impl CoseEncrypt0BuilderExt for CoseEncrypt0Builder {
-    fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,

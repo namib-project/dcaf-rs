@@ -11,9 +11,9 @@
 
 //! Contains error types used across this crate.
 
+use alloc::collections::BTreeSet;
 use core::any::type_name;
 use core::fmt::{Display, Formatter};
-use std::collections::BTreeSet;
 
 use ciborium::value::Value;
 use coset::{Algorithm, CoseError, KeyOperation, KeyType, Label};
@@ -23,10 +23,7 @@ use {alloc::format, alloc::string::String, alloc::string::ToString};
 
 use crate::token::cose::header_util::HeaderParam;
 use crate::token::cose::key::{EllipticCurve, KeyParam};
-#[cfg(not(feature = "std"))]
-use {core::num::TryFromIntError, derive_builder::export::core::marker::PhantomData};
-#[cfg(feature = "std")]
-use {std::marker::PhantomData, std::num::TryFromIntError};
+use core::{marker::PhantomData, num::TryFromIntError};
 
 /// Error type used when the parameter of the type `T` couldn't be
 /// converted into [`expected_type`](WrongSourceTypeError::expected_type) because the received

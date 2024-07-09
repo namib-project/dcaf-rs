@@ -1,6 +1,3 @@
-use crate::common::test_helper::FakeRng;
-use crate::token::CoseCipher;
-use crate::CoseSignCipher;
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
 use coset::iana::{Algorithm, KeyOperation};
 use coset::{
@@ -11,8 +8,13 @@ use openssl::bn::{BigNum, BigNumContext};
 use openssl::ec::{EcGroup, EcKey};
 use openssl::nid::Nid;
 use openssl::sign::{Signer, Verifier};
-use parameterized::parameterized;
 use serde::Serialize;
+
+use parameterized::parameterized;
+
+use crate::common::test_helper::FakeRng;
+use crate::token::CoseCipher;
+use crate::CoseSignCipher;
 
 fn p256_testkey() -> CoseKey {
     CoseKeyBuilder::new_ec2_priv_key(

@@ -737,16 +737,19 @@ mod conversion {
     impl ToCborMap for AccessTokenRequest {
         fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             let grant_type: Option<CborMapValue<GrantType>> = self.grant_type.map(CborMapValue);
-            cbor_map_vec! {
-                introspection::ISSUER => self.issuer.as_ref(),
-                token::REQ_CNF => self.req_cnf.as_ref().map(ToCborMap::to_ciborium_value),
-                token::AUDIENCE => self.audience.as_ref(),
-                token::SCOPE => self.scope.as_ref(),
-                token::CLIENT_ID => self.client_id.as_ref(),
-                token::REDIRECT_URI => self.redirect_uri.as_ref(),
-                token::GRANT_TYPE => grant_type,
-                token::ACE_PROFILE => self.ace_profile.as_ref(),
-                token::CNONCE => self.client_nonce.as_ref().map(|v| Value::Bytes(v.clone()))
+            #[allow(clippy::cast_lossless)]
+            {
+                cbor_map_vec! {
+                    introspection::ISSUER => self.issuer.as_ref(),
+                    token::REQ_CNF => self.req_cnf.as_ref().map(ToCborMap::to_ciborium_value),
+                    token::AUDIENCE => self.audience.as_ref(),
+                    token::SCOPE => self.scope.as_ref(),
+                    token::CLIENT_ID => self.client_id.as_ref(),
+                    token::REDIRECT_URI => self.redirect_uri.as_ref(),
+                    token::GRANT_TYPE => grant_type,
+                    token::ACE_PROFILE => self.ace_profile.as_ref(),
+                    token::CNONCE => self.client_nonce.as_ref().map(|v| Value::Bytes(v.clone()))
+                }
             }
         }
 
@@ -787,16 +790,19 @@ mod conversion {
         fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             let token_type: Option<CborMapValue<TokenType>> = self.token_type.map(CborMapValue);
             let ace_profile: Option<CborMapValue<AceProfile>> = self.ace_profile.map(CborMapValue);
-            cbor_map_vec! {
-                token::ACCESS_TOKEN => Some(Value::Bytes(self.access_token.clone())),
-                token::EXPIRES_IN => self.expires_in,
-                introspection::ISSUED_AT => self.issued_at.as_ref().map(|x| x.clone().to_cbor_value().expect("serialization of issued_at failed")),
-                token::CNF => self.cnf.as_ref().map(ToCborMap::to_ciborium_value),
-                token::SCOPE => self.scope.as_ref(),
-                token::TOKEN_TYPE => token_type,
-                token::REFRESH_TOKEN => self.refresh_token.as_ref().map(|v| Value::Bytes(v.clone())),
-                token::ACE_PROFILE => ace_profile,
-                token::RS_CNF => self.rs_cnf.as_ref().map(ToCborMap::to_ciborium_value)
+            #[allow(clippy::cast_lossless)]
+            {
+                cbor_map_vec! {
+                    token::ACCESS_TOKEN => Some(Value::Bytes(self.access_token.clone())),
+                    token::EXPIRES_IN => self.expires_in,
+                    introspection::ISSUED_AT => self.issued_at.as_ref().map(|x| x.clone().to_cbor_value().expect("serialization of issued_at failed")),
+                    token::CNF => self.cnf.as_ref().map(ToCborMap::to_ciborium_value),
+                    token::SCOPE => self.scope.as_ref(),
+                    token::TOKEN_TYPE => token_type,
+                    token::REFRESH_TOKEN => self.refresh_token.as_ref().map(|v| Value::Bytes(v.clone())),
+                    token::ACE_PROFILE => ace_profile,
+                    token::RS_CNF => self.rs_cnf.as_ref().map(ToCborMap::to_ciborium_value)
+                }
             }
         }
 

@@ -1,11 +1,13 @@
+use alloc::collections::BTreeSet;
+use core::fmt::Display;
+
+use ciborium::Value;
+use coset::iana::EnumI64;
+use coset::{iana, Algorithm, CoseKey, Header, KeyOperation, Label};
+
 use crate::error::CoseCipherError;
 use crate::token::cose::header_util;
 use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey};
-use ciborium::Value;
-use core::fmt::Display;
-use coset::iana::EnumI64;
-use coset::{iana, Algorithm, CoseKey, Header, KeyOperation, Label};
-use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeaderParam {
@@ -25,7 +27,7 @@ impl From<iana::HeaderAlgorithmParameter> for HeaderParam {
     }
 }
 
-pub(crate) fn create_header_parameter_set(header_bucket: &Header) -> BTreeSet<Label> {
+fn create_header_parameter_set(header_bucket: &Header) -> BTreeSet<Label> {
     let mut header_bucket_fields = BTreeSet::new();
 
     if header_bucket.alg.is_some() {
@@ -57,7 +59,7 @@ pub(crate) fn create_header_parameter_set(header_bucket: &Header) -> BTreeSet<La
 
 pub(crate) fn find_param_index_by_label(
     label: &Label,
-    param_vec: &Vec<(Label, Value)>,
+    param_vec: &[(Label, Value)],
 ) -> Option<usize> {
     // TODO assert that parameters are sorted (Vec::is_sorted is unstable rn).
     param_vec.binary_search_by(|(v, _)| v.cmp(label)).ok()
@@ -70,6 +72,8 @@ pub(crate) fn find_param_by_label<'a>(
     find_param_index_by_label(label, param_vec).map(|i| &param_vec.get(i).unwrap().1)
 }
 
+// TODO is this something we should enforce? It shouldn't prevent us from serializing the structure
+//      if we want to...
 pub(crate) fn check_for_duplicate_headers<E: Display>(
     protected_header: &Header,
     unprotected_header: &Header,
@@ -79,12 +83,12 @@ pub(crate) fn check_for_duplicate_headers<E: Display>(
     let duplicate_header_fields: Vec<&Label> = unprotected_header_set
         .intersection(&protected_header_set)
         .collect();
-    if !duplicate_header_fields.is_empty() {
+    if duplicate_header_fields.is_empty() {
+        Ok(())
+    } else {
         Err(CoseCipherError::DuplicateHeaders(
             duplicate_header_fields.into_iter().cloned().collect(),
         ))
-    } else {
-        Ok(())
     }
 }
 
@@ -116,7 +120,7 @@ pub(crate) fn determine_key_candidates<'a, CE: Display, CKP: CoseKeyProvider>(
     operation: BTreeSet<KeyOperation>,
     try_all_keys: bool,
     // TODO could the return value be an iterator here? Would avoid parsing some of the keys.
-) -> Result<Box<dyn Iterator<Item = CoseKey> + 'a>, CoseCipherError<CE>> {
+) -> Box<dyn Iterator<Item = CoseKey> + 'a> {
     let key_id = if try_all_keys {
         None
     } else {
@@ -127,7 +131,7 @@ pub(crate) fn determine_key_candidates<'a, CE: Display, CKP: CoseKeyProvider>(
             .filter(|v| !v.is_empty())
     };
 
-    Ok(Box::new(key_provider.lookup_key(key_id).filter(move |k| {
+    Box::new(key_provider.lookup_key(key_id).filter(move |k| {
         k.key_ops.is_empty() || k.key_ops.intersection(&operation).next().is_some()
-    })))
+    }))
 }

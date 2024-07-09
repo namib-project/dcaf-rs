@@ -1,3 +1,8 @@
+use alloc::rc::Rc;
+use core::cell::RefCell;
+
+use coset::{CoseEncrypt, CoseEncryptBuilder, EncryptionContext, Header};
+
 use crate::error::CoseCipherError;
 use crate::token::cose::encrypt;
 use crate::token::cose::encrypt::try_decrypt;
@@ -6,15 +11,12 @@ use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
 use crate::token::cose::recipient::{
     struct_to_recipient_context, CoseNestedRecipientSearchContext,
 };
-use alloc::rc::Rc;
-use core::cell::RefCell;
-use coset::{CoseEncrypt, CoseEncryptBuilder, EncryptionContext, Header};
 
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
 pub trait CoseEncryptBuilderExt: Sized {
-    fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -27,7 +29,7 @@ pub trait CoseEncryptBuilderExt: Sized {
 }
 
 impl CoseEncryptBuilderExt for CoseEncryptBuilder {
-    fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -67,7 +69,7 @@ impl CoseEncryptBuilderExt for CoseEncryptBuilder {
 }
 
 pub trait CoseEncryptExt {
-    fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -76,8 +78,6 @@ pub trait CoseEncryptExt {
     ) -> Result<Vec<u8>, CoseCipherError<B::Error>>;
 
     fn try_decrypt_with_recipients<
-        'a,
-        'b,
         B: CoseKeyDistributionCipher + CoseEncryptCipher,
         CKP: CoseKeyProvider,
         CAP: CoseAadProvider,
@@ -91,7 +91,7 @@ pub trait CoseEncryptExt {
 }
 
 impl CoseEncryptExt for CoseEncrypt {
-    fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -108,8 +108,8 @@ impl CoseEncryptExt for CoseEncrypt {
             ),
             |ciphertext, aad| {
                 encrypt::try_decrypt(
-                    backend,
-                    key_provider,
+                    &backend,
+                    &key_provider,
                     &self.protected.header,
                     &self.unprotected,
                     try_all_keys,
@@ -121,8 +121,6 @@ impl CoseEncryptExt for CoseEncrypt {
     }
 
     fn try_decrypt_with_recipients<
-        'a,
-        'b,
         B: CoseKeyDistributionCipher + CoseEncryptCipher,
         CKP: CoseKeyProvider,
         CAP: CoseAadProvider,
@@ -150,8 +148,8 @@ impl CoseEncryptExt for CoseEncrypt {
             ),
             |ciphertext, aad| {
                 try_decrypt(
-                    backend,
-                    Rc::new(RefCell::new(&mut nested_recipient_key_provider)),
+                    &backend,
+                    &Rc::new(RefCell::new(&mut nested_recipient_key_provider)),
                     &self.protected.header,
                     &self.unprotected,
                     true,

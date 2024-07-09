@@ -1,5 +1,6 @@
-use crate::error::CoseCipherError;
 use core::fmt::{Debug, Display};
+
+use crate::error::CoseCipherError;
 
 pub mod crypto_impl;
 pub mod encrypt;

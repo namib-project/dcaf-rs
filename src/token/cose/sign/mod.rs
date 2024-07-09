@@ -8,20 +8,22 @@
  *
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
-mod sign;
-mod sign1;
-
-use crate::error::CoseCipherError;
-use crate::token::cose::key::{CoseEc2Key, CoseKeyProvider, CoseParsedKey, KeyParam};
+use alloc::collections::BTreeSet;
 use core::fmt::Display;
+
 use coset::iana::Ec2KeyParameter;
 use coset::{iana, Algorithm, Header, KeyOperation};
-use std::collections::BTreeSet;
 
-use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
-use crate::token::cose::CoseCipher;
 pub use sign::{CoseSignBuilderExt, CoseSignExt};
 pub use sign1::{CoseSign1BuilderExt, CoseSign1Ext};
+
+use crate::error::CoseCipherError;
+use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
+use crate::token::cose::key::{CoseEc2Key, CoseKeyProvider, CoseParsedKey, KeyParam};
+use crate::token::cose::CoseCipher;
+
+mod sign;
+mod sign1;
 
 /// Provides basic operations for signing and verifying COSE structures.
 ///
@@ -187,7 +189,7 @@ fn is_valid_ecdsa_key<'a, BE: Display>(
     Ok(ec2_key)
 }
 
-fn try_sign<'a, B: CoseSignCipher, CKP: CoseKeyProvider>(
+fn try_sign<B: CoseSignCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
     key_provider: &mut CKP,
     protected: Option<&Header>,
@@ -261,11 +263,11 @@ fn try_verify_with_key<B: CoseSignCipher>(
     }
 }
 
-fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider>(
+fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
     key_provider: &mut CKP,
-    protected: &'b Header,
-    unprotected: &'b Header,
+    protected: &Header,
+    unprotected: &Header,
     try_all_keys: bool,
     signature: &[u8],
     toverify: &[u8],

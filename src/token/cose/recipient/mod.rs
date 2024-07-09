@@ -1,17 +1,19 @@
+use alloc::collections::{BTreeSet, VecDeque};
+use alloc::rc::Rc;
+use core::cell::RefCell;
+use core::fmt::Display;
+use core::marker::PhantomData;
+
+use coset::{
+    iana, Algorithm, CoseKey, CoseKeyBuilder, CoseRecipient, CoseRecipientBuilder,
+    EncryptionContext, Header, KeyOperation,
+};
+
 use crate::error::CoseCipherError;
 use crate::token::cose::encrypt::is_valid_aes_key;
 use crate::token::cose::encrypt::CoseKeyDistributionCipher;
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider, CoseParsedKey};
-use alloc::rc::Rc;
-use core::fmt::Display;
-use coset::{
-    iana, Algorithm, CoseKey, CoseKeyBuilder, CoseRecipient, CoseRecipientBuilder,
-    EncryptionContext, Header, KeyOperation,
-};
-use std::cell::RefCell;
-use std::collections::{BTreeSet, VecDeque};
-use std::marker::PhantomData;
 
 pub(crate) struct CoseNestedRecipientSearchContext<
     'a,
@@ -42,7 +44,7 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
             key_provider,
             try_all_keys,
             context,
-            _key_lifetime_marker: Default::default(),
+            _key_lifetime_marker: PhantomData,
         }
     }
 }
@@ -50,14 +52,14 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
 impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider> CoseKeyProvider
     for CoseNestedRecipientSearchContext<'a, B, CKP>
 {
-    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> + 'a {
+    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
         let mut iter: Box<dyn Iterator<Item = CoseKey>> = Box::new(CoseNestedRecipientIterator {
             iteration_state: vec![self.recipient_iter.iter()],
             recipient_stack: vec![],
             backend: Rc::clone(&self.backend),
             key_provider: Rc::clone(&self.key_provider),
             try_all_keys: self.try_all_keys,
-            current_key_candidates: Default::default(),
+            current_key_candidates: VecDeque::default(),
             current_candidates_position: 0,
             last_error: None,
             context: self.context,
@@ -112,13 +114,13 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider> Iterator
                     // respective stacks and proceed with next iteration.
                     self.iteration_state
                         .truncate(self.iteration_state.len() - 1);
-                    if !self.recipient_stack.is_empty() {
-                        self.recipient_stack
-                            .truncate(self.recipient_stack.len() - 1);
-                    } else {
+                    if self.recipient_stack.is_empty() {
                         // If the recipient stack was already empty, we should have now removed the
                         // last iterator from the stack (will cause loop exit on next iteration).
                         debug_assert!(self.iteration_state.is_empty());
+                    } else {
+                        self.recipient_stack
+                            .truncate(self.recipient_stack.len() - 1);
                     }
 
                     continue;
@@ -151,13 +153,12 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider> Iterator
                         continue;
                     }
                 }
-            } else {
-                // Recipients has itself recipients, which means that the key for this recipient is
-                // itself encrypted in its own recipient structures.
-                // Proceed search with nested recipients.
-                self.iteration_state.push(next_recipient.recipients.iter());
-                self.recipient_stack.push(next_recipient);
             }
+            // Recipients has itself recipients, which means that the key for this recipient is
+            // itself encrypted in its own recipient structures.
+            // Proceed search with nested recipients.
+            self.iteration_state.push(next_recipient.recipients.iter());
+            self.recipient_stack.push(next_recipient);
         }
 
         // We ran out of recipients to consider, i.e. we have completed the DFS and still haven't
@@ -169,10 +170,8 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider> Iterator
 pub(crate) fn struct_to_recipient_context(ctx: EncryptionContext) -> EncryptionContext {
     match ctx {
         EncryptionContext::CoseEncrypt => EncryptionContext::EncRecipient,
-        EncryptionContext::CoseEncrypt0 => EncryptionContext::EncRecipient, // TODO this shouldn't be possible - panic?
-        EncryptionContext::EncRecipient => EncryptionContext::RecRecipient,
-        EncryptionContext::MacRecipient => EncryptionContext::RecRecipient,
-        EncryptionContext::RecRecipient => EncryptionContext::RecRecipient,
+        EncryptionContext::CoseEncrypt0 => panic!("attempted to obtain recipient context for a CoseEncrypt0 object (which can't contain CoseRecipients)"),
+        EncryptionContext::EncRecipient | EncryptionContext::MacRecipient | EncryptionContext::RecRecipient => EncryptionContext::RecRecipient,
     }
 }
 
@@ -183,10 +182,10 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
         &mut self,
         leaf_recipient: &CoseRecipient,
     ) -> Result<VecDeque<CoseKey>, CoseCipherError<B::Error>> {
-        let ctx = if !self.recipient_stack.is_empty() {
-            EncryptionContext::RecRecipient
-        } else {
+        let ctx = if self.recipient_stack.is_empty() {
             self.context
+        } else {
+            EncryptionContext::RecRecipient
         };
         // Attempt to decrypt leaf node, return (non-search-terminating) error if that doesn't work.
         let mut current_keys: Vec<CoseKey> = leaf_recipient.try_decrypt(
@@ -267,11 +266,7 @@ fn determine_encrypt_key_ops_for_alg<CE: Display>(
                 KeyOperation::Assigned(iana::KeyOperation::WrapKey),
             ]
         }
-        v @ Algorithm::Assigned(_) => {
-            // Unsupported algorithm - skip over this recipient.
-            return Err(CoseCipherError::UnsupportedAlgorithm(v.clone()));
-        }
-        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
+        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_) | Algorithm::Assigned(_)) => {
             // Unsupported algorithm - skip over this recipient.
             return Err(CoseCipherError::UnsupportedAlgorithm(v.clone()));
         }
@@ -315,11 +310,7 @@ fn determine_decrypt_key_ops_for_alg<CE: Display>(
                 KeyOperation::Assigned(iana::KeyOperation::UnwrapKey),
             ]
         }
-        v @ Algorithm::Assigned(_) => {
-            // Unsupported algorithm - skip over this recipient.
-            return Err(CoseCipherError::UnsupportedAlgorithm(v.clone()));
-        }
-        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
+        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_) | Algorithm::Assigned(_)) => {
             // Unsupported algorithm - skip over this recipient.
             return Err(CoseCipherError::UnsupportedAlgorithm(v.clone()));
         }
@@ -363,7 +354,7 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
             };
 
         // Determine key operations that fulfill the requirements of the algorithm.
-        let operation = determine_decrypt_key_ops_for_alg(&alg)?;
+        let operation = determine_encrypt_key_ops_for_alg(&alg)?;
 
         let key = determine_key_candidates(
             key_provider,
@@ -413,11 +404,7 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
                     },
                 )
             }
-            v @ Algorithm::Assigned(_) => {
-                // Unsupported algorithm - skip over this recipient.
-                Err(CoseCipherError::UnsupportedAlgorithm(v.clone()))
-            }
-            v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
+            v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_) | Algorithm::Assigned(_)) => {
                 // Unsupported algorithm - skip over this recipient.
                 Err(CoseCipherError::UnsupportedAlgorithm(v.clone()))
             }
@@ -474,6 +461,7 @@ impl CoseRecipientExt for CoseRecipient {
         .map(|v| v.into_iter().collect())?;
 
         // Direct => Key of key provider will be used for lower layer directly.
+        // TODO ensure that Direct is the only method used on the message (RFC 9052, Section 8.5.1)
         if let Algorithm::Assigned(iana::Algorithm::Direct) = alg {
             return Ok(key_candidates);
         }
@@ -521,11 +509,7 @@ impl CoseRecipientExt for CoseRecipient {
                         }
                     };
                 }
-                v @ Algorithm::Assigned(_) => {
-                    // Unsupported algorithm - skip over this recipient.
-                    return Err(CoseCipherError::UnsupportedAlgorithm(v.clone()));
-                }
-                v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
+                v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_) | Algorithm::Assigned(_)) => {
                     // Unsupported algorithm - skip over this recipient.
                     return Err(CoseCipherError::UnsupportedAlgorithm(v.clone()));
                 }

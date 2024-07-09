@@ -1,4 +1,14 @@
 #![cfg(all(test, feature = "std"))]
+use core::convert::Infallible;
+use std::path::PathBuf;
+
+use coset::iana::Algorithm;
+use coset::{
+    CoseError, CoseKey, CoseKeyBuilder, CoseMac, CoseMacBuilder, CoseRecipientBuilder,
+    EncryptionContext, Header,
+};
+use rstest::rstest;
+
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
 use crate::token::cose::encrypt::CoseKeyDistributionCipher;
 use crate::token::cose::header_util::determine_algorithm;
@@ -8,17 +18,9 @@ use crate::token::cose::mac::CoseMacCipher;
 use crate::token::cose::recipient::CoseRecipientBuilderExt;
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, serialize_cose_with_failures,
-    CoseStructTestHelper, TestCase, TestCaseFailures,
+    CoseStructTestHelper, TestCase,
 };
 use crate::token::cose::{test_helper, CoseCipher};
-use coset::iana::Algorithm;
-use coset::{
-    CborSerializable, CoseError, CoseKey, CoseKeyBuilder, CoseMac, CoseMacBuilder,
-    CoseRecipientBuilder, EncryptionContext, Header, TaggedCborSerializable,
-};
-use rstest::rstest;
-use std::convert::Infallible;
-use std::path::PathBuf;
 
 impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHelper<B>
     for CoseMac

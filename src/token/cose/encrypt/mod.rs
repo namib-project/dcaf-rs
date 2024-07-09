@@ -1,16 +1,21 @@
-mod encrypt;
-mod encrypt0;
+use alloc::collections::BTreeSet;
+use alloc::rc::Rc;
+use core::cell::RefCell;
+use core::fmt::Display;
+
+use ciborium::Value;
+use coset::{iana, Algorithm, Header, HeaderBuilder, KeyOperation};
 
 use crate::error::CoseCipherError;
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
 use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey, KeyParam};
 use crate::token::cose::CoseCipher;
-use alloc::rc::Rc;
-use ciborium::Value;
-use core::fmt::Display;
-use coset::{iana, Algorithm, Header, HeaderBuilder, KeyOperation};
-use std::cell::RefCell;
-use std::collections::BTreeSet;
+
+mod encrypt;
+mod encrypt0;
+
+pub use encrypt::{CoseEncryptBuilderExt, CoseEncryptExt};
+pub use encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
 
 /// Provides basic operations for encrypting and decrypting COSE structures.
 ///
@@ -185,7 +190,7 @@ pub(crate) fn is_valid_aes_key<'a, BE: Display>(
     Ok(symm_key)
 }
 
-fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider>(
+fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
     key_provider: &mut CKP,
     protected: Option<&Header>,
@@ -275,9 +280,9 @@ fn try_decrypt_with_key<B: CoseEncryptCipher>(
     }
 }
 
-pub(crate) fn try_decrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider>(
-    backend: Rc<RefCell<&mut B>>,
-    key_provider: Rc<RefCell<&mut CKP>>,
+pub(crate) fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
+    backend: &Rc<RefCell<&mut B>>,
+    key_provider: &Rc<RefCell<&mut CKP>>,
     protected: &Header,
     unprotected: &Header,
     try_all_keys: bool,

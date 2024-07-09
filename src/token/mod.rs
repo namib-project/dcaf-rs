@@ -171,18 +171,6 @@ pub mod cose;
 #[cfg(disabled)]
 mod tests;
 
-/// Creates new headers if `unprotected_header` or `protected_header` is `None`, respectively,
-/// and passes them to the `cipher`'s `header` function, returning the mutated result.
-/// Arguments: key (expr), unprotected (ident), protected (ident), rng (expr), cipher (type)
-macro_rules! prepare_headers {
-    ($key:expr, $unprotected:ident, $protected:ident, $rng:expr, $t:ty) => {{
-        let mut unprotected = $unprotected.unwrap_or_else(|| HeaderBuilder::new().build());
-        let mut protected = $protected.unwrap_or_else(|| HeaderBuilder::new().build());
-        <$t>::set_headers($key, &mut unprotected, &mut protected, $rng)?;
-        Ok::<(Header, Header), CoseCipherError<<$t>::Error>>((unprotected, protected))
-    }};
-}
-
 /*/// Encrypts the given `claims` with the given headers and `external_aad` using the
 /// `key` and the cipher given by type parameter `T`, returning the token as a serialized
 /// bytestring of the [`CoseEncrypt0`] structure.

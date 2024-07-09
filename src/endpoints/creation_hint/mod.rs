@@ -141,12 +141,15 @@ mod conversion {
 
     impl ToCborMap for AuthServerRequestCreationHint {
         fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
-            cbor_map_vec! {
-                creation_hint::AS => self.auth_server.as_ref(),
-                creation_hint::KID => self.kid.as_ref(),
-                creation_hint::AUDIENCE => self.audience.as_ref(),
-                creation_hint::SCOPE => self.scope.as_ref(),
-                creation_hint::CNONCE => self.client_nonce.as_ref().map(|v| Value::Bytes(v.clone()))
+            #[allow(clippy::cast_lossless)]
+            {
+                cbor_map_vec! {
+                    creation_hint::AS => self.auth_server.as_ref(),
+                    creation_hint::KID => self.kid.as_ref(),
+                    creation_hint::AUDIENCE => self.audience.as_ref(),
+                    creation_hint::SCOPE => self.scope.as_ref(),
+                    creation_hint::CNONCE => self.client_nonce.as_ref().map(|v| Value::Bytes(v.clone()))
+                }
             }
         }
 

@@ -1,3 +1,19 @@
+use alloc::collections::BTreeSet;
+use alloc::rc::Rc;
+use core::cell::RefCell;
+use core::fmt::Display;
+
+use ciborium::Value;
+use coset::{iana, Algorithm, Header, KeyOperation};
+
+pub use mac::{CoseMacBuilderExt, CoseMacExt};
+pub use mac0::{CoseMac0BuilderExt, CoseMac0Ext};
+
+use crate::error::CoseCipherError;
+use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
+use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey, KeyParam};
+use crate::token::cose::CoseCipher;
+
 /// Provides basic operations for generating and verifying MAC tags for COSE structures.
 ///
 /// This trait is currently not used by any access token function.
@@ -18,23 +34,8 @@ pub trait CoseMacCipher: CoseCipher {
     ) -> Result<(), CoseCipherError<Self::Error>>;
 }
 
-use crate::error::CoseCipherError;
-use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
-use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey, KeyParam};
-use crate::token::cose::CoseCipher;
-use alloc::rc::Rc;
-use ciborium::Value;
-use core::fmt::Display;
-use coset::{iana, Algorithm, Header, KeyOperation};
-use std::cell::RefCell;
-use std::collections::BTreeSet;
-
 mod mac;
 mod mac0;
-
-pub use mac::{CoseMacBuilderExt, CoseMacExt};
-
-pub use mac0::{CoseMac0BuilderExt, CoseMac0Ext};
 
 pub(crate) fn is_valid_hmac_key<'a, BE: Display>(
     algorithm: &Algorithm,
@@ -84,7 +85,7 @@ pub(crate) fn is_valid_hmac_key<'a, BE: Display>(
     Ok(symm_key)
 }
 
-fn try_compute<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider>(
+fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
     key_provider: &mut CKP,
     protected: Option<&Header>,
@@ -142,9 +143,9 @@ fn try_verify_with_key<B: CoseMacCipher>(
     }
 }
 
-pub(crate) fn try_verify<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider>(
-    backend: Rc<RefCell<&mut B>>,
-    key_provider: Rc<RefCell<&mut CKP>>,
+pub(crate) fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider>(
+    backend: &Rc<RefCell<&mut B>>,
+    key_provider: &Rc<RefCell<&mut CKP>>,
     protected: &Header,
     unprotected: &Header,
     try_all_keys: bool,

@@ -1,14 +1,16 @@
-use crate::error::CoseCipherError;
-use crate::token::cose::header_util::find_param_by_label;
-use ciborium::Value;
 use core::borrow::BorrowMut;
 use core::fmt::Display;
+use core::marker::PhantomData;
+
+use ciborium::Value;
 use coset::iana::EnumI64;
 use coset::{
     iana, AsCborValue, CoseKey, EncryptionContext, Header, KeyType, Label,
     RegisteredLabelWithPrivate,
 };
-use std::marker::PhantomData;
+
+use crate::error::CoseCipherError;
+use crate::token::cose::header_util::find_param_by_label;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum KeyParam {
@@ -121,7 +123,8 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseEc2Key<'a, OE> {
             iana::Ec2KeyParameter::Crv.into(),
         ))?;
         // Curve must be of correct type
-        let crv = EllipticCurve::from_cbor_value(crv.clone()).map_err(|e| {
+        let crv = EllipticCurve::from_cbor_value(crv.clone()).map_err(|_e| {
+            // TODO e as error source (as soon as we use core::error::Error).
             CoseCipherError::InvalidKeyParam(iana::Ec2KeyParameter::Crv.into(), crv.clone())
         })?;
 
@@ -200,7 +203,7 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseEc2Key<'a, OE> {
             x,
             y,
             sign,
-            _backend_error_type: Default::default(),
+            _backend_error_type: PhantomData,
         })
     }
 }
@@ -236,7 +239,8 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseOkpKey<'a, OE> {
         ))?;
 
         // Curve must be of correct type
-        let crv = EllipticCurve::from_cbor_value(crv.clone()).map_err(|e| {
+        let crv = EllipticCurve::from_cbor_value(crv.clone()).map_err(|_e| {
+            // TODO e as error source (as soon as we use core::error::Error).
             CoseCipherError::InvalidKeyParam(iana::Ec2KeyParameter::Crv.into(), crv.clone())
         })?;
 
@@ -283,7 +287,7 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseOkpKey<'a, OE> {
             crv,
             d,
             x,
-            _backend_error_type: Default::default(),
+            _backend_error_type: PhantomData,
         })
     }
 }
@@ -325,7 +329,7 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseSymmetricKey<'a, OE> {
         Ok(CoseSymmetricKey {
             generic: key,
             k,
-            _backend_error_type: Default::default(),
+            _backend_error_type: PhantomData,
         })
     }
 }
@@ -390,7 +394,7 @@ impl CoseKeyProvider for Option<&CoseKey> {
             (Some(key), Some(key_id)) if key.key_id.as_slice() != *key_id => {
                 Box::new(std::iter::empty())
             }
-            (Some(key), Some(key_id)) => Box::new(std::iter::once(*key)),
+            (Some(key), Some(_key_id)) => Box::new(std::iter::once(*key)),
             (v, _) => Box::new(v.iter().copied()),
         };
         ret.cloned()
@@ -424,8 +428,8 @@ impl CoseAadProvider for &[u8] {
     fn lookup_aad(
         &mut self,
         context: Option<EncryptionContext>,
-        protected: Option<&Header>,
-        unprotected: Option<&Header>,
+        _protected: Option<&Header>,
+        _unprotected: Option<&Header>,
     ) -> &[u8] {
         match context {
             Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => self,
@@ -442,8 +446,8 @@ impl CoseAadProvider for Option<&[u8]> {
     fn lookup_aad(
         &mut self,
         context: Option<EncryptionContext>,
-        protected: Option<&Header>,
-        unprotected: Option<&Header>,
+        _protected: Option<&Header>,
+        _unprotected: Option<&Header>,
     ) -> &[u8] {
         match context {
             Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => {
@@ -462,8 +466,8 @@ impl<'a, 'b: 'a> CoseAadProvider for std::slice::Iter<'a, &'b [u8]> {
     fn lookup_aad(
         &mut self,
         context: Option<EncryptionContext>,
-        protected: Option<&Header>,
-        unprotected: Option<&Header>,
+        _protected: Option<&Header>,
+        _unprotected: Option<&Header>,
     ) -> &[u8] {
         match context {
             Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => {
@@ -485,8 +489,8 @@ where
     fn lookup_aad(
         &mut self,
         context: Option<EncryptionContext>,
-        protected: Option<&Header>,
-        unprotected: Option<&Header>,
+        _protected: Option<&Header>,
+        _unprotected: Option<&Header>,
     ) -> &[u8] {
         match context {
             Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => {

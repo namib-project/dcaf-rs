@@ -1,9 +1,9 @@
+use coset::{CoseSign, CoseSignBuilder, CoseSignature};
+
 use crate::error::CoseCipherError;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
 use crate::token::cose::sign;
 use crate::CoseSignCipher;
-use core::borrow::BorrowMut;
-use coset::{CoseSign, CoseSignBuilder, CoseSignature};
 
 #[cfg(all(test, feature = "std"))]
 mod tests;
@@ -11,7 +11,7 @@ mod tests;
 /// Extension trait that enables signing using predefined backends instead of by providing signature
 /// functions.
 pub trait CoseSignBuilderExt: Sized {
-    fn try_add_sign<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_add_sign<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -19,13 +19,7 @@ pub trait CoseSignBuilderExt: Sized {
         aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>>;
 
-    fn try_add_sign_detached<
-        'a,
-        'b,
-        B: CoseSignCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider,
-    >(
+    fn try_add_sign_detached<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -36,7 +30,7 @@ pub trait CoseSignBuilderExt: Sized {
 }
 
 impl CoseSignBuilderExt for CoseSignBuilder {
-    fn try_add_sign<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_add_sign<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -58,13 +52,7 @@ impl CoseSignBuilderExt for CoseSignBuilder {
         )
     }
 
-    fn try_add_sign_detached<
-        'a,
-        'b,
-        B: CoseSignCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider,
-    >(
+    fn try_add_sign_detached<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -93,7 +81,7 @@ impl CoseSignBuilderExt for CoseSignBuilder {
 ///      successful. However, some environments may have other policies, see
 ///      https://datatracker.ietf.org/doc/html/rfc9052#section-4.1.
 pub trait CoseSignExt {
-    fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -101,7 +89,7 @@ pub trait CoseSignExt {
         aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>>;
 
-    fn try_verify_detached<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_verify_detached<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -112,7 +100,7 @@ pub trait CoseSignExt {
 }
 
 impl CoseSignExt for CoseSign {
-    fn try_verify<'a, 'b, B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,
@@ -149,13 +137,7 @@ impl CoseSignExt for CoseSign {
         Err(CoseCipherError::VerificationFailure)
     }
 
-    fn try_verify_detached<
-        'a,
-        'b,
-        B: CoseSignCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider,
-    >(
+    fn try_verify_detached<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
         key_provider: &mut CKP,

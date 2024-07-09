@@ -1,19 +1,17 @@
 #![cfg(all(test, feature = "std"))]
+use std::path::PathBuf;
+
+use coset::{CoseEncrypt0, CoseEncrypt0Builder, CoseError, CoseKey, HeaderBuilder};
+use rstest::rstest;
+
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
 use crate::token::cose::encrypt::encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
 use crate::token::cose::encrypt::{CoseEncryptCipher, HeaderBuilderExt};
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, perform_cose_reference_output_test,
     perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,
-    TestCaseEncrypted, TestCaseFailures,
 };
 use crate::token::cose::CoseCipher;
-use coset::{
-    CborSerializable, CoseEncrypt0, CoseEncrypt0Builder, CoseError, CoseKey, CoseSign1, Header,
-    HeaderBuilder, TaggedCborSerializable,
-};
-use rstest::rstest;
-use std::path::PathBuf;
 
 impl<B: CoseCipher + CoseEncryptCipher> CoseStructTestHelper<B> for CoseEncrypt0 {
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self {
@@ -104,7 +102,6 @@ impl<B: CoseCipher + CoseEncryptCipher> CoseStructTestHelper<B> for CoseEncrypt0
             let plaintext = verify_result.expect("unable to verify token");
 
             assert_eq!(case.input.plaintext.as_bytes(), plaintext.as_slice());
-            let empty_hdr = Header::default();
             // TODO IV is apprarently taken from rng_stream field, not header field, but still implicitly added to header.
             //      ugh...
             let mut unprotected = test_case.unprotected.clone().unwrap_or_default();

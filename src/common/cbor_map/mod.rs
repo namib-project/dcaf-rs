@@ -47,9 +47,9 @@
 //!
 //! [`AccessTokenRequest`]: crate::AccessTokenRequest
 
-use core::fmt::{Debug, Display, Formatter};
 #[cfg(feature = "std")]
-use std::any::type_name;
+use core::any::type_name;
+use core::fmt::{Debug, Display, Formatter};
 
 use ciborium::de::from_reader;
 use ciborium::ser::into_writer;

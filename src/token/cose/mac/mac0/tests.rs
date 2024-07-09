@@ -1,25 +1,20 @@
 #![cfg(all(test, feature = "std"))]
+use core::convert::Infallible;
+use std::path::PathBuf;
+
+use coset::iana::Algorithm;
+use coset::{CoseError, CoseKey, CoseKeyBuilder, CoseMac0, CoseMac0Builder, Header};
+use rstest::rstest;
+
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
-use crate::token::cose::encrypt::CoseKeyDistributionCipher;
 use crate::token::cose::header_util::determine_algorithm;
-use crate::token::cose::mac::mac::CoseMacExt;
 use crate::token::cose::mac::mac0::{CoseMac0BuilderExt, CoseMac0Ext};
 use crate::token::cose::mac::CoseMacCipher;
-use crate::token::cose::sign::CoseSign1Ext;
-use crate::token::cose::sign::CoseSignExt;
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, serialize_cose_with_failures,
-    CoseStructTestHelper, TestCase, TestCaseFailures,
+    CoseStructTestHelper, TestCase,
 };
 use crate::token::cose::{test_helper, CoseCipher};
-use coset::iana::Algorithm;
-use coset::{
-    CborSerializable, CoseError, CoseKey, CoseKeyBuilder, CoseMac0, CoseMac0Builder, Header,
-    TaggedCborSerializable,
-};
-use rstest::rstest;
-use std::convert::Infallible;
-use std::path::PathBuf;
 
 impl<B: CoseCipher + CoseMacCipher> CoseStructTestHelper<B> for CoseMac0 {
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self {
@@ -38,25 +33,24 @@ impl<B: CoseCipher + CoseMacCipher> CoseStructTestHelper<B> for CoseMac0 {
 
         let unprotected = mac0_cfg.unprotected.clone().unwrap_or_default();
 
-        let enc_key: CoseKey;
-        if recipient.alg == Some(Algorithm::Direct)
+        let enc_key = if recipient.alg == Some(Algorithm::Direct)
             || determine_algorithm::<Infallible>(
                 None,
                 recipient.unprotected.as_ref(),
                 recipient.protected.as_ref(),
             ) == Ok(coset::Algorithm::Assigned(Algorithm::Direct))
         {
-            enc_key = recipient.key.clone();
+            recipient.key.clone()
         } else {
-            enc_key = CoseKeyBuilder::new_symmetric_key(
+            CoseKeyBuilder::new_symmetric_key(
                 case.intermediates
                     .as_ref()
                     .expect("CoseMac0 test case should have intermediates")
                     .cek
                     .clone(),
             )
-            .build();
-        }
+            .build()
+        };
 
         let mac0 = mac0
             .try_compute(

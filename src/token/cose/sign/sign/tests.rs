@@ -1,22 +1,19 @@
 #![cfg(all(test, feature = "std"))]
 
+use std::path::PathBuf;
+
+use coset::{CoseError, CoseKey, CoseSign, CoseSignBuilder, CoseSignatureBuilder, Header};
+use rstest::rstest;
+
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
 use crate::token::cose::encrypt::CoseKeyDistributionCipher;
-use crate::token::cose::sign::CoseSign1Ext;
 use crate::token::cose::sign::{CoseSignBuilderExt, CoseSignExt};
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, perform_cose_reference_output_test,
     perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,
-    TestCaseFailures, TestCaseInput, TestCaseSign,
 };
 use crate::token::cose::CoseCipher;
 use crate::CoseSignCipher;
-use coset::{
-    CborSerializable, CoseError, CoseKey, CoseSign, CoseSign1, CoseSignBuilder, CoseSignature,
-    CoseSignatureBuilder, Header, TaggedCborSerializable,
-};
-use rstest::rstest;
-use std::path::PathBuf;
 
 impl<B: CoseCipher + CoseSignCipher + CoseKeyDistributionCipher> CoseStructTestHelper<B>
     for CoseSign
@@ -62,7 +59,7 @@ impl<B: CoseCipher + CoseSignCipher + CoseKeyDistributionCipher> CoseStructTestH
 
     fn serialize_and_apply_failures(mut self, case: &TestCase) -> Result<Vec<u8>, CoseError> {
         let failures = &case.input.failures;
-        apply_header_failures(&mut self.protected.header, &failures);
+        apply_header_failures(&mut self.protected.header, failures);
 
         for (signer, signature) in case
             .input
@@ -83,7 +80,7 @@ impl<B: CoseCipher + CoseSignCipher + CoseKeyDistributionCipher> CoseStructTestH
             apply_attribute_failures(&mut signature.unprotected, &signer.failures)?;
         }
 
-        Ok(serialize_cose_with_failures(self, &failures))
+        Ok(serialize_cose_with_failures(self, failures))
     }
 
     fn check_against_test_case(&self, case: &TestCase, backend: &mut B) {

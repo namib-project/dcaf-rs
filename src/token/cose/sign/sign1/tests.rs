@@ -1,25 +1,22 @@
 #![cfg(all(test, feature = "std"))]
+use std::path::PathBuf;
+
+use coset::{CoseError, CoseKey, CoseSign1, CoseSign1Builder, Header};
+use rstest::rstest;
+
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
 use crate::token::cose::sign::CoseSign1BuilderExt;
 use crate::token::cose::sign::CoseSign1Ext;
-use crate::token::cose::sign::CoseSignExt;
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, perform_cose_reference_output_test,
     perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,
-    TestCaseFailures,
 };
 use crate::token::cose::CoseCipher;
 use crate::CoseSignCipher;
-use coset::{
-    CborSerializable, CoseError, CoseKey, CoseSign1, CoseSign1Builder, Header,
-    TaggedCborSerializable,
-};
-use rstest::rstest;
-use std::path::PathBuf;
 
 impl<B: CoseCipher + CoseSignCipher> CoseStructTestHelper<B> for CoseSign1 {
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self {
-        let mut sign1_cfg = case
+        let sign1_cfg = case
             .input
             .clone()
             .sign0
@@ -47,7 +44,7 @@ impl<B: CoseCipher + CoseSignCipher> CoseStructTestHelper<B> for CoseSign1 {
             *byte = byte.wrapping_add(1);
         }
 
-        apply_header_failures(&mut self.protected.header, &failures);
+        apply_header_failures(&mut self.protected.header, failures);
         apply_attribute_failures(&mut self.unprotected, failures)?;
         Ok(serialize_cose_with_failures(self, failures))
     }

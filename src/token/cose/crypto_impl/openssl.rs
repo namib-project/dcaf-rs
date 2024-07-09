@@ -8,15 +8,9 @@
  *
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
-#![cfg(feature = "openssl")]
-use crate::error::CoseCipherError;
-use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher};
-use crate::token::cose::header_util::HeaderParam;
-use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
-use crate::token::cose::mac::CoseMacCipher;
-use crate::token::cose::sign::CoseSignCipher;
-use crate::token::cose::CoseCipher;
+
 use alloc::vec::Vec;
+
 use ciborium::value::Value;
 use coset::{iana, Algorithm};
 use openssl::aes::{unwrap_key, wrap_key, AesKey};
@@ -31,11 +25,23 @@ use openssl::sign::{Signer, Verifier};
 use openssl::symm::{decrypt_aead, encrypt_aead, Cipher};
 use strum_macros::Display;
 
+use crate::error::CoseCipherError;
+use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher};
+use crate::token::cose::header_util::HeaderParam;
+use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
+use crate::token::cose::mac::CoseMacCipher;
+use crate::token::cose::sign::CoseSignCipher;
+use crate::token::cose::CoseCipher;
+
+/// Represents an error caused by the OpenSSL cryptographic backend.
 #[derive(Debug, Display)]
 #[non_exhaustive]
 pub enum CoseOpensslCipherError {
+    /// Standard OpenSSL error (represented as an [ErrorStack] in the openssl library crate).
     OpensslError(ErrorStack),
+    /// AES key error.
     AesKeyError(openssl::aes::KeyError),
+    /// Other error (error message is provided as a string).
     Other(&'static str),
 }
 
@@ -57,7 +63,106 @@ impl<T: Into<CoseOpensslCipherError>> From<T> for CoseCipherError<CoseOpensslCip
     }
 }
 
+/// Context for the OpenSSL cryptographic backend.
+///
+/// Can be used as a [CoseCipher] for COSE operations.
+///
+/// Generic properties of this backend:
+/// - [ ] Can derive EC public key components if only the private component (d) is present.
+///
+/// Algorithm support:
+/// - Signature Algorithms (for COSE_Sign and COSE_Sign1)
+///     - [x] ECDSA
+///         - [x] ES256
+///         - [x] ES384
+///         - [x] ES512
+///         - [ ] ES256K
+///     - [ ] EdDSA
+/// - Message Authentication Code Algorithms (for COSE_Mac and COSE_Mac0)
+///     - [x] HMAC
+///         - [ ] HMAC 256/64
+///         - [x] HMAC 256/256
+///         - [x] HMAC 384/384
+///         - [x] HMAC 512/512
+///     - [ ] AES-CBC-MAC
+///         - [ ] AES-MAC 128/64
+///         - [ ] AES-MAC 256/64
+///         - [ ] AES-MAC 128/128
+///         - [ ] AES-MAC 256/128
+/// - Content Encryption Algorithms (for COSE_Encrypt and COSE_Encrypt0)
+///     - [x] AES-GCM
+///         - [x] A128GCM
+///         - [x] A192GCM
+///         - [x] A256GCM
+///     - [ ] AES-CCM
+///         - [ ] AES-CCM-16-64-128
+///         - [ ] AES-CCM-16-64-256
+///         - [ ] AES-CCM-64-64-128
+///         - [ ] AES-CCM-64-64-256
+///         - [ ] AES-CCM-16-128-128
+///         - [ ] AES-CCM-16-128-256
+///         - [ ] AES-CCM-64-128-128
+///         - [ ] AES-CCM-64-128-256
+///     - [ ] ChaCha20/Poly1305
+/// - Key Derivation Functions (for COSE_Recipients with Key Agreement) // TODO this section might be redundant, see the CEK distribution methods
+///     - [ ] HKDF
+///         - [ ] HKDF SHA-256
+///         - [ ] HKDF SHA-512
+///         - [ ] HKDF AES-MAC-128
+///         - [ ] HKDF AES-MAC-256
+/// - Content Key Distribution Methods (for COSE_Recipients)
+///     - Direct Encryption
+///         - [ ] Direct Key with KDF
+///             - [ ] direct+HKDF-SHA-256
+///             - [ ] direct+HKDF-SHA-512
+///             - [ ] direct+HKDF-AES-128
+///             - [ ] direct+HKDF-AES-256
+///     - Key Wrap
+///         - [x] AES Key Wrap
+///             - [x] A128KW
+///             - [x] A192KW
+///             - [x] A256KW
+///     - Direct Key Agreement
+///         - [ ] Direct ECDH
+///             - [ ] ECDH-ES + HKDF-256
+///             - [ ] ECDH-ES + HKDF-512
+///             - [ ] ECDH-SS + HKDF-256
+///             - [ ] ECDH-SS + HKDF-512
+///     - Key Agreement with Key Wrap
+///         - [ ] ECDH with Key Wrap
+///             - [ ] ECDH-ES + A128KW
+///             - [ ] ECDH-ES + A192KW
+///             - [ ] ECDH-ES + A256KW
+///             - [ ] ECDH-SS + A128KW
+///             - [ ] ECDH-SS + A192KW
+///             - [ ] ECDH-SS + A256KW
+///
+/// Elliptic Curve support (for EC algorithms):
+/// - ES256/ES384/ES512 [^1]
+///     - [x] P-256
+///     - [x] P-384
+///     - [x] P-521
+/// - ES256K
+///     - [ ] secp256k1
+/// - EdDSA
+///     - [ ] Ed448
+///     - [ ] Ed25519
+/// - ECDH
+///     - [ ] X448
+///     - [ ] X25519
+///
+/// [^1]: RFC 9053, Section 2.1 suggests using ES256 only with curve P-256, ES384 with curve P-384
+///       and ES512 only with curve P-521.
+#[derive(Default)]
 pub struct OpensslContext {}
+
+impl OpensslContext {
+    /// Creates a new OpenSSL context for use with COSE algorithms.
+    #[must_use]
+    pub fn new() -> OpensslContext {
+        OpensslContext {}
+    }
+}
 
 impl CoseCipher for OpensslContext {
     type Error = CoseOpensslCipherError;
@@ -78,7 +183,7 @@ impl CoseSignCipher for OpensslContext {
         let hash = get_algorithm_hash_function(&alg)?;
 
         // Possible truncation is fine, the key size will never exceed the size of an i32.
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         sign_ecdsa(&group, pad_size as i32, hash, key, target)
     }
 
@@ -121,13 +226,15 @@ fn get_algorithm_hash_function(
     alg: &Algorithm,
 ) -> Result<MessageDigest, CoseCipherError<CoseOpensslCipherError>> {
     match alg {
-        Algorithm::Assigned(iana::Algorithm::ES256) => Ok(MessageDigest::sha256()),
-        Algorithm::Assigned(iana::Algorithm::ES384) => Ok(MessageDigest::sha384()),
-        Algorithm::Assigned(iana::Algorithm::ES512) => Ok(MessageDigest::sha512()),
-        Algorithm::Assigned(iana::Algorithm::HMAC_256_64) => Ok(MessageDigest::sha256()),
-        Algorithm::Assigned(iana::Algorithm::HMAC_256_256) => Ok(MessageDigest::sha256()),
-        Algorithm::Assigned(iana::Algorithm::HMAC_384_384) => Ok(MessageDigest::sha384()),
-        Algorithm::Assigned(iana::Algorithm::HMAC_512_512) => Ok(MessageDigest::sha512()),
+        Algorithm::Assigned(iana::Algorithm::ES256 | iana::Algorithm::HMAC_256_256) => {
+            Ok(MessageDigest::sha256())
+        }
+        Algorithm::Assigned(iana::Algorithm::ES384 | iana::Algorithm::HMAC_384_384) => {
+            Ok(MessageDigest::sha384())
+        }
+        Algorithm::Assigned(iana::Algorithm::ES512 | iana::Algorithm::HMAC_512_512) => {
+            Ok(MessageDigest::sha512())
+        }
         v => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
     }
 }
@@ -199,9 +306,12 @@ fn verify_ecdsa(
         .verify_oneshot(der_signature.as_slice(), signed_data)
         .map_err(CoseOpensslCipherError::from)
         .map_err(CoseCipherError::from)
-        .and_then(|verification_successful| match verification_successful {
-            true => Ok(()),
-            false => Err(CoseCipherError::VerificationFailure),
+        .and_then(|verification_successful| {
+            if verification_successful {
+                Ok(())
+            } else {
+                Err(CoseCipherError::VerificationFailure)
+            }
         })
 }
 
@@ -320,13 +430,13 @@ impl CoseKeyDistributionCipher for OpensslContext {
 
     fn aes_key_unwrap(
         &mut self,
-        algorithm: Algorithm,
+        _algorithm: Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         ciphertext: &[u8],
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         let key = AesKey::new_decrypt(key.k)?;
-        let iv: [u8; 8] = iv.try_into().map_err(|e| {
+        let iv: [u8; 8] = iv.try_into().map_err(|_e| {
             CoseCipherError::InvalidHeaderParam(
                 HeaderParam::Generic(iana::HeaderParameter::Iv),
                 Value::Bytes(iv.to_vec()),
@@ -340,11 +450,11 @@ impl CoseKeyDistributionCipher for OpensslContext {
 }
 
 fn compute_hmac(
-    algorithm: Algorithm,
-    key: CoseSymmetricKey<'_, CoseOpensslCipherError>,
+    algorithm: &Algorithm,
+    key: &CoseSymmetricKey<'_, CoseOpensslCipherError>,
     input: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<CoseOpensslCipherError>> {
-    let hash = get_algorithm_hash_function(&algorithm)?;
+    let hash = get_algorithm_hash_function(algorithm)?;
     let hmac_key = PKey::hmac(key.k)?;
     let mut signer = Signer::new(hash, &hmac_key)?;
     signer
@@ -359,7 +469,7 @@ impl CoseMacCipher for OpensslContext {
         key: CoseSymmetricKey<'_, Self::Error>,
         data: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        compute_hmac(algorithm, key, data)
+        compute_hmac(&algorithm, &key, data)
     }
 
     fn verify_hmac(
@@ -369,11 +479,12 @@ impl CoseMacCipher for OpensslContext {
         tag: &[u8],
         data: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>> {
-        let hmac = compute_hmac(algorithm, key, data)?;
+        let hmac = compute_hmac(&algorithm, &key, data)?;
         // Use openssl::memcmp::eq to prevent timing attacks.
-        match openssl::memcmp::eq(hmac.as_slice(), tag) {
-            true => Ok(()),
-            false => Err(CoseCipherError::VerificationFailure),
+        if openssl::memcmp::eq(hmac.as_slice(), tag) {
+            Ok(())
+        } else {
+            Err(CoseCipherError::VerificationFailure)
         }
     }
 }

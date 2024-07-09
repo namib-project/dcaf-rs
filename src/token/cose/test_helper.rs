@@ -1,7 +1,6 @@
-use crate::error::CoseCipherError;
-use crate::token::cose::encrypt::CoseEncryptCipher;
-use crate::token::cose::key::CoseSymmetricKey;
-use crate::token::cose::CoseCipher;
+use std::collections::HashMap;
+use std::path::PathBuf;
+
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use coset::iana::{Algorithm, EnumI64};
@@ -11,8 +10,8 @@ use coset::{
 };
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
-use std::collections::HashMap;
-use std::path::PathBuf;
+
+use crate::token::cose::CoseCipher;
 
 fn deserialize_key<'de, D>(deserializer: D) -> Result<CoseKey, D::Error>
 where
@@ -131,8 +130,9 @@ where
         .and_then(Value::as_str)
         .map(hex::decode)
     {
-        builder = builder
-            .key_id(v.map_err(|e| de::Error::custom("could not parse test case key ID hex"))?);
+        builder = builder.key_id(v.map_err(|e| {
+            de::Error::custom(format!("could not parse test case key ID hex: {e}"))
+        })?);
     }
 
     if let Some(alg) = string_to_algorithm::<D>(hdr_obj.get("alg").and_then(Value::as_str))? {
@@ -284,6 +284,16 @@ pub struct TestCaseOutput {
     pub cbor: Vec<u8>,
 }
 
+fn print_test_information(case: &TestCase) {
+    println!("COSE Examples Test information:");
+    println!("Name: {}", case.title);
+    println!(
+        "Description: {}",
+        case.description.as_ref().map_or("None", String::as_str)
+    );
+    println!("Verification should fail: {}", case.fail);
+}
+
 pub fn perform_cose_reference_output_test<T: CoseStructTestHelper<B>, B: CoseCipher>(
     test_path: PathBuf,
     mut backend: B,
@@ -291,6 +301,8 @@ pub fn perform_cose_reference_output_test<T: CoseStructTestHelper<B>, B: CoseCip
     let test_case_description: TestCase =
         serde_json::from_reader(std::fs::File::open(test_path).expect("unable to open test case"))
             .expect("invalid test case");
+    print_test_information(&test_case_description);
+    println!("Performing reference output test (deserializing and verifying the already serialized CBOR output provided by the test case description)...");
 
     let example_output = match <T as CoseStructTestHelper<B>>::from_test_case_output(
         test_case_description.output.cbor.as_slice(),
@@ -312,9 +324,11 @@ pub fn perform_cose_self_signed_test<T: CoseStructTestHelper<B>, B: CoseCipher>(
     test_path: PathBuf,
     mut backend: B,
 ) {
-    let mut test_case_description: TestCase =
+    let test_case_description: TestCase =
         serde_json::from_reader(std::fs::File::open(test_path).expect("unable to open test case"))
             .expect("invalid test case");
+    print_test_information(&test_case_description);
+    println!("Performing self-signed test (creating and signing the object ourselves, then verifying both the signature and equality to test case description)...");
 
     let structure = T::from_test_case(&test_case_description, &mut backend);
 
@@ -325,13 +339,10 @@ pub fn perform_cose_self_signed_test<T: CoseStructTestHelper<B>, B: CoseCipher>(
         Ok(v) => v,
         Err(e) => {
             if test_case_description.fail {
-                println!("serialization failed as expected for test case: {:?}", e);
+                println!("serialization failed as expected for test case: {e}");
                 return;
             }
-            panic!(
-                "unexpected error occurred while serializing COSE object: {:?}",
-                e
-            )
+            panic!("unexpected error occurred while serializing COSE object: {e}")
         }
     };
 
@@ -339,13 +350,10 @@ pub fn perform_cose_self_signed_test<T: CoseStructTestHelper<B>, B: CoseCipher>(
         Ok(v) => v,
         Err(e) => {
             if test_case_description.fail {
-                println!("deserialization failed as expected for test case: {:?}", e);
+                println!("deserialization failed as expected for test case: {e}");
                 return;
             }
-            panic!(
-                "unexpected error occurred while deserializing COSE structure: {:?}",
-                e
-            )
+            panic!("unexpected error occurred while deserializing COSE structure: {e}")
         }
     };
     redeserialized.check_against_test_case(&test_case_description, &mut backend);
@@ -355,7 +363,7 @@ pub trait CoseStructTestHelper<B: CoseCipher>:
     Sized + CborSerializable + TaggedCborSerializable
 {
     fn from_test_case_output(output: &[u8]) -> Result<Self, CoseError> {
-        Self::from_tagged_slice(output).or_else(|_e1| Self::from_slice(output).map_err(|e2| e2))
+        Self::from_tagged_slice(output).or_else(|_e1| Self::from_slice(output))
     }
 
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self;
@@ -373,10 +381,10 @@ pub(crate) fn apply_header_failures(hdr: &mut Header, failures: &TestCaseFailure
         if !headers_to_remove.counter_signatures.is_empty() {
             hdr.counter_signatures = Vec::new();
         }
-        if let Some(new_val) = &headers_to_remove.alg {
+        if headers_to_remove.alg.is_some() {
             hdr.alg = None;
         }
-        if let Some(new_val) = &headers_to_remove.content_type {
+        if headers_to_remove.content_type.is_some() {
             hdr.content_type = None;
         }
         if !headers_to_remove.crit.is_empty() {
@@ -498,7 +506,7 @@ pub(crate) fn apply_attribute_failures(
     }
 }
 
-pub struct RngMockCipher<T: CoseEncryptCipher> {
+/*pub struct RngMockCipher<T: CoseEncryptCipher> {
     rng_outputs: Vec<Vec<u8>>,
     cipher: T,
 }
@@ -509,30 +517,4 @@ impl<T: CoseEncryptCipher> CoseCipher for RngMockCipher<T> {
     fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>> {
         todo!()
     }
-}
-
-impl<T: CoseEncryptCipher> CoseEncryptCipher for RngMockCipher<T> {
-    fn encrypt_aes_gcm(
-        &mut self,
-        algorithm: coset::Algorithm,
-        key: CoseSymmetricKey<'_, Self::Error>,
-        plaintext: &[u8],
-        aad: &[u8],
-        iv: &[u8],
-    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        self.cipher
-            .encrypt_aes_gcm(algorithm, key, plaintext, aad, iv)
-    }
-
-    fn decrypt_aes_gcm(
-        &mut self,
-        algorithm: coset::Algorithm,
-        key: CoseSymmetricKey<'_, Self::Error>,
-        ciphertext_with_tag: &[u8],
-        aad: &[u8],
-        iv: &[u8],
-    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        self.cipher
-            .decrypt_aes_gcm(algorithm, key, ciphertext_with_tag, aad, iv)
-    }
-}
+}*/

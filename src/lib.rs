@@ -304,7 +304,12 @@
 //! of the key (which must be convertible to a `CoseKey`) and implement a method which sets
 //! headers for the token, for example, the used algorithm, the key ID, an IV, and so on.
 
-#![deny(rustdoc::broken_intra_doc_links, clippy::pedantic)]
+#![deny(
+    rustdoc::broken_intra_doc_links,
+    clippy::pedantic,
+    clippy::std_instead_of_core,
+    clippy::std_instead_of_alloc
+)]
 #![warn(missing_docs, rustdoc::missing_crate_level_docs)]
 // These ones are a little too eager
 #![allow(
