@@ -2,7 +2,6 @@ use crate::error::CoseCipherError;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
 use crate::token::cose::sign;
 use crate::CoseSignCipher;
-use core::borrow::BorrowMut;
 use coset::{CoseSign1, CoseSign1Builder, Header};
 
 #[cfg(all(test, feature = "std"))]
@@ -68,7 +67,7 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
         key_provider: &mut CKP,
         protected: Option<Header>,
         unprotected: Option<Header>,
-        mut aad: &mut CAP,
+        aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let mut builder = self;
         if let Some(protected) = &protected {
@@ -97,7 +96,7 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
         protected: Option<Header>,
         unprotected: Option<Header>,
         payload: &[u8],
-        mut aad: &mut CAP,
+        aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let mut builder = self;
         if let Some(protected) = &protected {
@@ -179,7 +178,7 @@ impl CoseSign1Ext for CoseSign1 {
         key_provider: &mut CKP,
         try_all_keys: bool,
         payload: &[u8],
-        mut aad: &mut CAP,
+        aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
         self.verify_detached_signature(
             payload,

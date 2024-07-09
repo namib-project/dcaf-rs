@@ -8,7 +8,6 @@ use crate::token::cose::recipient::{
 };
 use alloc::rc::Rc;
 use core::cell::RefCell;
-use core::fmt::Display;
 use coset::{CoseEncrypt, CoseEncryptBuilder, EncryptionContext, Header};
 
 #[cfg(all(test, feature = "std"))]

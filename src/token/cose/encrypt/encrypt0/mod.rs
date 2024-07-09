@@ -3,7 +3,6 @@ use crate::token::cose::encrypt;
 use crate::token::cose::encrypt::CoseEncryptCipher;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
 use alloc::rc::Rc;
-use core::fmt::Display;
 use coset::{CoseEncrypt0, CoseEncrypt0Builder, EncryptionContext, Header};
 use std::cell::RefCell;
 

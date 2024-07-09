@@ -12,13 +12,10 @@ mod sign;
 mod sign1;
 
 use crate::error::CoseCipherError;
-use crate::token::cose::key::{
-    CoseAadProvider, CoseEc2Key, CoseKeyProvider, CoseParsedKey, KeyParam,
-};
-use core::borrow::BorrowMut;
-use core::fmt::{Debug, Display};
-use coset::iana::{Ec2KeyParameter, EnumI64};
-use coset::{iana, Algorithm, CoseKey, Header, KeyOperation, RegisteredLabel};
+use crate::token::cose::key::{CoseEc2Key, CoseKeyProvider, CoseParsedKey, KeyParam};
+use core::fmt::Display;
+use coset::iana::Ec2KeyParameter;
+use coset::{iana, Algorithm, Header, KeyOperation};
 use std::collections::BTreeSet;
 
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
@@ -204,7 +201,6 @@ fn try_sign<'a, B: CoseSignCipher, CKP: CoseKeyProvider>(
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Sign)]),
         false,
     )?
-    .into_iter()
     .next()
     .ok_or(CoseCipherError::NoKeyFound)?;
     let parsed_key = CoseParsedKey::try_from(&key)?;
@@ -221,11 +217,9 @@ fn try_sign<'a, B: CoseSignCipher, CKP: CoseKeyProvider>(
             let ec2_key = is_valid_ecdsa_key::<B::Error>(&algorithm, parsed_key, true)?;
 
             // Perform signing operation using backend.
-            move |tosign| return backend.sign_ecdsa(algorithm, &ec2_key, tosign)
+            move |tosign| backend.sign_ecdsa(algorithm, &ec2_key, tosign)
         }
-        v @ (Algorithm::Assigned(_)) => {
-            return Err(CoseCipherError::UnsupportedAlgorithm(v.clone()))
-        }
+        v @ Algorithm::Assigned(_) => return Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
         // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
         //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
         v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
@@ -258,7 +252,7 @@ fn try_verify_with_key<B: CoseSignCipher>(
 
             backend.verify_ecdsa(algorithm, &ec2_key, signature, toverify)
         }
-        v @ (Algorithm::Assigned(_)) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+        v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
         // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
         //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
         v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {

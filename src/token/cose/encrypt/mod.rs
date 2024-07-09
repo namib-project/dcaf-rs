@@ -5,10 +5,9 @@ use crate::error::CoseCipherError;
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
 use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey, KeyParam};
 use crate::token::cose::CoseCipher;
-use crate::CoseSignCipher;
 use alloc::rc::Rc;
 use ciborium::Value;
-use core::fmt::{Debug, Display};
+use core::fmt::Display;
 use coset::{iana, Algorithm, Header, HeaderBuilder, KeyOperation};
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -203,7 +202,6 @@ fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider>(
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Encrypt)]),
         try_all_keys,
     )?
-    .into_iter()
     .next()
     .ok_or(CoseCipherError::NoKeyFound)?;
     let parsed_key = CoseParsedKey::try_from(&key)?;
@@ -226,7 +224,7 @@ fn try_encrypt<'a, 'b, B: CoseEncryptCipher, CKP: CoseKeyProvider>(
 
             backend.encrypt_aes_gcm(algorithm, symm_key, plaintext, aad, iv)
         }
-        v @ (Algorithm::Assigned(_)) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+        v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
         // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
         //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
         v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
@@ -268,7 +266,7 @@ fn try_decrypt_with_key<B: CoseEncryptCipher>(
 
             backend.decrypt_aes_gcm(algorithm, symm_key, ciphertext, aad, iv)
         }
-        v @ (Algorithm::Assigned(_)) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+        v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
         // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
         //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
         v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {

@@ -1,14 +1,13 @@
 use crate::error::CoseCipherError;
 use crate::token::cose::header_util::find_param_by_label;
 use ciborium::Value;
-use core::borrow::{Borrow, BorrowMut};
+use core::borrow::BorrowMut;
 use core::fmt::Display;
 use coset::iana::EnumI64;
 use coset::{
-    iana, AsCborValue, CoseKey, CoseSignature, EncryptionContext, Header, KeyType, Label,
+    iana, AsCborValue, CoseKey, EncryptionContext, Header, KeyType, Label,
     RegisteredLabelWithPrivate,
 };
-use std::convert::Infallible;
 use std::marker::PhantomData;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -178,7 +177,7 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseEc2Key<'a, OE> {
         let (y, sign) = match y {
             None => (None, None),
             Some(Value::Bytes(b)) => (Some(b.as_slice()), None),
-            Some(Value::Bool(b)) => (None, Some(b.clone())),
+            Some(Value::Bool(b)) => (None, Some(*b)),
             Some(value) => {
                 return Err(CoseCipherError::InvalidKeyParam(
                     iana::Ec2KeyParameter::Y.into(),
@@ -392,7 +391,7 @@ impl CoseKeyProvider for Option<&CoseKey> {
                 Box::new(std::iter::empty())
             }
             (Some(key), Some(key_id)) => Box::new(std::iter::once(*key)),
-            (v, _) => Box::new(v.iter().map(|v| *v)),
+            (v, _) => Box::new(v.iter().copied()),
         };
         ret.cloned()
     }
@@ -468,7 +467,7 @@ impl<'a, 'b: 'a> CoseAadProvider for std::slice::Iter<'a, &'b [u8]> {
     ) -> &[u8] {
         match context {
             Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => {
-                self.next().map(|v| *v).unwrap_or(&[] as &[u8])
+                self.next().copied().unwrap_or(&[] as &[u8])
             }
             Some(
                 EncryptionContext::EncRecipient

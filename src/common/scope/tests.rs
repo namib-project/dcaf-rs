@@ -164,7 +164,7 @@ mod text {
         let error = TextEncodedScope::try_from(scope).expect_err("expected error");
         assert_eq!(error.actual_type, "AifEncoded");
         assert_eq!(error.expected_type, "TextEncoded");
-        assert_eq!(error.general_type, PhantomData::<Scope>::default());
+        assert_eq!(error.general_type, PhantomData::<Scope>);
     }
 }
 
@@ -315,7 +315,7 @@ mod aif {
         let error = AifEncodedScope::try_from(scope).expect_err("expected error");
         assert_eq!(error.actual_type, "LibdcafEncoded");
         assert_eq!(error.expected_type, "AifEncoded");
-        assert_eq!(error.general_type, PhantomData::<Scope>::default());
+        assert_eq!(error.general_type, PhantomData::<Scope>);
     }
 }
 
@@ -336,7 +336,7 @@ mod libdcaf {
     fn test_scope_elements_normal() {
         let (restricted, dynamic, all, none) = example_elements();
 
-        for element in vec![restricted, dynamic, all, none] {
+        for element in [restricted, dynamic, all, none] {
             let scope = LibdcafEncodedScope::from_element(element.clone());
             assert_eq!(scope.elements(), vec![&element]);
         }
@@ -388,7 +388,7 @@ mod libdcaf {
         let error = LibdcafEncodedScope::try_from(scope).expect_err("expected error");
         assert_eq!(error.actual_type, "BinaryEncoded");
         assert_eq!(error.expected_type, "LibdcafEncoded");
-        assert_eq!(error.general_type, PhantomData::<Scope>::default());
+        assert_eq!(error.general_type, PhantomData::<Scope>);
         Ok(())
     }
 }
@@ -509,7 +509,7 @@ mod binary {
         let error = BinaryEncodedScope::try_from(scope).expect_err("expected error");
         assert_eq!(error.actual_type, "TextEncoded");
         assert_eq!(error.expected_type, "BinaryEncoded");
-        assert_eq!(error.general_type, PhantomData::<Scope>::default());
+        assert_eq!(error.general_type, PhantomData::<Scope>);
 
         let invalid_values = vec![
             Value::Bool(true),

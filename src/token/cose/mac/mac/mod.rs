@@ -1,14 +1,11 @@
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypt;
-use crate::token::cose::encrypt::try_decrypt;
-use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher};
+use crate::token::cose::encrypt::CoseKeyDistributionCipher;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
 use crate::token::cose::mac::{try_compute, try_verify, CoseMacCipher};
 use crate::token::cose::recipient::CoseNestedRecipientSearchContext;
 use alloc::rc::Rc;
 use core::cell::RefCell;
-use core::fmt::Display;
-use coset::{CoseEncrypt, CoseEncryptBuilder, CoseMac, CoseMacBuilder, EncryptionContext, Header};
+use coset::{CoseMac, CoseMacBuilder, EncryptionContext, Header};
 
 #[cfg(all(test, feature = "std"))]
 mod tests;

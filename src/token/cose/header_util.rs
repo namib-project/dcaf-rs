@@ -1,7 +1,6 @@
 use crate::error::CoseCipherError;
 use crate::token::cose::header_util;
-use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, EllipticCurve};
-use crate::CoseSignCipher;
+use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey};
 use ciborium::Value;
 use core::fmt::Display;
 use coset::iana::EnumI64;
@@ -53,7 +52,7 @@ pub(crate) fn create_header_parameter_set(header_bucket: &Header) -> BTreeSet<La
 
     header_bucket_fields.extend(header_bucket.rest.iter().map(|(k, _v)| k.clone()));
 
-    return header_bucket_fields;
+    header_bucket_fields
 }
 
 pub(crate) fn find_param_index_by_label(
@@ -82,10 +81,7 @@ pub(crate) fn check_for_duplicate_headers<E: Display>(
         .collect();
     if !duplicate_header_fields.is_empty() {
         Err(CoseCipherError::DuplicateHeaders(
-            duplicate_header_fields
-                .into_iter()
-                .map(Label::clone)
-                .collect(),
+            duplicate_header_fields.into_iter().cloned().collect(),
         ))
     } else {
         Ok(())
@@ -105,7 +101,7 @@ pub(crate) fn determine_algorithm<CE: Display>(
     } else if let Some(Some(alg)) = unprotected_header.map(|v| &v.alg) {
         // ...in the unprotected header...
         Ok(alg.clone())
-    } else if let Some(alg) = &parsed_key.map(|v| v.as_ref().alg.clone()).flatten() {
+    } else if let Some(alg) = &parsed_key.and_then(|v| v.as_ref().alg.clone()) {
         // ...or the key itself.
         Ok(alg.clone())
     } else {

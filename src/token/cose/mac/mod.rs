@@ -19,19 +19,22 @@ pub trait CoseMacCipher: CoseCipher {
 }
 
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypt::CoseEncryptCipher;
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
 use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey, KeyParam};
 use crate::token::cose::CoseCipher;
 use alloc::rc::Rc;
 use ciborium::Value;
-use core::fmt::{Debug, Display};
+use core::fmt::Display;
 use coset::{iana, Algorithm, Header, KeyOperation};
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 
 mod mac;
 mod mac0;
+
+pub use mac::{CoseMacBuilderExt, CoseMacExt};
+
+pub use mac0::{CoseMac0BuilderExt, CoseMac0Ext};
 
 pub(crate) fn is_valid_hmac_key<'a, BE: Display>(
     algorithm: &Algorithm,
@@ -96,7 +99,6 @@ fn try_compute<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider>(
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::MacCreate)]),
         try_all_keys,
     )?
-    .into_iter()
     .next()
     .ok_or(CoseCipherError::NoKeyFound)?;
     let parsed_key = CoseParsedKey::try_from(&key)?;
@@ -107,7 +109,7 @@ fn try_compute<'a, 'b, B: CoseMacCipher, CKP: CoseKeyProvider>(
             let symm_key = is_valid_hmac_key(&algorithm, parsed_key)?;
             backend.compute_hmac(algorithm, symm_key, input)
         }
-        v @ (Algorithm::Assigned(_)) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+        v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
         // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
         //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
         v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
@@ -131,7 +133,7 @@ fn try_verify_with_key<B: CoseMacCipher>(
             let symm_key = is_valid_hmac_key(&algorithm, key)?;
             backend.verify_hmac(algorithm, symm_key, tag, data)
         }
-        v @ (Algorithm::Assigned(_)) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+        v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
         // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
         //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
         v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {

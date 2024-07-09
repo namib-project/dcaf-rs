@@ -6,22 +6,22 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use coset::iana::{Algorithm, EnumI64};
 use coset::{
-    iana, AsCborValue, CborSerializable, CoseError, CoseKey, CoseKeyBuilder, CoseRecipient,
-    CoseRecipientBuilder, Header, HeaderBuilder, Label, TaggedCborSerializable,
+    iana, AsCborValue, CborSerializable, CoseError, CoseKey, CoseKeyBuilder, CoseRecipientBuilder,
+    Header, HeaderBuilder, Label, TaggedCborSerializable,
 };
-use serde::de::Error;
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 fn deserialize_key<'de, D>(deserializer: D) -> Result<CoseKey, D::Error>
 where
     D: Deserializer<'de>,
 {
     let key_obj = serde_json::Map::deserialize(deserializer)?;
-    match key_obj.get("kty").map(Value::as_str).flatten() {
+    match key_obj.get("kty").and_then(Value::as_str) {
         Some("EC") => {
-            let curve = match key_obj.get("crv").map(Value::as_str).flatten() {
+            let curve = match key_obj.get("crv").and_then(Value::as_str) {
                 Some("P-256") => iana::EllipticCurve::P_256,
                 Some("P-384") => iana::EllipticCurve::P_384,
                 Some("P-521") => iana::EllipticCurve::P_521,
@@ -30,10 +30,8 @@ where
 
             let x = if let Some(v) = key_obj
                 .get("x")
-                .map(Value::as_str)
-                .flatten()
-                .map(|v| URL_SAFE_NO_PAD.decode(v).ok())
-                .flatten()
+                .and_then(Value::as_str)
+                .and_then(|v| URL_SAFE_NO_PAD.decode(v).ok())
             {
                 v
             } else {
@@ -42,10 +40,8 @@ where
 
             let y = if let Some(v) = key_obj
                 .get("y")
-                .map(Value::as_str)
-                .flatten()
-                .map(|v| URL_SAFE_NO_PAD.decode(v).ok())
-                .flatten()
+                .and_then(Value::as_str)
+                .and_then(|v| URL_SAFE_NO_PAD.decode(v).ok())
             {
                 v
             } else {
@@ -53,10 +49,8 @@ where
             };
             let d = if let Some(v) = key_obj
                 .get("d")
-                .map(Value::as_str)
-                .flatten()
-                .map(|v| URL_SAFE_NO_PAD.decode(v).ok())
-                .flatten()
+                .and_then(Value::as_str)
+                .and_then(|v| URL_SAFE_NO_PAD.decode(v).ok())
             {
                 v
             } else {
@@ -65,8 +59,8 @@ where
 
             let mut builder = CoseKeyBuilder::new_ec2_priv_key(curve, x, y, d);
 
-            if let Some(v) = key_obj.get("kid").map(Value::as_str).flatten() {
-                builder = builder.key_id(v.to_string().into_bytes())
+            if let Some(v) = key_obj.get("kid").and_then(Value::as_str) {
+                builder = builder.key_id(v.to_string().into_bytes());
             }
 
             Ok(builder.build())
@@ -74,10 +68,8 @@ where
         Some("oct") => {
             let k = if let Some(v) = key_obj
                 .get("k")
-                .map(Value::as_str)
-                .flatten()
-                .map(|v| URL_SAFE_NO_PAD.decode(v).ok())
-                .flatten()
+                .and_then(Value::as_str)
+                .and_then(|v| URL_SAFE_NO_PAD.decode(v).ok())
             {
                 v
             } else {
@@ -86,8 +78,8 @@ where
 
             let mut builder = CoseKeyBuilder::new_symmetric_key(k);
 
-            if let Some(v) = key_obj.get("kid").map(Value::as_str).flatten() {
-                builder = builder.key_id(v.to_string().into_bytes())
+            if let Some(v) = key_obj.get("kid").and_then(Value::as_str) {
+                builder = builder.key_id(v.to_string().into_bytes());
             }
 
             Ok(builder.build())
@@ -131,24 +123,23 @@ where
 
     let mut builder = HeaderBuilder::new();
 
-    if let Some(v) = hdr_obj.get("kid").map(Value::as_str).flatten() {
+    if let Some(v) = hdr_obj.get("kid").and_then(Value::as_str) {
         builder = builder.key_id(v.to_string().into_bytes());
     }
     if let Some(v) = hdr_obj
         .get("kid_hex")
-        .map(Value::as_str)
-        .flatten()
+        .and_then(Value::as_str)
         .map(hex::decode)
     {
         builder = builder
             .key_id(v.map_err(|e| de::Error::custom("could not parse test case key ID hex"))?);
     }
 
-    if let Some(alg) = string_to_algorithm::<D>(hdr_obj.get("alg").map(Value::as_str).flatten())? {
+    if let Some(alg) = string_to_algorithm::<D>(hdr_obj.get("alg").and_then(Value::as_str))? {
         builder = builder.algorithm(alg);
     }
 
-    builder = match hdr_obj.get("ctyp").map(Value::as_i64).flatten() {
+    builder = match hdr_obj.get("ctyp").and_then(Value::as_i64) {
         Some(v) => {
             let content_format = iana::CoapContentFormat::from_i64(v).ok_or(de::Error::custom(
                 "could not parse test case content format",
@@ -293,6 +284,87 @@ pub struct TestCaseOutput {
     pub cbor: Vec<u8>,
 }
 
+pub fn perform_cose_reference_output_test<T: CoseStructTestHelper<B>, B: CoseCipher>(
+    test_path: PathBuf,
+    mut backend: B,
+) {
+    let test_case_description: TestCase =
+        serde_json::from_reader(std::fs::File::open(test_path).expect("unable to open test case"))
+            .expect("invalid test case");
+
+    let example_output = match <T as CoseStructTestHelper<B>>::from_test_case_output(
+        test_case_description.output.cbor.as_slice(),
+    ) {
+        Ok(v) => v,
+        Err(e) => {
+            if test_case_description.fail {
+                println!("test case failed as expected. Error: {e:?}");
+                return;
+            }
+            panic!("unable to deserialize test case data");
+        }
+    };
+
+    example_output.check_against_test_case(&test_case_description, &mut backend);
+}
+
+pub fn perform_cose_self_signed_test<T: CoseStructTestHelper<B>, B: CoseCipher>(
+    test_path: PathBuf,
+    mut backend: B,
+) {
+    let mut test_case_description: TestCase =
+        serde_json::from_reader(std::fs::File::open(test_path).expect("unable to open test case"))
+            .expect("invalid test case");
+
+    let structure = T::from_test_case(&test_case_description, &mut backend);
+
+    let v = match <T as CoseStructTestHelper<B>>::serialize_and_apply_failures(
+        structure,
+        &test_case_description,
+    ) {
+        Ok(v) => v,
+        Err(e) => {
+            if test_case_description.fail {
+                println!("serialization failed as expected for test case: {:?}", e);
+                return;
+            }
+            panic!(
+                "unexpected error occurred while serializing COSE object: {:?}",
+                e
+            )
+        }
+    };
+
+    let redeserialized = match <T as CoseStructTestHelper<B>>::from_test_case_output(v.as_slice()) {
+        Ok(v) => v,
+        Err(e) => {
+            if test_case_description.fail {
+                println!("deserialization failed as expected for test case: {:?}", e);
+                return;
+            }
+            panic!(
+                "unexpected error occurred while deserializing COSE structure: {:?}",
+                e
+            )
+        }
+    };
+    redeserialized.check_against_test_case(&test_case_description, &mut backend);
+}
+
+pub trait CoseStructTestHelper<B: CoseCipher>:
+    Sized + CborSerializable + TaggedCborSerializable
+{
+    fn from_test_case_output(output: &[u8]) -> Result<Self, CoseError> {
+        Self::from_tagged_slice(output).or_else(|_e1| Self::from_slice(output).map_err(|e2| e2))
+    }
+
+    fn from_test_case(case: &TestCase, backend: &mut B) -> Self;
+
+    fn serialize_and_apply_failures(self, case: &TestCase) -> Result<Vec<u8>, CoseError>;
+
+    fn check_against_test_case(&self, case: &TestCase, backend: &mut B);
+}
+
 pub(crate) fn apply_header_failures(hdr: &mut Header, failures: &TestCaseFailures) {
     if let Some(headers_to_remove) = &failures.remove_protected_headers {
         if !headers_to_remove.key_id.is_empty() {
@@ -302,10 +374,10 @@ pub(crate) fn apply_header_failures(hdr: &mut Header, failures: &TestCaseFailure
             hdr.counter_signatures = Vec::new();
         }
         if let Some(new_val) = &headers_to_remove.alg {
-            hdr.alg = None
+            hdr.alg = None;
         }
         if let Some(new_val) = &headers_to_remove.content_type {
-            hdr.content_type = None
+            hdr.content_type = None;
         }
         if !headers_to_remove.crit.is_empty() {
             hdr.crit = Vec::new();
@@ -314,7 +386,7 @@ pub(crate) fn apply_header_failures(hdr: &mut Header, failures: &TestCaseFailure
             hdr.iv = Vec::new();
         }
         if !headers_to_remove.partial_iv.is_empty() {
-            hdr.partial_iv = Vec::new()
+            hdr.partial_iv = Vec::new();
         }
         let removed_fields = headers_to_remove
             .rest
@@ -328,30 +400,31 @@ pub(crate) fn apply_header_failures(hdr: &mut Header, failures: &TestCaseFailure
             .filter(|(label, _hdr)| !removed_fields.contains(label))
             .cloned()
             .collect::<Vec<(Label, ciborium::Value)>>();
-        hdr.rest = new_headers
+        hdr.rest = new_headers;
     }
 
     if let Some(headers_to_add) = &failures.add_protected_headers {
         if !headers_to_add.key_id.is_empty() {
-            hdr.key_id = headers_to_add.key_id.clone();
+            hdr.key_id.clone_from(&headers_to_add.key_id);
         }
         if !headers_to_add.counter_signatures.is_empty() {
-            hdr.counter_signatures = headers_to_add.counter_signatures.clone();
+            hdr.counter_signatures
+                .clone_from(&headers_to_add.counter_signatures);
         }
         if let Some(new_val) = &headers_to_add.alg {
-            hdr.alg = Some(new_val.clone())
+            hdr.alg = Some(new_val.clone());
         }
         if let Some(new_val) = &headers_to_add.content_type {
-            hdr.content_type = Some(new_val.clone())
+            hdr.content_type = Some(new_val.clone());
         }
         if !headers_to_add.crit.is_empty() {
-            hdr.crit = headers_to_add.crit.clone();
+            hdr.crit.clone_from(&headers_to_add.crit);
         }
         if !headers_to_add.iv.is_empty() {
-            hdr.iv = headers_to_add.iv.clone();
+            hdr.iv.clone_from(&headers_to_add.iv);
         }
         if !headers_to_add.partial_iv.is_empty() {
-            hdr.partial_iv = headers_to_add.partial_iv.clone();
+            hdr.partial_iv.clone_from(&headers_to_add.partial_iv);
         }
 
         let removed_fields = headers_to_add
@@ -367,7 +440,7 @@ pub(crate) fn apply_header_failures(hdr: &mut Header, failures: &TestCaseFailure
             .cloned()
             .collect::<Vec<(Label, ciborium::Value)>>();
         new_headers.append(&mut headers_to_add.rest.clone());
-        hdr.rest = new_headers
+        hdr.rest = new_headers;
     }
 }
 
@@ -390,38 +463,38 @@ pub(crate) fn serialize_cose_with_failures<T: AsCborValue + TaggedCborSerializab
 }
 
 pub(crate) fn apply_attribute_failures(
-    key: &mut CoseKey,
+    header: &mut Header,
     failures: &TestCaseFailures,
-) -> Option<CoseError> {
+) -> Result<(), CoseError> {
     if let Some(attribute_changes) = &failures.change_attribute {
         match attribute_changes.get("alg") {
-            None => None,
+            None => Ok(()),
             Some(Value::Number(v)) => {
                 let cbor_value = ciborium::Value::Integer(ciborium::value::Integer::from(
                     v.as_i64().expect("unable to parse algorithm number"),
                 ));
                 match coset::Algorithm::from_cbor_value(cbor_value) {
                     Ok(value) => {
-                        key.alg = Some(value);
-                        None
+                        header.alg = Some(value);
+                        Ok(())
                     }
-                    Err(e) => Some(e),
+                    Err(e) => Err(e),
                 }
             }
             Some(Value::String(v)) => {
                 let cbor_value = ciborium::Value::Text(v.to_string());
                 match coset::Algorithm::from_cbor_value(cbor_value) {
                     Ok(value) => {
-                        key.alg = Some(value);
-                        None
+                        header.alg = Some(value);
+                        Ok(())
                     }
-                    Err(e) => Some(e),
+                    Err(e) => Err(e),
                 }
             }
-            v => panic!("unable to set algorithm to {:?}", v),
+            v => panic!("unable to set algorithm to {v:?}"),
         }
     } else {
-        None
+        Ok(())
     }
 }
 

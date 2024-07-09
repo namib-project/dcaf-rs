@@ -11,17 +11,15 @@
 #![cfg(feature = "openssl")]
 use crate::error::CoseCipherError;
 use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher};
-use crate::token::cose::header_util::{find_param_by_label, HeaderParam};
+use crate::token::cose::header_util::HeaderParam;
 use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
 use crate::token::cose::mac::CoseMacCipher;
 use crate::token::cose::sign::CoseSignCipher;
 use crate::token::cose::CoseCipher;
 use alloc::vec::Vec;
 use ciborium::value::Value;
-use core::ops::Deref;
-use coset::iana::EnumI64;
-use coset::{iana, Algorithm, CoseKey, Header, Label, ProtectedHeader};
-use openssl::aes::{unwrap_key, wrap_key, AesKey, KeyError};
+use coset::{iana, Algorithm};
+use openssl::aes::{unwrap_key, wrap_key, AesKey};
 use openssl::bn::BigNum;
 use openssl::ec::{EcGroup, EcKey};
 use openssl::ecdsa::EcdsaSig;
@@ -30,8 +28,7 @@ use openssl::hash::MessageDigest;
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Private, Public};
 use openssl::sign::{Signer, Verifier};
-use openssl::symm::{decrypt, decrypt_aead, encrypt, encrypt_aead, Cipher};
-use std::convert::Infallible;
+use openssl::symm::{decrypt_aead, encrypt_aead, Cipher};
 use strum_macros::Display;
 
 #[derive(Debug, Display)]
@@ -80,6 +77,8 @@ impl CoseSignCipher for OpensslContext {
         let (pad_size, group) = get_ecdsa_group_params(key)?;
         let hash = get_algorithm_hash_function(&alg)?;
 
+        // Possible truncation is fine, the key size will never exceed the size of an i32.
+        #[allow(clippy::cast_possible_truncation)]
         sign_ecdsa(&group, pad_size as i32, hash, key, target)
     }
 
@@ -114,7 +113,7 @@ fn get_ecdsa_group_params(
             // to the nearest full bytes).
             Ok((66, EcGroup::from_curve_name(Nid::SECP521R1).unwrap()))
         }
-        v => return Err(CoseCipherError::UnsupportedCurve(v.clone())),
+        v => Err(CoseCipherError::UnsupportedCurve(v.clone())),
     }
 }
 
@@ -129,7 +128,7 @@ fn get_algorithm_hash_function(
         Algorithm::Assigned(iana::Algorithm::HMAC_256_256) => Ok(MessageDigest::sha256()),
         Algorithm::Assigned(iana::Algorithm::HMAC_384_384) => Ok(MessageDigest::sha384()),
         Algorithm::Assigned(iana::Algorithm::HMAC_512_512) => Ok(MessageDigest::sha512()),
-        v => return Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+        v => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
     }
 }
 
@@ -140,13 +139,11 @@ fn sign_ecdsa(
     key: &CoseEc2Key<'_, CoseOpensslCipherError>,
     target: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<CoseOpensslCipherError>> {
-    let private_key = cose_ec2_to_ec_private_key(key, &group).map_err(CoseCipherError::from)?;
+    let private_key = cose_ec2_to_ec_private_key(key, group).map_err(CoseCipherError::from)?;
 
     let mut signer = Signer::new(
         hash,
-        PKey::from_ec_key(private_key)
-            .map_err(CoseOpensslCipherError::from)?
-            .deref(),
+        &*PKey::from_ec_key(private_key).map_err(CoseOpensslCipherError::from)?,
     )
     .map_err(CoseOpensslCipherError::from)?;
 
@@ -184,7 +181,7 @@ fn verify_ecdsa(
     signature: &[u8],
     signed_data: &[u8],
 ) -> Result<(), CoseCipherError<CoseOpensslCipherError>> {
-    let public_key = cose_ec2_to_ec_public_key(key, &group).map_err(CoseCipherError::from)?;
+    let public_key = cose_ec2_to_ec_public_key(key, group).map_err(CoseCipherError::from)?;
     let pkey = PKey::from_ec_key(public_key).map_err(CoseOpensslCipherError::from)?;
 
     let mut verifier = Verifier::new(hash, &pkey).map_err(CoseOpensslCipherError::from)?;
@@ -216,14 +213,13 @@ fn cose_ec2_to_ec_private_key(
 
     EcKey::<Private>::from_private_components(
         group,
-        &BigNum::from_slice(
+        &*BigNum::from_slice(
             // According to the contract of the trait, this should be ensured by the caller, so it's
             // fine to panic here.
             key.d
                 .expect("key provided to backend has no private component"),
         )
-        .map_err(CoseCipherError::<CoseOpensslCipherError>::from)?
-        .deref(),
+        .map_err(CoseCipherError::<CoseOpensslCipherError>::from)?,
         public_key.public_key(),
     )
     .map_err(CoseCipherError::<CoseOpensslCipherError>::from)
@@ -240,13 +236,11 @@ fn cose_ec2_to_ec_public_key(
     }
 
     EcKey::<Public>::from_public_key_affine_coordinates(
-        &group,
-        &BigNum::from_slice(key.x.unwrap())
-            .map_err(CoseCipherError::<CoseOpensslCipherError>::from)?
-            .deref(),
-        &BigNum::from_slice(key.y.unwrap())
-            .map_err(CoseCipherError::<CoseOpensslCipherError>::from)?
-            .deref(),
+        group,
+        &*BigNum::from_slice(key.x.unwrap())
+            .map_err(CoseCipherError::<CoseOpensslCipherError>::from)?,
+        &*BigNum::from_slice(key.y.unwrap())
+            .map_err(CoseCipherError::<CoseOpensslCipherError>::from)?,
     )
     .map_err(CoseCipherError::<CoseOpensslCipherError>::from)
 }
@@ -299,7 +293,7 @@ fn algorithm_to_cipher(
         Algorithm::Assigned(iana::Algorithm::A128KW) => Ok(Cipher::aes_128_ecb()),
         Algorithm::Assigned(iana::Algorithm::A192KW) => Ok(Cipher::aes_192_ecb()),
         Algorithm::Assigned(iana::Algorithm::A256KW) => Ok(Cipher::aes_256_ecb()),
-        v => return Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+        v => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
     }
 }
 
@@ -312,14 +306,14 @@ impl CoseKeyDistributionCipher for OpensslContext {
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         let key = AesKey::new_encrypt(key.k)?;
-        let iv: [u8; 8] = iv.clone().try_into().map_err(|_e| {
+        let iv: [u8; 8] = iv.try_into().map_err(|_e| {
             CoseCipherError::InvalidHeaderParam(
                 HeaderParam::Generic(iana::HeaderParameter::Iv),
-                Value::Bytes(iv.clone().to_vec()),
+                Value::Bytes(iv.to_vec()),
             )
         })?;
         let mut output = vec![0u8; plaintext.len() + 8];
-        let output_len = wrap_key(&key, Some(iv), output.as_mut_slice(), plaintext.as_ref())?;
+        let output_len = wrap_key(&key, Some(iv), output.as_mut_slice(), plaintext)?;
         output.truncate(output_len);
         Ok(output)
     }
@@ -332,14 +326,14 @@ impl CoseKeyDistributionCipher for OpensslContext {
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         let key = AesKey::new_decrypt(key.k)?;
-        let iv: [u8; 8] = iv.clone().try_into().map_err(|e| {
+        let iv: [u8; 8] = iv.try_into().map_err(|e| {
             CoseCipherError::InvalidHeaderParam(
                 HeaderParam::Generic(iana::HeaderParameter::Iv),
-                Value::Bytes(iv.clone().to_vec()),
+                Value::Bytes(iv.to_vec()),
             )
         })?;
         let mut output = vec![0u8; ciphertext.len() - 8];
-        let output_len = unwrap_key(&key, Some(iv), output.as_mut_slice(), ciphertext.as_ref())?;
+        let output_len = unwrap_key(&key, Some(iv), output.as_mut_slice(), ciphertext)?;
         output.truncate(output_len);
         Ok(output)
     }

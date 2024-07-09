@@ -10,22 +10,10 @@
  */
 
 use ciborium::value::Value;
-use coset::cwt::{ClaimsSetBuilder, Timestamp};
-use coset::iana::EllipticCurve::P_256;
-use coset::iana::{Algorithm, CwtClaimName};
-use coset::{iana, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, Label, ProtectedHeader};
+use coset::{iana, CoseKey, Header, HeaderBuilder, Label};
 use rand::{CryptoRng, Error, RngCore};
 
 use dcaf::common::cbor_map::ToCborMap;
-use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
-use dcaf::common::scope::TextEncodedScope;
-use dcaf::endpoints::creation_hint::AuthServerRequestCreationHint;
-use dcaf::endpoints::token_req::{
-    AccessTokenRequest, AccessTokenResponse, AceProfile, ErrorCode, ErrorResponse, GrantType,
-    TokenType,
-};
-use dcaf::error::CoseCipherError;
-use dcaf::{sign_access_token, verify_access_token, CoseSignCipher};
 
 fn get_x_y_from_key(key: &CoseKey) -> (Vec<u8>, Vec<u8>) {
     const X_PARAM: i64 = iana::Ec2KeyParameter::X as i64;

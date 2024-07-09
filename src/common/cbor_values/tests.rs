@@ -39,7 +39,7 @@ mod pop {
             WrongSourceTypeError {
                 expected_type: "PlainCoseKey",
                 actual_type: "KeyId",
-                general_type: PhantomData::default(),
+                general_type: PhantomData,
             }
         );
         expect_ser_de(pop, None, "A10342DCAF")?;
@@ -74,7 +74,7 @@ mod pop {
             WrongSourceTypeError {
                 expected_type: "EncryptedCoseKey",
                 actual_type: "PlainCoseKey",
-                general_type: PhantomData::default(),
+                general_type: PhantomData,
             }
         );
         expect_ser_de(pop, None, "A101A501020242DCAF2001215820D7CC072DE2205BDC1537A543D53C60A6ACB62ECCD890C7FA27C9E354089BBE13225820F95E1D4B851A2CC80FFF87D8E23F22AFB725D535E515D020731E79A3B4E47120")?;
@@ -116,7 +116,7 @@ mod pop {
             WrongSourceTypeError {
                 expected_type: "KeyId",
                 actual_type: "EncryptedCoseKey",
-                general_type: PhantomData::default(),
+                general_type: PhantomData,
             }
         );
         expect_ser_de(pop, Some(transform_header), "A1028343A1010AA20442DCAF054D636898994FF0EC7BFCF6D3F95B58300573318A3573EB983E55A7C2F06CADD0796C9E584F1D0E3EA8C5B052592A8B2694BE9654F0431F38D5BBC8049FA7F13F")?;

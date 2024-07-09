@@ -41,7 +41,7 @@ impl CoseSignBuilderExt for CoseSignBuilder {
         backend: &mut B,
         key_provider: &mut CKP,
         sig: CoseSignature,
-        mut aad: &mut CAP,
+        aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         self.try_add_created_signature(
             sig.clone(),
@@ -70,7 +70,7 @@ impl CoseSignBuilderExt for CoseSignBuilder {
         key_provider: &mut CKP,
         sig: CoseSignature,
         payload: &[u8],
-        mut aad: &mut CAP,
+        aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         self.try_add_detached_signature(
             sig.clone(),
@@ -117,7 +117,7 @@ impl CoseSignExt for CoseSign {
         backend: &mut B,
         key_provider: &mut CKP,
         try_all_keys: bool,
-        mut aad: &mut CAP,
+        aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
         for sigindex in 0..self.signatures.len() {
             match self.verify_signature(
@@ -161,7 +161,7 @@ impl CoseSignExt for CoseSign {
         key_provider: &mut CKP,
         try_all_keys: bool,
         payload: &[u8],
-        mut aad: &mut CAP,
+        aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
         let aad = aad.borrow_mut();
         for sigindex in 0..self.signatures.len() {

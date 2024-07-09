@@ -16,8 +16,7 @@ use core::convert::identity;
 use core::fmt::{Debug, Display};
 
 use ciborium::value::Value;
-use coset::iana::Algorithm;
-use coset::{iana, CoseKey, CoseKeyBuilder, Header, Label, ProtectedHeader};
+use coset::{iana, CoseKey, Label};
 use rand::{CryptoRng, Error, RngCore};
 
 use {
@@ -29,7 +28,6 @@ use crate::common::cbor_map::ToCborMap;
 use crate::error::{AccessTokenError, CoseCipherError, MultipleCoseError};
 //use crate::token::MultipleEncryptCipher;
 //use crate::{CoseEncryptCipher, CoseMacCipher, CoseSignCipher};
-use crate::CoseSignCipher;
 
 /// Returns the value of the given symmetric [`key`].
 ///

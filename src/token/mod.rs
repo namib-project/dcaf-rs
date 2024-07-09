@@ -153,8 +153,6 @@
 //! # Ok::<(), AccessTokenError<String>>(())
 //! ```
 
-use core::fmt::{Debug, Display};
-
 use crate::common::cbor_values::ByteString;
 use crate::error::AccessTokenError;
 use crate::token::cose::key::CoseKeyProvider;
@@ -164,10 +162,9 @@ use cose::sign::{CoseSign1BuilderExt, CoseSign1Ext};
 use cose::sign::{CoseSignBuilderExt, CoseSignExt};
 use coset::cwt::ClaimsSet;
 use coset::{
-    AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseKey, CoseSign, CoseSign1,
-    CoseSign1Builder, CoseSignBuilder, CoseSignature, Header, ProtectedHeader,
+    AsCborValue, CborSerializable, CoseKey, CoseSign, CoseSign1, CoseSign1Builder, CoseSignBuilder,
+    CoseSignature, Header, ProtectedHeader,
 };
-use rand::{CryptoRng, RngCore};
 
 pub mod cose;
 #[cfg(test)]
@@ -404,7 +401,7 @@ where
     if let Some(protected) = protected_header {
         builder = builder.protected(protected);
     }
-    for (key, signature) in keys.into_iter() {
+    for (key, signature) in keys {
         builder = builder.try_add_sign::<T, &CoseKey, &[u8]>(
             backend,
             &mut &*key,

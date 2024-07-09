@@ -14,11 +14,9 @@
 use core::any::type_name;
 use core::fmt::{Display, Formatter};
 use std::collections::BTreeSet;
-use std::convert::Infallible;
 
 use ciborium::value::Value;
-use coset::iana::HeaderParameter;
-use coset::{iana, Algorithm, CoseError, KeyOperation, KeyType, Label};
+use coset::{Algorithm, CoseError, KeyOperation, KeyType, Label};
 use strum_macros::IntoStaticStr;
 
 use {alloc::format, alloc::string::String, alloc::string::ToString};
