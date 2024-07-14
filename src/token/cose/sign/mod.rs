@@ -18,7 +18,9 @@ pub use sign::{CoseSignBuilderExt, CoseSignExt};
 pub use sign1::{CoseSign1BuilderExt, CoseSign1Ext};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
+use crate::token::cose::header_util::{
+    check_for_duplicate_headers, determine_algorithm, determine_key_candidates,
+};
 use crate::token::cose::key::{CoseEc2Key, CoseKeyProvider, CoseParsedKey, KeyParam};
 use crate::token::cose::CoseCipher;
 
@@ -196,13 +198,16 @@ fn try_sign<B: CoseSignCipher, CKP: CoseKeyProvider>(
     unprotected: Option<&Header>,
     tosign: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    let key = determine_key_candidates(
+    if let (Some(protected), Some(unprotected)) = (protected, unprotected) {
+        check_for_duplicate_headers(protected, unprotected)?;
+    }
+    let key = determine_key_candidates::<B::Error, CKP>(
         key_provider,
         protected,
         unprotected,
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Sign)]),
         false,
-    )?
+    )
     .next()
     .ok_or(CoseCipherError::NoKeyFound)?;
     let parsed_key = CoseParsedKey::try_from(&key)?;
@@ -240,6 +245,7 @@ fn try_verify_with_key<B: CoseSignCipher>(
     signature: &[u8],
     toverify: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
+    check_for_duplicate_headers(protected, unprotected)?;
     let algorithm = determine_algorithm(Some(&key), Some(protected), Some(unprotected))?;
 
     match algorithm {
@@ -272,13 +278,14 @@ fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider>(
     signature: &[u8],
     toverify: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
-    for key in determine_key_candidates(
+    check_for_duplicate_headers(protected, unprotected)?;
+    for key in determine_key_candidates::<B::Error, CKP>(
         key_provider,
         Some(protected),
         Some(unprotected),
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Verify)]),
         try_all_keys,
-    )? {
+    ) {
         let parsed_key = CoseParsedKey::try_from(&key)?;
         match try_verify_with_key(
             backend,

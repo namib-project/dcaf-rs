@@ -11,7 +11,7 @@ pub mod sign;
 pub mod mac;
 pub mod recipient;
 #[cfg(test)]
-mod test_helper;
+pub(crate) mod test_helper;
 
 pub trait CoseCipher {
     /// Error type that this cipher uses in [`Result`]s returned by cryptographic operations.
@@ -19,6 +19,6 @@ pub trait CoseCipher {
 
     /// Fill the given buffer with random bytes.
     ///
-    /// Mainly used for IV generation if an IV is not provided by the application.
+    /// Mainly used for IV or key generation.
     fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>>;
 }

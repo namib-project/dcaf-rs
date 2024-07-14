@@ -10,7 +10,9 @@ pub use mac::{CoseMacBuilderExt, CoseMacExt};
 pub use mac0::{CoseMac0BuilderExt, CoseMac0Ext};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
+use crate::token::cose::header_util::{
+    check_for_duplicate_headers, determine_algorithm, determine_key_candidates,
+};
 use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey, KeyParam};
 use crate::token::cose::CoseCipher;
 
@@ -93,13 +95,16 @@ fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider>(
     try_all_keys: bool,
     input: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    let key = determine_key_candidates(
+    if let (Some(protected), Some(unprotected)) = (protected, unprotected) {
+        check_for_duplicate_headers(protected, unprotected)?;
+    }
+    let key = determine_key_candidates::<B::Error, CKP>(
         key_provider,
         protected,
         unprotected,
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::MacCreate)]),
         try_all_keys,
-    )?
+    )
     .next()
     .ok_or(CoseCipherError::NoKeyFound)?;
     let parsed_key = CoseParsedKey::try_from(&key)?;
@@ -127,6 +132,7 @@ fn try_verify_with_key<B: CoseMacCipher>(
     tag: &[u8],
     data: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
+    check_for_duplicate_headers(protected, unprotected)?;
     let algorithm = determine_algorithm(Some(&key), Some(protected), Some(unprotected))?;
 
     match algorithm {
@@ -152,13 +158,14 @@ pub(crate) fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider>(
     tag: &[u8],
     data: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
-    for key in determine_key_candidates(
+    check_for_duplicate_headers(protected, unprotected)?;
+    for key in determine_key_candidates::<B::Error, CKP>(
         *key_provider.borrow_mut(),
         Some(protected),
         Some(unprotected),
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Decrypt)]),
         try_all_keys,
-    )? {
+    ) {
         match try_verify_with_key(
             *backend.borrow_mut(),
             CoseParsedKey::try_from(&key)?,

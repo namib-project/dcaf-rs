@@ -72,8 +72,6 @@ pub(crate) fn find_param_by_label<'a>(
     find_param_index_by_label(label, param_vec).map(|i| &param_vec.get(i).unwrap().1)
 }
 
-// TODO is this something we should enforce? It shouldn't prevent us from serializing the structure
-//      if we want to...
 pub(crate) fn check_for_duplicate_headers<E: Display>(
     protected_header: &Header,
     unprotected_header: &Header,
@@ -119,7 +117,6 @@ pub(crate) fn determine_key_candidates<'a, CE: Display, CKP: CoseKeyProvider>(
     unprotected: Option<&'a Header>,
     operation: BTreeSet<KeyOperation>,
     try_all_keys: bool,
-    // TODO could the return value be an iterator here? Would avoid parsing some of the keys.
 ) -> Box<dyn Iterator<Item = CoseKey> + 'a> {
     let key_id = if try_all_keys {
         None

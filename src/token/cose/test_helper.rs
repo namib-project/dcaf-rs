@@ -1,6 +1,13 @@
+use core::fmt::{Debug, Display};
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::path::PathBuf;
 
+use crate::error::CoseCipherError;
+use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher};
+use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey};
+use crate::token::cose::CoseCipher;
+use crate::CoseSignCipher;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use coset::iana::{Algorithm, EnumI64};
@@ -8,10 +15,9 @@ use coset::{
     iana, AsCborValue, CborSerializable, CoseError, CoseKey, CoseKeyBuilder, CoseRecipientBuilder,
     Header, HeaderBuilder, Label, TaggedCborSerializable,
 };
+use rand::{CryptoRng, Rng};
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
-
-use crate::token::cose::CoseCipher;
 
 fn deserialize_key<'de, D>(deserializer: D) -> Result<CoseKey, D::Error>
 where
@@ -518,3 +524,196 @@ impl<T: CoseEncryptCipher> CoseCipher for RngMockCipher<T> {
         todo!()
     }
 }*/
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MockCipherAeadParams {
+    key: Vec<u8>,
+    algorithm: coset::Algorithm,
+    aad: Vec<u8>,
+    iv: Vec<u8>,
+}
+
+impl MockCipherAeadParams {
+    fn new_with_aes_params<E: Display + Debug>(
+        algorithm: coset::Algorithm,
+        key: CoseSymmetricKey<'_, E>,
+        aad: &[u8],
+        iv: &[u8],
+    ) -> MockCipherAeadParams {
+        MockCipherAeadParams {
+            key: key.k.to_vec(),
+            algorithm,
+            aad: aad.to_vec(),
+            iv: iv.to_vec(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct MockCipherEcdsaParams {
+    key: CoseKey,
+    algorithm: coset::Algorithm,
+    target: Vec<u8>,
+}
+
+impl MockCipherEcdsaParams {
+    fn new_with_ecdsa_params<E: Display + Debug>(
+        alg: coset::Algorithm,
+        key: &CoseEc2Key<'_, E>,
+        target: &[u8],
+    ) -> MockCipherEcdsaParams {
+        MockCipherEcdsaParams {
+            key: key.as_ref().clone(),
+            algorithm: alg,
+            target: target.to_vec(),
+        }
+    }
+}
+
+pub struct MockCipher<R: CryptoRng + Rng> {
+    rng: R,
+    aes_gcm_inputs: HashMap<Vec<u8>, (MockCipherAeadParams, Vec<u8>)>,
+    aes_kw_inputs: HashMap<Vec<u8>, (MockCipherAeadParams, Vec<u8>)>,
+    ecdsa_inputs: HashMap<Vec<u8>, MockCipherEcdsaParams>,
+}
+
+impl<R: CryptoRng + Rng> MockCipher<R> {
+    pub fn new(rng: R) -> MockCipher<R> {
+        MockCipher {
+            rng,
+            aes_gcm_inputs: HashMap::default(),
+            aes_kw_inputs: HashMap::default(),
+            ecdsa_inputs: HashMap::default(),
+        }
+    }
+}
+
+impl<R: CryptoRng + Rng> CoseCipher for MockCipher<R> {
+    type Error = Infallible;
+
+    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>> {
+        self.rng.fill_bytes(buf);
+        Ok(())
+    }
+}
+
+impl<R: CryptoRng + Rng> CoseEncryptCipher for MockCipher<R> {
+    fn encrypt_aes_gcm(
+        &mut self,
+        algorithm: coset::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let mut lookup_key = vec![0u8; 64];
+        self.rng.fill_bytes(lookup_key.as_mut_slice());
+        self.aes_gcm_inputs.insert(
+            lookup_key.clone(),
+            (
+                MockCipherAeadParams::new_with_aes_params(algorithm, key, aad, iv),
+                plaintext.to_vec(),
+            ),
+        );
+        Ok(lookup_key)
+    }
+
+    fn decrypt_aes_gcm(
+        &mut self,
+        algorithm: coset::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext_with_tag: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let (expected_input, plaintext) = self
+            .aes_gcm_inputs
+            .get(&ciphertext_with_tag.to_vec())
+            .ok_or(CoseCipherError::DecryptionFailure)?;
+        if expected_input.eq(&MockCipherAeadParams::new_with_aes_params(
+            algorithm, key, aad, iv,
+        )) {
+            return Ok(plaintext.clone());
+        }
+        return Err(CoseCipherError::DecryptionFailure);
+    }
+}
+
+impl<R: CryptoRng + Rng> CoseSignCipher for MockCipher<R> {
+    fn sign_ecdsa(
+        &mut self,
+        alg: coset::Algorithm,
+        key: &CoseEc2Key<'_, Self::Error>,
+        target: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let mut lookup_key = vec![0u8; 64];
+        self.rng.fill_bytes(lookup_key.as_mut_slice());
+        self.ecdsa_inputs.insert(
+            lookup_key.clone(),
+            MockCipherEcdsaParams::new_with_ecdsa_params(alg, key, target),
+        );
+        Ok(lookup_key)
+    }
+
+    fn verify_ecdsa(
+        &mut self,
+        alg: coset::Algorithm,
+        key: &CoseEc2Key<'_, Self::Error>,
+        signature: &[u8],
+        target: &[u8],
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        let expected_input = self
+            .ecdsa_inputs
+            .get(&signature.to_vec())
+            .ok_or(CoseCipherError::VerificationFailure)?;
+        if expected_input.eq(&MockCipherEcdsaParams::new_with_ecdsa_params(
+            alg, key, target,
+        )) {
+            return Ok(());
+        }
+        return Err(CoseCipherError::VerificationFailure);
+    }
+}
+
+impl<R: Rng + CryptoRng> CoseKeyDistributionCipher for MockCipher<R> {
+    fn aes_key_wrap(
+        &mut self,
+        algorithm: coset::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let mut lookup_key = vec![0u8; 64];
+        self.rng.fill_bytes(lookup_key.as_mut_slice());
+        self.aes_kw_inputs.insert(
+            lookup_key.clone(),
+            (
+                MockCipherAeadParams::new_with_aes_params(algorithm, key, &[] as &[u8], iv),
+                plaintext.to_vec(),
+            ),
+        );
+        Ok(lookup_key)
+    }
+
+    fn aes_key_unwrap(
+        &mut self,
+        algorithm: coset::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let (expected_input, plaintext) = self
+            .aes_kw_inputs
+            .get(&ciphertext.to_vec())
+            .ok_or(CoseCipherError::DecryptionFailure)?;
+        if expected_input.eq(&MockCipherAeadParams::new_with_aes_params(
+            algorithm,
+            key,
+            &[] as &[u8],
+            iv,
+        )) {
+            return Ok(plaintext.clone());
+        }
+        return Err(CoseCipherError::DecryptionFailure);
+    }
+}

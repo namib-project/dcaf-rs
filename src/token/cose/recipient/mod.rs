@@ -10,9 +10,9 @@ use coset::{
 };
 
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypt::is_valid_aes_key;
 use crate::token::cose::encrypt::CoseKeyDistributionCipher;
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
+use crate::token::cose::key::is_valid_aes_key;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider, CoseParsedKey};
 
 pub(crate) struct CoseNestedRecipientSearchContext<
@@ -343,6 +343,8 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
         plaintext: &[u8],
         external_aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
+        let mut builder = self;
+
         let alg =
             match determine_algorithm::<B::Error>(None, unprotected.as_ref(), protected.as_ref()) {
                 Ok(v) => v,
@@ -356,13 +358,13 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
         // Determine key operations that fulfill the requirements of the algorithm.
         let operation = determine_encrypt_key_ops_for_alg(&alg)?;
 
-        let key = determine_key_candidates(
+        let key = determine_key_candidates::<B::Error, CKP>(
             key_provider,
             protected.as_ref(),
             unprotected.as_ref(),
             operation,
             try_all_keys,
-        )?
+        )
         .next()
         .ok_or(CoseCipherError::NoKeyFound)?;
         let parsed_key = CoseParsedKey::try_from(&key)?;
@@ -372,6 +374,13 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
             return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
                 iana::Algorithm::Direct,
             )));
+        }
+
+        if let Some(protected) = &protected {
+            builder = builder.protected(protected.clone());
+        }
+        if let Some(unprotected) = &unprotected {
+            builder = builder.unprotected(unprotected.clone());
         }
 
         match alg {
@@ -384,7 +393,7 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
                     return Err(CoseCipherError::AadUnsupported);
                 }
 
-                self.try_create_ciphertext(
+                builder.try_create_ciphertext(
                     context,
                     plaintext,
                     external_aad.lookup_aad(
@@ -458,7 +467,7 @@ impl CoseRecipientExt for CoseRecipient {
             operation,
             try_all_keys,
         )
-        .map(|v| v.into_iter().collect())?;
+        .collect();
 
         // Direct => Key of key provider will be used for lower layer directly.
         // TODO ensure that Direct is the only method used on the message (RFC 9052, Section 8.5.1)
@@ -482,7 +491,6 @@ impl CoseRecipientExt for CoseRecipient {
                     if !self.protected.is_empty() {
                         return Err(CoseCipherError::AadUnsupported);
                     }
-                    dbg!(&self);
                     match self.decrypt(
                         context,
                         external_aad.lookup_aad(

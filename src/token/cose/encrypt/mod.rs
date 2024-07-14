@@ -3,13 +3,14 @@ use alloc::rc::Rc;
 use core::cell::RefCell;
 use core::fmt::Display;
 
-use ciborium::Value;
 use coset::{iana, Algorithm, Header, HeaderBuilder, KeyOperation};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
-use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey, KeyParam};
-use crate::token::cose::CoseCipher;
+use crate::token::cose::header_util::{
+    check_for_duplicate_headers, determine_algorithm, determine_key_candidates,
+};
+use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey};
+use crate::token::cose::{key, CoseCipher};
 
 mod encrypt;
 mod encrypt0;
@@ -89,106 +90,6 @@ impl HeaderBuilderExt for HeaderBuilder {
         Ok(self.iv(iv))
     }
 }
-/*
-/// Intended for ciphers which can encrypt for multiple recipients.
-/// For this purpose, a method must be provided which generates the Content Encryption Key.
-///
-/// If these recipients each use different key types, you can use an enum to represent them.
-pub trait MultipleEncryptCipher: CoseEncryptCipher {
-    /// Randomly generates a new Content Encryption Key (CEK) using the given `rng`.
-    /// The content of the `CoseEncrypt` will then be encrypted with the key, while each recipient
-    /// will be encrypted with a corresponding Key Encryption Key (KEK) provided by the caller
-    /// of [`encrypt_access_token_multiple`].
-    fn generate_cek<RNG: RngCore + CryptoRng>(rng: &mut RNG) -> CoseKey;
-}
-
-pub trait CoseEncrypt0BuilderExt {}
-
-impl CoseEncrypt0BuilderExt for CoseEncrypt0Builder {}
-
-pub trait CoseEncrypt0Ext {
-    fn try_decrypt<B: CoseEncryptCipher>(
-        &self,
-        backend: &mut B,
-        external_aad: &[u8],
-    ) -> Result<Vec<u8>, CoseCipherError<B::Error>>;
-}
-
-impl CoseEncrypt0Ext for CoseEncrypt0 {
-    fn try_decrypt<B: CoseEncryptCipher>(
-        &self,
-        backend: &mut B,
-        external_aad: &[u8],
-    ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    }
-}
-
-pub trait CoseEncryptBuilderExt {}
-
-impl CoseEncryptBuilderExt for CoseEncryptBuilder {}
-
-pub trait CoseEncryptExt {}
-
-impl CoseEncryptExt for CoseEncrypt {}
-*/
-pub(crate) fn is_valid_aes_key<'a, BE: Display>(
-    algorithm: &Algorithm,
-    parsed_key: CoseParsedKey<'a, BE>,
-) -> Result<CoseSymmetricKey<'a, BE>, CoseCipherError<BE>> {
-    // Checks according to RFC 9053, Section 4.1 and 4.2.
-
-    // Key type must be symmetric.
-    let symm_key = if let CoseParsedKey::Symmetric(symm_key) = parsed_key {
-        symm_key
-    } else {
-        return Err(CoseCipherError::KeyTypeAlgorithmMismatch(
-            parsed_key.as_ref().kty.clone(),
-            algorithm.clone(),
-        ));
-    };
-
-    // Algorithm in key must match algorithm to use.
-    if let Some(alg) = &symm_key.as_ref().alg {
-        if alg != algorithm {
-            return Err(CoseCipherError::KeyAlgorithmMismatch(
-                alg.clone(),
-                algorithm.clone(),
-            ));
-        }
-    }
-
-    // For algorithms that we know, check the key length (would lead to a cipher error later on).
-    let key_len = match algorithm {
-        Algorithm::Assigned(
-            iana::Algorithm::A128GCM
-            | iana::Algorithm::AES_CCM_16_64_128
-            | iana::Algorithm::AES_CCM_64_64_128
-            | iana::Algorithm::AES_CCM_16_128_128
-            | iana::Algorithm::AES_CCM_64_128_128
-            | iana::Algorithm::A128KW,
-        ) => Some(16),
-        Algorithm::Assigned(iana::Algorithm::A192GCM | iana::Algorithm::A192KW) => Some(24),
-        Algorithm::Assigned(
-            iana::Algorithm::A256GCM
-            | iana::Algorithm::AES_CCM_16_64_256
-            | iana::Algorithm::AES_CCM_64_64_256
-            | iana::Algorithm::AES_CCM_16_128_256
-            | iana::Algorithm::AES_CCM_64_128_256
-            | iana::Algorithm::A256KW,
-        ) => Some(32),
-        _ => None,
-    };
-    if let Some(key_len) = key_len {
-        if symm_key.k.len() != key_len {
-            return Err(CoseCipherError::InvalidKeyParam(
-                KeyParam::Symmetric(iana::SymmetricKeyParameter::K),
-                Value::Bytes(symm_key.k.to_vec()),
-            ));
-        }
-    }
-
-    Ok(symm_key)
-}
 
 fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
@@ -200,13 +101,16 @@ fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
     // NOTE: aad ist not the external AAD provided by the user, but the Enc_structure as defined in RFC 9052, Section 5.3
     aad: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    let key = determine_key_candidates(
+    if let (Some(protected), Some(unprotected)) = (protected, unprotected) {
+        check_for_duplicate_headers(protected, unprotected)?;
+    }
+    let key = determine_key_candidates::<B::Error, CKP>(
         key_provider,
         protected,
         unprotected,
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Encrypt)]),
         try_all_keys,
-    )?
+    )
     .next()
     .ok_or(CoseCipherError::NoKeyFound)?;
     let parsed_key = CoseParsedKey::try_from(&key)?;
@@ -217,7 +121,7 @@ fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
             iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM,
         ) => {
             // Check if this is a valid AES key.
-            let symm_key = is_valid_aes_key::<B::Error>(&algorithm, parsed_key)?;
+            let symm_key = key::is_valid_aes_key::<B::Error>(&algorithm, parsed_key)?;
 
             let iv = if protected.is_some() && !protected.unwrap().iv.is_empty() {
                 protected.unwrap().iv.as_ref()
@@ -247,6 +151,7 @@ fn try_decrypt_with_key<B: CoseEncryptCipher>(
     // NOTE: aad ist not the external AAD provided by the user, but the Enc_structure as defined in RFC 9052, Section 5.3
     aad: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
+    check_for_duplicate_headers(protected, unprotected)?;
     let algorithm = determine_algorithm(Some(&key), Some(protected), Some(unprotected))?;
 
     match algorithm {
@@ -254,7 +159,7 @@ fn try_decrypt_with_key<B: CoseEncryptCipher>(
             iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM,
         ) => {
             // Check if this is a valid AES key.
-            let symm_key = is_valid_aes_key::<B::Error>(&algorithm, key)?;
+            let symm_key = key::is_valid_aes_key::<B::Error>(&algorithm, key)?;
 
             let iv = if !protected.iv.is_empty() {
                 protected.iv.as_ref()
@@ -290,13 +195,14 @@ pub(crate) fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
     // NOTE: aad ist not the external AAD provided by the user, but the Enc_structure as defined in RFC 9052, Section 5.3
     aad: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    for key in determine_key_candidates(
+    check_for_duplicate_headers(protected, unprotected)?;
+    for key in determine_key_candidates::<B::Error, CKP>(
         *key_provider.borrow_mut(),
         Some(protected),
         Some(unprotected),
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Decrypt)]),
         try_all_keys,
-    )? {
+    ) {
         match try_decrypt_with_key(
             *backend.borrow_mut(),
             CoseParsedKey::try_from(&key)?,

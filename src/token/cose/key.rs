@@ -5,12 +5,13 @@ use core::marker::PhantomData;
 use ciborium::Value;
 use coset::iana::EnumI64;
 use coset::{
-    iana, AsCborValue, CoseKey, EncryptionContext, Header, KeyType, Label,
-    RegisteredLabelWithPrivate,
+    iana, Algorithm, AsCborValue, CoseKey, CoseKeyBuilder, EncryptionContext, Header, KeyType,
+    Label, RegisteredLabelWithPrivate,
 };
 
 use crate::error::CoseCipherError;
 use crate::token::cose::header_util::find_param_by_label;
+use crate::token::cose::CoseCipher;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum KeyParam {
@@ -502,5 +503,93 @@ where
                 | EncryptionContext::RecRecipient,
             ) => &[] as &[u8],
         }
+    }
+}
+
+fn symmetric_key_size<BE: Display>(algorithm: &Algorithm) -> Result<usize, CoseCipherError<BE>> {
+    match algorithm {
+        Algorithm::Assigned(
+            iana::Algorithm::A128GCM
+            | iana::Algorithm::AES_CCM_16_64_128
+            | iana::Algorithm::AES_CCM_64_64_128
+            | iana::Algorithm::AES_CCM_16_128_128
+            | iana::Algorithm::AES_CCM_64_128_128
+            | iana::Algorithm::A128KW,
+        ) => Ok(16),
+        Algorithm::Assigned(iana::Algorithm::A192GCM | iana::Algorithm::A192KW) => Ok(24),
+        Algorithm::Assigned(
+            iana::Algorithm::A256GCM
+            | iana::Algorithm::AES_CCM_16_64_256
+            | iana::Algorithm::AES_CCM_64_64_256
+            | iana::Algorithm::AES_CCM_16_128_256
+            | iana::Algorithm::AES_CCM_64_128_256
+            | iana::Algorithm::A256KW,
+        ) => Ok(32),
+        _ => Err(CoseCipherError::UnsupportedAlgorithm(algorithm.clone())),
+    }
+}
+
+pub(crate) fn is_valid_aes_key<'a, BE: Display>(
+    algorithm: &Algorithm,
+    parsed_key: CoseParsedKey<'a, BE>,
+) -> Result<CoseSymmetricKey<'a, BE>, CoseCipherError<BE>> {
+    // Checks according to RFC 9053, Section 4.1 and 4.2.
+
+    // Key type must be symmetric.
+    let symm_key = if let CoseParsedKey::Symmetric(symm_key) = parsed_key {
+        symm_key
+    } else {
+        return Err(CoseCipherError::KeyTypeAlgorithmMismatch(
+            parsed_key.as_ref().kty.clone(),
+            algorithm.clone(),
+        ));
+    };
+
+    // Algorithm in key must match algorithm to use.
+    if let Some(alg) = &symm_key.as_ref().alg {
+        if alg != algorithm {
+            return Err(CoseCipherError::KeyAlgorithmMismatch(
+                alg.clone(),
+                algorithm.clone(),
+            ));
+        }
+    }
+
+    // For algorithms that we know, check the key length (would lead to a cipher error later on).
+    let key_len = symmetric_key_size(algorithm)?;
+    if symm_key.k.len() != key_len {
+        return Err(CoseCipherError::InvalidKeyParam(
+            KeyParam::Symmetric(iana::SymmetricKeyParameter::K),
+            Value::Bytes(symm_key.k.to_vec()),
+        ));
+    }
+
+    Ok(symm_key)
+}
+
+pub(crate) fn generate_cek_for_alg<B: CoseCipher>(
+    backend: &mut B,
+    alg: Algorithm,
+) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
+    match alg {
+        Algorithm::Assigned(
+            v @ (iana::Algorithm::A128GCM
+            | iana::Algorithm::AES_CCM_16_64_128
+            | iana::Algorithm::AES_CCM_64_64_128
+            | iana::Algorithm::AES_CCM_16_128_128
+            | iana::Algorithm::AES_CCM_64_128_128
+            | iana::Algorithm::A192GCM
+            | iana::Algorithm::A256GCM
+            | iana::Algorithm::AES_CCM_16_64_256
+            | iana::Algorithm::AES_CCM_64_64_256
+            | iana::Algorithm::AES_CCM_16_128_256
+            | iana::Algorithm::AES_CCM_64_128_256),
+        ) => {
+            let key_len = symmetric_key_size(&alg)?;
+            let mut key = vec![0u8; key_len];
+            backend.generate_rand(key.as_mut_slice())?;
+            Ok(key)
+        }
+        v => Err(CoseCipherError::UnsupportedAlgorithm(v)),
     }
 }
