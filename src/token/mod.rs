@@ -170,9 +170,9 @@ use cose::sign::{CoseSignBuilderExt, CoseSignExt};
 use coset::cwt::ClaimsSet;
 use coset::{
     iana, Algorithm, AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder,
-    CoseEncryptBuilder, CoseKey, CoseKeyBuilder, CoseRecipient, CoseRecipientBuilder, CoseSign,
-    CoseSign1, CoseSign1Builder, CoseSignBuilder, CoseSignature, EncryptionContext, Header,
-    HeaderBuilder, ProtectedHeader,
+    CoseEncryptBuilder, CoseKey, CoseKeyBuilder, CoseRecipientBuilder, CoseSign, CoseSign1,
+    CoseSign1Builder, CoseSignBuilder, CoseSignature, EncryptionContext, Header, HeaderBuilder,
+    ProtectedHeader,
 };
 
 pub mod cose;
@@ -266,7 +266,7 @@ pub fn encrypt_access_token_multiple<'a, T, I>(
 ) -> Result<ByteString, AccessTokenError<T::Error>>
 where
     T: CoseEncryptCipher + CoseKeyDistributionCipher,
-    I: IntoIterator<Item = (&'a CoseKey)>,
+    I: IntoIterator<Item = &'a CoseKey>,
     I::IntoIter: ExactSizeIterator,
 {
     let mut result = CoseEncryptBuilder::new();

@@ -1,3 +1,5 @@
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::borrow::BorrowMut;
 use core::fmt::Display;
 use core::marker::PhantomData;
@@ -5,8 +7,8 @@ use core::marker::PhantomData;
 use ciborium::Value;
 use coset::iana::EnumI64;
 use coset::{
-    iana, Algorithm, AsCborValue, CoseKey, CoseKeyBuilder, EncryptionContext, Header, KeyType,
-    Label, RegisteredLabelWithPrivate,
+    iana, Algorithm, AsCborValue, CoseKey, EncryptionContext, Header, KeyType, Label,
+    RegisteredLabelWithPrivate,
 };
 
 use crate::error::CoseCipherError;
@@ -393,9 +395,9 @@ impl CoseKeyProvider for Option<&CoseKey> {
     fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
         let ret: Box<dyn Iterator<Item = &CoseKey>> = match (self, &key_id) {
             (Some(key), Some(key_id)) if key.key_id.as_slice() != *key_id => {
-                Box::new(std::iter::empty())
+                Box::new(core::iter::empty())
             }
-            (Some(key), Some(_key_id)) => Box::new(std::iter::once(*key)),
+            (Some(key), Some(_key_id)) => Box::new(core::iter::once(*key)),
             (v, _) => Box::new(v.iter().copied()),
         };
         ret.cloned()
@@ -404,7 +406,7 @@ impl CoseKeyProvider for Option<&CoseKey> {
 
 impl CoseKeyProvider for &CoseKey {
     fn lookup_key(&mut self, _key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
-        std::iter::once(self.clone())
+        core::iter::once(self.clone())
     }
 }
 
@@ -463,7 +465,7 @@ impl CoseAadProvider for Option<&[u8]> {
     }
 }
 
-impl<'a, 'b: 'a> CoseAadProvider for std::slice::Iter<'a, &'b [u8]> {
+impl<'a, 'b: 'a> CoseAadProvider for core::slice::Iter<'a, &'b [u8]> {
     fn lookup_aad(
         &mut self,
         context: Option<EncryptionContext>,
@@ -483,7 +485,7 @@ impl<'a, 'b: 'a> CoseAadProvider for std::slice::Iter<'a, &'b [u8]> {
     }
 }
 
-impl<'a, 'b: 'a, I: Iterator, F> CoseAadProvider for &'a mut std::iter::Map<I, F>
+impl<'a, 'b: 'a, I: Iterator, F> CoseAadProvider for &'a mut core::iter::Map<I, F>
 where
     F: FnMut(I::Item) -> &'b [u8],
 {
@@ -573,7 +575,7 @@ pub(crate) fn generate_cek_for_alg<B: CoseCipher>(
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
     match alg {
         Algorithm::Assigned(
-            v @ (iana::Algorithm::A128GCM
+            iana::Algorithm::A128GCM
             | iana::Algorithm::AES_CCM_16_64_128
             | iana::Algorithm::AES_CCM_64_64_128
             | iana::Algorithm::AES_CCM_16_128_128
@@ -583,7 +585,7 @@ pub(crate) fn generate_cek_for_alg<B: CoseCipher>(
             | iana::Algorithm::AES_CCM_16_64_256
             | iana::Algorithm::AES_CCM_64_64_256
             | iana::Algorithm::AES_CCM_16_128_256
-            | iana::Algorithm::AES_CCM_64_128_256),
+            | iana::Algorithm::AES_CCM_64_128_256,
         ) => {
             let key_len = symmetric_key_size(&alg)?;
             let mut key = vec![0u8; key_len];

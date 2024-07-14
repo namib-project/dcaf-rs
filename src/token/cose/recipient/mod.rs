@@ -1,5 +1,7 @@
+use alloc::boxed::Box;
 use alloc::collections::{BTreeSet, VecDeque};
 use alloc::rc::Rc;
+use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::fmt::Display;
 use core::marker::PhantomData;
@@ -510,8 +512,8 @@ impl CoseRecipientExt for CoseRecipient {
                         },
                     ) {
                         Ok(v) => return Ok(vec![CoseKeyBuilder::new_symmetric_key(v).build()]),
-                        Err(e) => {
-                            dbg!(e);
+                        Err(_e) => {
+                            // TODO some better output here
                             // Decryption using key failed, skip.
                             continue;
                         }

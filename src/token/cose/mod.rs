@@ -10,7 +10,7 @@ pub mod sign;
 
 pub mod mac;
 pub mod recipient;
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 pub(crate) mod test_helper;
 
 pub trait CoseCipher {

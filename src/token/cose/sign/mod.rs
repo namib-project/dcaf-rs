@@ -9,6 +9,7 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 use alloc::collections::BTreeSet;
+use alloc::vec::Vec;
 use core::fmt::Display;
 
 use coset::iana::Ec2KeyParameter;
@@ -296,8 +297,9 @@ fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider>(
             toverify,
         ) {
             Ok(()) => return Ok(()),
-            Err(e) => {
-                dbg!(e);
+            Err(_e) => {
+                // TODO better output here
+                continue;
             }
         }
     }

@@ -10,8 +10,9 @@
  */
 
 use super::*;
+use crate::common::test_helper::MockCipher;
 use crate::error::CoseCipherError;
-use crate::token::cose::test_helper::MockCipher;
+use alloc::vec::Vec;
 use alloc::{string::ToString, vec};
 use base64::Engine;
 use ciborium::value::Value;

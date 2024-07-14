@@ -1,4 +1,5 @@
 use alloc::rc::Rc;
+use alloc::vec::Vec;
 use core::cell::RefCell;
 
 use coset::{CoseEncrypt0, CoseEncrypt0Builder, EncryptionContext, Header};

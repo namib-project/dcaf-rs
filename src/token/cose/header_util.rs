@@ -1,4 +1,6 @@
+use alloc::boxed::Box;
 use alloc::collections::BTreeSet;
+use alloc::vec::Vec;
 use core::fmt::Display;
 
 use ciborium::Value;
@@ -67,7 +69,7 @@ pub(crate) fn find_param_index_by_label(
 
 pub(crate) fn find_param_by_label<'a>(
     label: &Label,
-    param_vec: &'a Vec<(Label, Value)>,
+    param_vec: &'a [(Label, Value)],
 ) -> Option<&'a Value> {
     find_param_index_by_label(label, param_vec).map(|i| &param_vec.get(i).unwrap().1)
 }

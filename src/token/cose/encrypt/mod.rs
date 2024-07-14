@@ -1,7 +1,7 @@
 use alloc::collections::BTreeSet;
 use alloc::rc::Rc;
+use alloc::vec::Vec;
 use core::cell::RefCell;
-use core::fmt::Display;
 
 use coset::{iana, Algorithm, Header, HeaderBuilder, KeyOperation};
 
@@ -212,8 +212,9 @@ pub(crate) fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
             aad,
         ) {
             Ok(v) => return Ok(v),
-            Err(e) => {
-                dbg!(e);
+            Err(_e) => {
+                // TODO better output here
+                continue;
             }
         }
     }

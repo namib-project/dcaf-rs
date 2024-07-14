@@ -12,6 +12,7 @@
 //! Contains error types used across this crate.
 
 use alloc::collections::BTreeSet;
+use alloc::vec::Vec;
 use core::any::type_name;
 use core::fmt::{Display, Formatter};
 

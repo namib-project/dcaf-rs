@@ -1,5 +1,6 @@
 use alloc::collections::BTreeSet;
 use alloc::rc::Rc;
+use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::fmt::Display;
 
@@ -175,8 +176,9 @@ pub(crate) fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider>(
             data,
         ) {
             Ok(v) => return Ok(v),
-            Err(e) => {
-                dbg!(e);
+            Err(_e) => {
+                // TODO better output here
+                continue;
             }
         }
     }

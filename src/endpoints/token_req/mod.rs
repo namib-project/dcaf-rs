@@ -854,10 +854,13 @@ mod conversion {
     impl ToCborMap for ErrorResponse {
         fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
             let error = CborMapValue(self.error);
-            cbor_map_vec! {
-                token::ERROR => Some(error),
-                token::ERROR_DESCRIPTION => self.description.as_ref(),
-                token::ERROR_URI => self.uri.as_ref()
+            #[allow(clippy::cast_lossless)]
+            {
+                cbor_map_vec! {
+                    token::ERROR => Some(error),
+                    token::ERROR_DESCRIPTION => self.description.as_ref(),
+                    token::ERROR_URI => self.uri.as_ref()
+                }
             }
         }
 
