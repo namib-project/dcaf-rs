@@ -10,8 +10,10 @@ use coset::{
 use rstest::rstest;
 
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
-use crate::token::cose::encrypt::encrypt::{CoseEncryptBuilderExt, CoseEncryptExt};
-use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher, HeaderBuilderExt};
+use crate::token::cose::encrypted::encrypt::{CoseEncryptBuilderExt, CoseEncryptExt};
+use crate::token::cose::encrypted::{
+    CoseEncryptCipher, CoseKeyDistributionCipher, HeaderBuilderExt,
+};
 use crate::token::cose::header_util::determine_algorithm;
 use crate::token::cose::key::CoseSymmetricKey;
 use crate::token::cose::recipient::CoseRecipientBuilderExt;

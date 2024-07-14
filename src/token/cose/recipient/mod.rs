@@ -12,9 +12,9 @@ use coset::{
 };
 
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypt::CoseKeyDistributionCipher;
+use crate::token::cose::encrypted::CoseKeyDistributionCipher;
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
-use crate::token::cose::key::is_valid_aes_key;
+use crate::token::cose::key::ensure_valid_aes_key;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider, CoseParsedKey};
 
 pub(crate) struct CoseNestedRecipientSearchContext<
@@ -360,7 +360,7 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
         // Determine key operations that fulfill the requirements of the algorithm.
         let operation = determine_encrypt_key_ops_for_alg(&alg)?;
 
-        let key = determine_key_candidates::<B::Error, CKP>(
+        let key = determine_key_candidates::<CKP>(
             key_provider,
             protected.as_ref(),
             unprotected.as_ref(),
@@ -389,7 +389,7 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
             Algorithm::Assigned(
                 iana::Algorithm::A128KW | iana::Algorithm::A192KW | iana::Algorithm::A256KW,
             ) => {
-                let symm_key = is_valid_aes_key(&alg, parsed_key)?;
+                let symm_key = ensure_valid_aes_key(&alg, parsed_key)?;
 
                 if protected.is_some() && !protected.as_ref().unwrap().is_empty() {
                     return Err(CoseCipherError::AadUnsupported);
@@ -462,7 +462,7 @@ impl CoseRecipientExt for CoseRecipient {
         // Determine key operations that fulfill the requirements of the algorithm.
         let operation = determine_decrypt_key_ops_for_alg(&alg)?;
 
-        let key_candidates: Vec<CoseKey> = determine_key_candidates::<B::Error, CKP>(
+        let key_candidates: Vec<CoseKey> = determine_key_candidates::<CKP>(
             key_provider,
             Some(&self.protected.header),
             Some(&self.unprotected),
@@ -483,7 +483,7 @@ impl CoseRecipientExt for CoseRecipient {
                 Algorithm::Assigned(
                     iana::Algorithm::A128KW | iana::Algorithm::A192KW | iana::Algorithm::A256KW,
                 ) => {
-                    let symm_key = match is_valid_aes_key(&alg, parsed_key) {
+                    let symm_key = match ensure_valid_aes_key(&alg, parsed_key) {
                         Ok(v) => v,
                         Err(_e) => {
                             // Key is not an AES key, skip.

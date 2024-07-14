@@ -3,12 +3,12 @@ use core::fmt::{Debug, Display};
 use crate::error::CoseCipherError;
 
 pub mod crypto_impl;
-pub mod encrypt;
+pub mod encrypted;
 pub mod header_util;
 pub mod key;
-pub mod sign;
+pub mod signed;
 
-pub mod mac;
+pub mod maced;
 pub mod recipient;
 #[cfg(all(test, feature = "std"))]
 pub(crate) mod test_helper;

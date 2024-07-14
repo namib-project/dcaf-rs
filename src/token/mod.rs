@@ -155,18 +155,18 @@
 
 use crate::common::cbor_values::ByteString;
 use crate::error::{AccessTokenError, CoseCipherError};
-use crate::token::cose::encrypt::{
+use crate::token::cose::encrypted::{
     CoseEncrypt0BuilderExt, CoseEncrypt0Ext, CoseEncryptBuilderExt, CoseEncryptCipher,
     CoseEncryptExt, CoseKeyDistributionCipher,
 };
 use crate::token::cose::header_util::determine_algorithm;
 use crate::token::cose::key::{generate_cek_for_alg, CoseKeyProvider, CoseParsedKey};
 use crate::token::cose::recipient::CoseRecipientBuilderExt;
-pub use crate::token::cose::sign::CoseSignCipher;
+pub use crate::token::cose::signed::CoseSignCipher;
 use crate::token::cose::CoseCipher;
 use ciborium::value::Value;
-use cose::sign::{CoseSign1BuilderExt, CoseSign1Ext};
-use cose::sign::{CoseSignBuilderExt, CoseSignExt};
+use cose::signed::{CoseSign1BuilderExt, CoseSign1Ext};
+use cose::signed::{CoseSignBuilderExt, CoseSignExt};
 use coset::cwt::ClaimsSet;
 use coset::{
     iana, Algorithm, AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder,
@@ -531,10 +531,8 @@ where
     CKP: CoseKeyProvider,
 {
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
-    let result = sign.try_verify(backend, key_provider, try_all_keys, &mut external_aad);
-    result?;
-
-    Ok(())
+    sign.try_verify(backend, key_provider, try_all_keys, &mut external_aad)
+        .map_err(AccessTokenError::from)
 }
 
 /// Verifies the given `token` and `external_aad` with the `key` using the cipher

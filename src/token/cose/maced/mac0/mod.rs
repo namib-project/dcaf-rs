@@ -6,7 +6,7 @@ use coset::{CoseMac0, CoseMac0Builder, Header};
 
 use crate::error::CoseCipherError;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
-use crate::token::cose::mac::{try_compute, try_verify, CoseMacCipher};
+use crate::token::cose::maced::{try_compute, try_verify, CoseMacCipher};
 
 #[cfg(all(test, feature = "std"))]
 mod tests;

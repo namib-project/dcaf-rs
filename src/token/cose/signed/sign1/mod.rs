@@ -2,7 +2,7 @@ use coset::{CoseSign1, CoseSign1Builder, Header};
 
 use crate::error::CoseCipherError;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
-use crate::token::cose::sign;
+use crate::token::cose::signed;
 use crate::CoseSignCipher;
 
 #[cfg(all(test, feature = "std"))]
@@ -13,14 +13,12 @@ mod tests;
 pub trait CoseSign1BuilderExt: Sized {
     /// Creates the signature for the CoseSign1 object using the given backend.
     ///
-    /// Will also set potentially required headers and check whether the given key is appropriate
-    /// for signing and matches the header information.
-    ///
     /// Parameters:
     /// - `backend`: cryptographic backend to use
-    /// - `key`: Key to use for signing.
+    /// - `key_provider`: Key provider to use for signing (usually a slice of keys will suffice).
     /// - `protected`: protected headers, will override the previously set ones.
     /// - `unprotected`: unprotected headers, will override the previously set ones.
+    /// - `aad`: External additional authenticated data to include in the signature calculation.
     ///
     /// TODO: Setting all of these options at once kind of defeats the purpose of
     ///       the builder pattern, but it is necessary here, as we lack access to the `protected`
@@ -37,14 +35,13 @@ pub trait CoseSign1BuilderExt: Sized {
 
     /// Builds the CoseSign1 object with a detached payload using the given backend.
     ///
-    /// Will also set potentially required headers and check whether the given key is appropriate
-    /// for signing and matches the header information.
-    ///
     /// Parameters:
     /// - `backend`: cryptographic backend to use
-    /// - `key`: Key to use for signing.
+    /// - `key_provider`: Key provider to use for signing (usually a slice of keys will suffice).
     /// - `protected`: protected headers, will override the previously set ones.
     /// - `unprotected`: unprotected headers, will override the previously set ones.
+    /// - `payload`: detached payload that should be signed.
+    /// - `aad`: External additional authenticated data to include in the signature calculation.
     ///
     /// TODO: Setting all of these options at once kind of defeats the purpose of
     ///       the builder pattern, but it is necessary here, as we lack access to the `protected`
@@ -80,7 +77,7 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
         builder.try_create_signature(
             aad.lookup_aad(None, protected.as_ref(), unprotected.as_ref()),
             |tosign| {
-                sign::try_sign(
+                signed::try_sign(
                     backend,
                     key_provider,
                     protected.as_ref(),
@@ -110,7 +107,7 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
             payload,
             aad.lookup_aad(None, protected.as_ref(), unprotected.as_ref()),
             |tosign| {
-                sign::try_sign(
+                signed::try_sign(
                     backend,
                     key_provider,
                     protected.as_ref(),
@@ -152,7 +149,7 @@ impl CoseSign1Ext for CoseSign1 {
         self.verify_signature(
             aad.lookup_aad(None, Some(&self.protected.header), Some(&self.unprotected)),
             |signature, toverify| {
-                sign::try_verify(
+                signed::try_verify(
                     backend,
                     key_provider,
                     &self.protected.header,
@@ -162,9 +159,7 @@ impl CoseSign1Ext for CoseSign1 {
                     toverify,
                 )
             },
-        )?;
-
-        Ok(())
+        )
     }
 
     fn try_verify_detached<
@@ -185,7 +180,7 @@ impl CoseSign1Ext for CoseSign1 {
             payload,
             aad.lookup_aad(None, Some(&self.protected.header), Some(&self.unprotected)),
             |signature, toverify| {
-                sign::try_verify(
+                signed::try_verify(
                     backend,
                     key_provider,
                     &self.protected.header,

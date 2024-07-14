@@ -20,7 +20,7 @@ use rand::{CryptoRng, Rng};
 
 use crate::common::cbor_map::ToCborMap;
 use crate::error::{AccessTokenError, CoseCipherError, MultipleCoseError};
-use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher};
+use crate::token::cose::encrypted::{CoseEncryptCipher, CoseKeyDistributionCipher};
 use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey};
 use crate::token::cose::CoseCipher;
 use crate::CoseSignCipher;
@@ -93,11 +93,6 @@ where
 {
     fn from(x: CoseCipherError<MultipleCoseError<C, K>>) -> Self {
         match x {
-            CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            } => CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            },
             CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
             CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
             CoseCipherError::Other(x) => CoseCipherError::Other(x.to_string()),
@@ -119,12 +114,9 @@ where
                 CoseCipherError::KeyAlgorithmMismatch(v, w)
             }
             CoseCipherError::DuplicateHeaders(v) => CoseCipherError::DuplicateHeaders(v),
-            CoseCipherError::InvalidKeyId(v) => CoseCipherError::InvalidKeyId(v),
             CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
             CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
-            CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
             CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
-            CoseCipherError::IvRequired => CoseCipherError::IvRequired,
             CoseCipherError::MissingHeaderParam(v) => CoseCipherError::MissingHeaderParam(v),
             CoseCipherError::InvalidHeaderParam(v, w) => CoseCipherError::InvalidHeaderParam(v, w),
             CoseCipherError::AadUnsupported => CoseCipherError::AadUnsupported,
@@ -144,10 +136,6 @@ where
                 AccessTokenError::CoseCipherError(CoseCipherError::from(x))
             }
             AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-            AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
-            AccessTokenError::MultipleMatchingRecipients => {
-                AccessTokenError::MultipleMatchingRecipients
-            }
         }
     }
 }

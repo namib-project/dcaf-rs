@@ -10,9 +10,7 @@
  */
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
-use core::fmt::Display;
 
-use coset::iana::Ec2KeyParameter;
 use coset::{iana, Algorithm, Header, KeyOperation};
 
 pub use sign::{CoseSignBuilderExt, CoseSignExt};
@@ -22,8 +20,8 @@ use crate::error::CoseCipherError;
 use crate::token::cose::header_util::{
     check_for_duplicate_headers, determine_algorithm, determine_key_candidates,
 };
-use crate::token::cose::key::{CoseEc2Key, CoseKeyProvider, CoseParsedKey, KeyParam};
-use crate::token::cose::CoseCipher;
+use crate::token::cose::key::{CoseEc2Key, CoseKeyProvider, CoseParsedKey};
+use crate::token::cose::{key, CoseCipher};
 
 mod sign;
 mod sign1;
@@ -61,7 +59,7 @@ pub trait CoseSignCipher: CoseCipher {
     ///           Note that curve and hash bit sizes do not necessarily match.
     ///           Implementations may assume the struct field `d` (the private key) to always be set
     ///           and panic if this is not the case.
-    ///           The fields x and y (the public key) may be used by implementations if they are
+    ///           The fields `x` and `y` (the public key) may be used by implementations if they are
     ///           set. If they are not, implementations may either derive the public key from `d` or
     ///           return a [CoseCipherError::UnsupportedKeyDerivation] if this derivation is
     ///           unsupported.
@@ -81,8 +79,10 @@ pub trait CoseSignCipher: CoseCipher {
     /// # Panics
     ///
     /// Implementations may panic if the provided algorithm is not an ECDSA algorithm, the
-    /// provided key is not part of a curve suitable for ECDSA or if an unrecoverable backend error
-    /// occurs that necessitates a panic (at their own discretion).
+    /// provided key is not part of a curve suitable for ECDSA, the `d` field of the key is not set
+    /// or if an unrecoverable backend error occurs that necessitates a panic (at their own
+    /// discretion).
+    /// In the last of the above cases, additional panics should be documented on the backend level.
     ///
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
     /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new ECDSA variants are defined).
@@ -114,31 +114,37 @@ pub trait CoseSignCipher: CoseCipher {
     ///           algorithm, the implementation may return [CoseCipherError::UnsupportedAlgorithm]
     ///           or panic.
     ///           Note that curve and hash bit sizes do not necessarily match.
-    ///           Implementations may assume the struct field `d` (the private key) to always be set
-    ///           and panic if this is not the case.
     ///           The fields x and y (the public key) may be used by implementations if they are
     ///           set. If they are not, implementations may either derive the public key from `d` or
     ///           return a [CoseCipherError::UnsupportedKeyDerivation] if this derivation is
     ///           unsupported.
-    /// * `signature` - the signature to verify.
+    /// * `signature` - the signature to verify. This signature should be a valid signature
+    ///           conforming to RFC 9053, Section 2.1 (i.e. the `r` and `s` values of the signature
+    ///           are each padded with zeros at the beginning to the key size rounded up to the next
+    ///           full byte), but as this is user-provided input, the implementation should not rely
+    ///           on this being the case.
     /// * `target` - Data that was presumably signed using the signature.
     ///
     /// # Return Value
     ///
-    /// It is expected that the return value is a signature conforming to RFC 9053, Section 2.1,
-    /// i.e. the return value should consist of the `r` and `s` values of the signature, which are
-    /// each padded (at the beginning) with zeros to the key size (rounded up to the next full
-    /// byte).
+    /// It is expected that the return value is Ok(()) if the provided signature is a valid ECDSA
+    /// signature for the provided key.
     ///
-    /// In case of errors, the implementation may return any valid [CoseCipherError].
+    /// If the signature is not malformed, but not valid for the given `alg`, `key`,
+    /// and `target`, a [CoseCipherError::VerificationFailure] must be returned.
+    ///
+    /// In case of other errors, the implementation may return any valid [CoseCipherError]
+    /// (including [CoseCipherError::VerificationFailure]).
     /// For backend-specific errors, [CoseCipherError::Other] may be used to convey a
     /// backend-specific error.
     ///
     /// # Panics
     ///
     /// Implementations may panic if the provided algorithm is not an ECDSA algorithm, the
-    /// provided key is not part of a curve suitable for ECDSA or if an unrecoverable backend error
-    /// occurs that necessitates a panic (at their own discretion).
+    /// provided key is not part of a curve suitable for ECDSA, neither the `x` and `y` fields nor
+    /// the `d` field of the provided key are set or if an unrecoverable backend error occurs that
+    /// necessitates a panic (at their own discretion).
+    /// In the last of the above cases, additional panics should be documented on the backend level.
     ///
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
     /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new ECDSA variants are defined).
@@ -151,47 +157,6 @@ pub trait CoseSignCipher: CoseCipher {
     ) -> Result<(), CoseCipherError<Self::Error>>;
 }
 
-fn is_valid_ecdsa_key<'a, BE: Display>(
-    algorithm: &Algorithm,
-    parsed_key: CoseParsedKey<'a, BE>,
-    key_should_be_private: bool,
-) -> Result<CoseEc2Key<'a, BE>, CoseCipherError<BE>> {
-    // Checks according to RFC 9053, Section 2.1 or RFC 8812, Section 3.2.
-
-    // Key type must be EC2
-    let ec2_key = if let CoseParsedKey::Ec2(ec2_key) = parsed_key {
-        ec2_key
-    } else {
-        return Err(CoseCipherError::KeyTypeAlgorithmMismatch(
-            parsed_key.as_ref().kty.clone(),
-            algorithm.clone(),
-        ));
-    };
-
-    // If algorithm in key is set, it must match our algorithm
-    if let Some(alg) = &ec2_key.as_ref().alg {
-        if alg != algorithm {
-            return Err(CoseCipherError::KeyAlgorithmMismatch(
-                alg.clone(),
-                algorithm.clone(),
-            ));
-        }
-    }
-
-    // Key must contain private key information to perform signature.
-    if key_should_be_private && ec2_key.d.is_none() {
-        return Err(CoseCipherError::MissingKeyParam(KeyParam::Ec2(
-            Ec2KeyParameter::D,
-        )));
-    } else if ec2_key.x.is_none() || ec2_key.y.is_none() {
-        return Err(CoseCipherError::MissingKeyParam(KeyParam::Ec2(
-            Ec2KeyParameter::X,
-        )));
-    }
-
-    Ok(ec2_key)
-}
-
 fn try_sign<B: CoseSignCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
     key_provider: &mut CKP,
@@ -202,7 +167,7 @@ fn try_sign<B: CoseSignCipher, CKP: CoseKeyProvider>(
     if let (Some(protected), Some(unprotected)) = (protected, unprotected) {
         check_for_duplicate_headers(protected, unprotected)?;
     }
-    let key = determine_key_candidates::<B::Error, CKP>(
+    let key = determine_key_candidates::<CKP>(
         key_provider,
         protected,
         unprotected,
@@ -222,7 +187,7 @@ fn try_sign<B: CoseSignCipher, CKP: CoseKeyProvider>(
             | iana::Algorithm::ES256K,
         ) => {
             // Check if this is a valid ECDSA key.
-            let ec2_key = is_valid_ecdsa_key::<B::Error>(&algorithm, parsed_key, true)?;
+            let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(&algorithm, parsed_key, true)?;
 
             // Perform signing operation using backend.
             move |tosign| backend.sign_ecdsa(algorithm, &ec2_key, tosign)
@@ -257,7 +222,7 @@ fn try_verify_with_key<B: CoseSignCipher>(
             | iana::Algorithm::ES256K,
         ) => {
             // Check if this is a valid ECDSA key.
-            let ec2_key = is_valid_ecdsa_key::<B::Error>(&algorithm, key, false)?;
+            let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(&algorithm, key, false)?;
 
             backend.verify_ecdsa(algorithm, &ec2_key, signature, toverify)
         }
@@ -280,7 +245,7 @@ fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider>(
     toverify: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
     check_for_duplicate_headers(protected, unprotected)?;
-    for key in determine_key_candidates::<B::Error, CKP>(
+    for key in determine_key_candidates::<CKP>(
         key_provider,
         Some(protected),
         Some(unprotected),

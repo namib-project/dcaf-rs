@@ -5,8 +5,8 @@ use core::cell::RefCell;
 use coset::{CoseEncrypt0, CoseEncrypt0Builder, EncryptionContext, Header};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypt;
-use crate::token::cose::encrypt::CoseEncryptCipher;
+use crate::token::cose::encrypted;
+use crate::token::cose::encrypted::CoseEncryptCipher;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
 
 #[cfg(all(test, feature = "std"))]
@@ -39,7 +39,7 @@ impl CoseEncrypt0Ext for CoseEncrypt0 {
                 Some(&self.unprotected),
             ),
             |ciphertext, aad| {
-                encrypt::try_decrypt(
+                encrypted::try_decrypt(
                     &backend,
                     &key_provider,
                     &self.protected.header,
@@ -92,7 +92,7 @@ impl CoseEncrypt0BuilderExt for CoseEncrypt0Builder {
                 unprotected.as_ref(),
             ),
             |plaintext, aad| {
-                encrypt::try_encrypt(
+                encrypted::try_encrypt(
                     backend,
                     key_provider,
                     protected.as_ref(),

@@ -99,7 +99,7 @@ fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider>(
     if let (Some(protected), Some(unprotected)) = (protected, unprotected) {
         check_for_duplicate_headers(protected, unprotected)?;
     }
-    let key = determine_key_candidates::<B::Error, CKP>(
+    let key = determine_key_candidates::<CKP>(
         key_provider,
         protected,
         unprotected,
@@ -160,7 +160,7 @@ pub(crate) fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider>(
     data: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
     check_for_duplicate_headers(protected, unprotected)?;
-    for key in determine_key_candidates::<B::Error, CKP>(
+    for key in determine_key_candidates::<CKP>(
         *key_provider.borrow_mut(),
         Some(protected),
         Some(unprotected),

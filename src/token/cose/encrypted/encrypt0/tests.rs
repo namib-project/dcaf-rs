@@ -5,8 +5,8 @@ use coset::{CoseEncrypt0, CoseEncrypt0Builder, CoseError, CoseKey, HeaderBuilder
 use rstest::rstest;
 
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
-use crate::token::cose::encrypt::encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
-use crate::token::cose::encrypt::{CoseEncryptCipher, HeaderBuilderExt};
+use crate::token::cose::encrypted::encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
+use crate::token::cose::encrypted::{CoseEncryptCipher, HeaderBuilderExt};
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, perform_cose_reference_output_test,
     perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,

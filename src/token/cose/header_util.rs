@@ -3,7 +3,6 @@ use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 use core::fmt::Display;
 
-use ciborium::Value;
 use coset::iana::EnumI64;
 use coset::{iana, Algorithm, CoseKey, Header, KeyOperation, Label};
 
@@ -59,21 +58,6 @@ fn create_header_parameter_set(header_bucket: &Header) -> BTreeSet<Label> {
     header_bucket_fields
 }
 
-pub(crate) fn find_param_index_by_label(
-    label: &Label,
-    param_vec: &[(Label, Value)],
-) -> Option<usize> {
-    // TODO assert that parameters are sorted (Vec::is_sorted is unstable rn).
-    param_vec.binary_search_by(|(v, _)| v.cmp(label)).ok()
-}
-
-pub(crate) fn find_param_by_label<'a>(
-    label: &Label,
-    param_vec: &'a [(Label, Value)],
-) -> Option<&'a Value> {
-    find_param_index_by_label(label, param_vec).map(|i| &param_vec.get(i).unwrap().1)
-}
-
 pub(crate) fn check_for_duplicate_headers<E: Display>(
     protected_header: &Header,
     unprotected_header: &Header,
@@ -113,7 +97,7 @@ pub(crate) fn determine_algorithm<CE: Display>(
     }
 }
 
-pub(crate) fn determine_key_candidates<'a, CE: Display, CKP: CoseKeyProvider>(
+pub(crate) fn determine_key_candidates<'a, CKP: CoseKeyProvider>(
     key_provider: &'a mut CKP,
     protected: Option<&'a Header>,
     unprotected: Option<&'a Header>,

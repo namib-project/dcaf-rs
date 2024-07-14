@@ -2,7 +2,7 @@ use coset::{CoseSign, CoseSignBuilder, CoseSignature};
 
 use crate::error::CoseCipherError;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
-use crate::token::cose::sign;
+use crate::token::cose::signed;
 use crate::CoseSignCipher;
 
 #[cfg(all(test, feature = "std"))]
@@ -41,7 +41,7 @@ impl CoseSignBuilderExt for CoseSignBuilder {
             sig.clone(),
             aad.lookup_aad(None, Some(&sig.protected.header), Some(&sig.unprotected)),
             |tosign| {
-                sign::try_sign(
+                signed::try_sign(
                     backend,
                     key_provider,
                     Some(&sig.protected.header),
@@ -65,7 +65,7 @@ impl CoseSignBuilderExt for CoseSignBuilder {
             payload,
             aad.lookup_aad(None, Some(&sig.protected.header), Some(&sig.unprotected)),
             |tosign| {
-                sign::try_sign(
+                signed::try_sign(
                     backend,
                     key_provider,
                     Some(&sig.protected.header),
@@ -116,7 +116,7 @@ impl CoseSignExt for CoseSign {
                     Some(&self.signatures[sigindex].unprotected),
                 ),
                 |signature, toverify| {
-                    sign::try_verify(
+                    signed::try_verify(
                         backend,
                         key_provider,
                         &self.signatures[sigindex].protected.header,
@@ -156,7 +156,7 @@ impl CoseSignExt for CoseSign {
                     Some(&self.signatures[sigindex].unprotected),
                 ),
                 |signature, toverify| {
-                    sign::try_verify(
+                    signed::try_verify(
                         backend,
                         key_provider,
                         &self.signatures[sigindex].protected.header,

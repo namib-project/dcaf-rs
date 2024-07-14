@@ -248,31 +248,24 @@ pub enum CoseCipherError<T>
 where
     T: Display,
 {
-    /// A header which the cipher is supposed to set has already been set.
-    HeaderAlreadySet {
-        /// The name of the header which has already been set.
-        existing_header_name: String,
-    },
     /// The given signature or MAC tag is either invalid or does not match the given data.
     VerificationFailure,
     /// The given ciphertext could not be decrypted.
     DecryptionFailure,
-    /// A different error has occurred. Details are provided in the contained error.
-    Other(T),
     /// Key type is not supported.
     UnsupportedKeyType(KeyType),
     /// Curve is not supported by coset or the chosen cryptographic backend.
     UnsupportedCurve(EllipticCurve),
-    /// Algorithm is not supported by coset or the chosen cryptographic backend.
+    /// Algorithm is not supported by coset, the chosen cryptographic backend or dcaf-rs itself.
     UnsupportedAlgorithm(Algorithm),
     /// The cryptographic backend does not support deriving the public key from the private key, and
-    /// your provided key does not provide the public key parts even though it is required for this
+    /// the provided key does not provide the public key parts even though it is required for this
     /// operation.
     UnsupportedKeyDerivation,
     /// The algorithm has not explicitly been specified anywhere (protected headers, unprotected
     /// headers or the key itself).
     NoAlgorithmDeterminable,
-    /// Your provided key does not support the given operation.
+    /// The provided key does not support the given operation.
     KeyOperationNotPermitted(BTreeSet<KeyOperation>, KeyOperation),
     /// Key in given curve must be in different format.
     KeyTypeCurveMismatch(KeyType, EllipticCurve),
@@ -281,50 +274,22 @@ where
     /// Algorithm provided in key does not match algorithm selected for operation.
     KeyAlgorithmMismatch(Algorithm, Algorithm),
     DuplicateHeaders(Vec<Label>),
-    InvalidKeyId(Vec<u8>),
     MissingKeyParam(KeyParam),
     InvalidKeyParam(KeyParam, Value),
     MissingHeaderParam(HeaderParam),
     InvalidHeaderParam(HeaderParam, Value),
-    TypeMismatch(Value),
     /// Provided algorithm does not support additional authenticated data (which also includes
     /// protected headers).
     AadUnsupported,
     NoKeyFound,
-    IvRequired,
+    /// A different error has occurred. Details are provided in the contained error.
+    Other(T),
 }
 
 impl<T> CoseCipherError<T>
 where
     T: Display,
 {
-    /// Creates a new [`CoseCipherError`] of type
-    /// [`HeaderAlreadySet`](CoseCipherError::HeaderAlreadySet) where the header
-    /// that was already set has the name of the given `label`.
-    #[must_use]
-    pub fn existing_header_label(label: &Label) -> CoseCipherError<T> {
-        let existing_header_name = match label {
-            Label::Int(i) => i.to_string(),
-            Label::Text(s) => s.to_string(),
-        };
-        CoseCipherError::HeaderAlreadySet {
-            existing_header_name,
-        }
-    }
-
-    /// Creates a new [`CoseCipherError`] of type
-    /// [`HeaderAlreadySet`](CoseCipherError::HeaderAlreadySet) where the header
-    /// that was already set has the given `name`.
-    #[must_use]
-    pub fn existing_header<S>(name: S) -> CoseCipherError<T>
-    where
-        S: Into<String>,
-    {
-        CoseCipherError::HeaderAlreadySet {
-            existing_header_name: name.into(),
-        }
-    }
-
     /// Creates a new [`CoseCipherError`] of type
     /// [`Other`](CoseCipherError::Other) (i.e., an error type that doesn't fit any other
     /// [`CoseCipherError`] variant) containing the given nested error `other`.
@@ -339,11 +304,6 @@ where
     ) -> CoseCipherError<MultipleCoseError<T, C>> {
         match error {
             CoseCipherError::Other(x) => CoseCipherError::Other(MultipleCoseError::KekError(x)),
-            CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            } => CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            },
             CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
             CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
             CoseCipherError::UnsupportedKeyType(v) => CoseCipherError::UnsupportedKeyType(v),
@@ -364,12 +324,9 @@ where
                 CoseCipherError::KeyAlgorithmMismatch(v, w)
             }
             CoseCipherError::DuplicateHeaders(v) => CoseCipherError::DuplicateHeaders(v),
-            CoseCipherError::InvalidKeyId(v) => CoseCipherError::InvalidKeyId(v),
             CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
             CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
-            CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
             CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
-            CoseCipherError::IvRequired => CoseCipherError::IvRequired,
             CoseCipherError::MissingHeaderParam(v) => CoseCipherError::MissingHeaderParam(v),
             CoseCipherError::InvalidHeaderParam(v, w) => CoseCipherError::InvalidHeaderParam(v, w),
             CoseCipherError::AadUnsupported => CoseCipherError::AadUnsupported,
@@ -381,11 +338,6 @@ where
     ) -> CoseCipherError<MultipleCoseError<K, T>> {
         match error {
             CoseCipherError::Other(x) => CoseCipherError::Other(MultipleCoseError::CekError(x)),
-            CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            } => CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            },
             CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
             CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
             CoseCipherError::UnsupportedKeyType(v) => CoseCipherError::UnsupportedKeyType(v),
@@ -406,12 +358,9 @@ where
                 CoseCipherError::KeyAlgorithmMismatch(v, w)
             }
             CoseCipherError::DuplicateHeaders(v) => CoseCipherError::DuplicateHeaders(v),
-            CoseCipherError::InvalidKeyId(v) => CoseCipherError::InvalidKeyId(v),
             CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
             CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
-            CoseCipherError::TypeMismatch(v) => CoseCipherError::TypeMismatch(v),
             CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
-            CoseCipherError::IvRequired => CoseCipherError::IvRequired,
             CoseCipherError::MissingHeaderParam(v) => CoseCipherError::MissingHeaderParam(v),
             CoseCipherError::InvalidHeaderParam(v, w) => CoseCipherError::InvalidHeaderParam(v, w),
             CoseCipherError::AadUnsupported => CoseCipherError::AadUnsupported,
@@ -425,13 +374,7 @@ where
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
-            // TODO this can probably be done better (use thiserror instead as soon as std::error::Error has been moved to core?)
-            CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            } => write!(
-                f,
-                "cipher-defined header '{existing_header_name}' already set"
-            ),
+            // TODO (#14): this can probably be done better (use thiserror instead as soon as std::error::Error has been moved to core?)
             CoseCipherError::VerificationFailure => write!(f, "data verification failed"),
             CoseCipherError::DecryptionFailure => write!(f, "decryption failed"),
             CoseCipherError::Other(s) => write!(f, "{s}"),
@@ -458,20 +401,10 @@ where
                 write!(f, "key does not support the given algorithm")
             }
             CoseCipherError::DuplicateHeaders(_) => write!(f, "duplicate headers"),
-            // TODO is this one still needed or maybe misnamed?
-            CoseCipherError::InvalidKeyId(_) => write!(f, "invalid key ID"),
             CoseCipherError::MissingKeyParam(_) => write!(f, "required key parameter missing"),
             CoseCipherError::InvalidKeyParam(_, _) => write!(f, "key parameter has invalid value"),
-            // TODO is this one still needed or maybe misnamed?
-            CoseCipherError::TypeMismatch(_) => write!(f, "key parameter has invalid type"),
             CoseCipherError::NoKeyFound => {
                 write!(f, "no suitable key was found for this operation")
-            }
-            CoseCipherError::IvRequired => {
-                write!(
-                    f,
-                    "chosen algorithm requires an initialization vector, but none was provided"
-                )
             }
             CoseCipherError::MissingHeaderParam(_) => {
                 write!(f, "header parameter missing")
@@ -638,14 +571,6 @@ where
     /// [`CoseEncrypt0`](coset::CoseEncrypt0), [`CoseSign1`](coset::CoseSign1),
     /// nor [`CoseMac0`](coset::CoseMac0).
     UnknownCoseStructure,
-    /// No matching recipient was found in the list of COSE_Recipient structures.
-    /// This means that the given Key Encryption Key could not be used to decrypt any of the
-    /// recipients, which means no Content Encryption Key could be extracted.
-    NoMatchingRecipient,
-    /// Multiple matching recipients were found in the list of COSE_Recipient structures.
-    /// This means that the given Key Encryption Key could be used to decrypt multiple of the
-    /// recipients, which means the token is malformed.
-    MultipleMatchingRecipients,
 }
 
 impl<T> Display for AccessTokenError<T>
@@ -660,12 +585,6 @@ where
                 f,
                 "input is either invalid or none of CoseEncrypt0, CoseSign1 nor CoseMac0"
             ),
-            AccessTokenError::NoMatchingRecipient => {
-                write!(f, "given KEK doesn't match any recipient")
-            }
-            AccessTokenError::MultipleMatchingRecipients => {
-                write!(f, "given KEK matches multiple recipients")
-            }
         }
     }
 }
@@ -706,10 +625,6 @@ where
             }
             AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
             AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-            AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
-            AccessTokenError::MultipleMatchingRecipients => {
-                AccessTokenError::MultipleMatchingRecipients
-            }
         }
     }
 
@@ -722,10 +637,6 @@ where
             }
             AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
             AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-            AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
-            AccessTokenError::MultipleMatchingRecipients => {
-                AccessTokenError::MultipleMatchingRecipients
-            }
         }
     }
 }

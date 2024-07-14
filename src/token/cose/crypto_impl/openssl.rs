@@ -26,11 +26,11 @@ use openssl::symm::{decrypt_aead, encrypt_aead, Cipher};
 use strum_macros::Display;
 
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypt::{CoseEncryptCipher, CoseKeyDistributionCipher};
+use crate::token::cose::encrypted::{CoseEncryptCipher, CoseKeyDistributionCipher};
 use crate::token::cose::header_util::HeaderParam;
 use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
-use crate::token::cose::mac::CoseMacCipher;
-use crate::token::cose::sign::CoseSignCipher;
+use crate::token::cose::maced::CoseMacCipher;
+use crate::token::cose::signed::CoseSignCipher;
 use crate::token::cose::CoseCipher;
 
 /// Represents an error caused by the OpenSSL cryptographic backend.
@@ -307,11 +307,9 @@ fn verify_ecdsa(
         .map_err(CoseOpensslCipherError::from)
         .map_err(CoseCipherError::from)
         .and_then(|verification_successful| {
-            if verification_successful {
-                Ok(())
-            } else {
-                Err(CoseCipherError::VerificationFailure)
-            }
+            verification_successful
+                .then_some(())
+                .ok_or(CoseCipherError::VerificationFailure)
         })
 }
 

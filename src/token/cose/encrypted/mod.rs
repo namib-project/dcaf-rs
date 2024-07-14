@@ -7,7 +7,7 @@ use coset::{iana, Algorithm, Header, HeaderBuilder, KeyOperation};
 
 use crate::error::CoseCipherError;
 use crate::token::cose::header_util::{
-    check_for_duplicate_headers, determine_algorithm, determine_key_candidates,
+    check_for_duplicate_headers, determine_algorithm, determine_key_candidates, HeaderParam,
 };
 use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey};
 use crate::token::cose::{key, CoseCipher};
@@ -72,6 +72,8 @@ pub trait HeaderBuilderExt: Sized {
     ) -> Result<Self, CoseCipherError<B::Error>>;
 }
 
+const AES_GCM_NONCE_SIZE: usize = 12;
+
 impl HeaderBuilderExt for HeaderBuilder {
     fn gen_iv<B: CoseCipher>(
         self,
@@ -79,10 +81,10 @@ impl HeaderBuilderExt for HeaderBuilder {
         alg: &Algorithm,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let iv_size = match alg {
-            // AES-GCM: Nonce is fixed at 96 bits
+            // AES-GCM: Nonce is fixed at 96 bits (RFC 9053, Section 4.1)
             Algorithm::Assigned(
                 iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM,
-            ) => 12,
+            ) => AES_GCM_NONCE_SIZE,
             v => return Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
         };
         let mut iv = vec![0; iv_size];
@@ -98,13 +100,14 @@ fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
     unprotected: Option<&Header>,
     try_all_keys: bool,
     plaintext: &[u8],
-    // NOTE: aad ist not the external AAD provided by the user, but the Enc_structure as defined in RFC 9052, Section 5.3
-    aad: &[u8],
+    // NOTE: this should be treated as the AAD for the purposes of the cryptographic backend
+    // (RFC 9052, Section 5.3).
+    enc_structure: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
     if let (Some(protected), Some(unprotected)) = (protected, unprotected) {
         check_for_duplicate_headers(protected, unprotected)?;
     }
-    let key = determine_key_candidates::<B::Error, CKP>(
+    let key = determine_key_candidates::<CKP>(
         key_provider,
         protected,
         unprotected,
@@ -121,17 +124,19 @@ fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
             iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM,
         ) => {
             // Check if this is a valid AES key.
-            let symm_key = key::is_valid_aes_key::<B::Error>(&algorithm, parsed_key)?;
+            let symm_key = key::ensure_valid_aes_key::<B::Error>(&algorithm, parsed_key)?;
 
-            let iv = if protected.is_some() && !protected.unwrap().iv.is_empty() {
-                protected.unwrap().iv.as_ref()
-            } else if unprotected.is_some() && !unprotected.unwrap().iv.is_empty() {
-                unprotected.unwrap().iv.as_ref()
-            } else {
-                return Err(CoseCipherError::IvRequired);
-            };
+            let iv = protected
+                .into_iter()
+                .chain(unprotected.into_iter())
+                .filter(|x| !x.iv.is_empty())
+                .map(|x| x.iv.as_ref())
+                .next()
+                .ok_or(CoseCipherError::MissingHeaderParam(HeaderParam::Generic(
+                    iana::HeaderParameter::Iv,
+                )))?;
 
-            backend.encrypt_aes_gcm(algorithm, symm_key, plaintext, aad, iv)
+            backend.encrypt_aes_gcm(algorithm, symm_key, plaintext, enc_structure, iv)
         }
         v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
         // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
@@ -148,8 +153,9 @@ fn try_decrypt_with_key<B: CoseEncryptCipher>(
     protected: &Header,
     unprotected: &Header,
     ciphertext: &[u8],
-    // NOTE: aad ist not the external AAD provided by the user, but the Enc_structure as defined in RFC 9052, Section 5.3
-    aad: &[u8],
+    // NOTE: this should be treated as the AAD for the purposes of the cryptographic backend
+    // (RFC 9052, Section 5.3).
+    enc_structure: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
     check_for_duplicate_headers(protected, unprotected)?;
     let algorithm = determine_algorithm(Some(&key), Some(protected), Some(unprotected))?;
@@ -159,22 +165,23 @@ fn try_decrypt_with_key<B: CoseEncryptCipher>(
             iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM,
         ) => {
             // Check if this is a valid AES key.
-            let symm_key = key::is_valid_aes_key::<B::Error>(&algorithm, key)?;
+            let symm_key = key::ensure_valid_aes_key::<B::Error>(&algorithm, key)?;
 
-            let iv = if !protected.iv.is_empty() {
-                protected.iv.as_ref()
-            } else if !unprotected.iv.is_empty() {
-                unprotected.iv.as_ref()
-            } else {
-                return Err(CoseCipherError::IvRequired);
-            };
+            let iv = core::iter::once(protected)
+                .chain(core::iter::once(unprotected))
+                .filter(|x| !x.iv.is_empty())
+                .map(|x| x.iv.as_ref())
+                .next()
+                .ok_or(CoseCipherError::MissingHeaderParam(HeaderParam::Generic(
+                    iana::HeaderParameter::Iv,
+                )))?;
 
             // Authentication tag is 16 bytes long and should be included in the ciphertext.
             if ciphertext.len() < 16 {
                 return Err(CoseCipherError::VerificationFailure);
             }
 
-            backend.decrypt_aes_gcm(algorithm, symm_key, ciphertext, aad, iv)
+            backend.decrypt_aes_gcm(algorithm, symm_key, ciphertext, enc_structure, iv)
         }
         v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
         // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
@@ -192,11 +199,12 @@ pub(crate) fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
     unprotected: &Header,
     try_all_keys: bool,
     ciphertext: &[u8],
-    // NOTE: aad ist not the external AAD provided by the user, but the Enc_structure as defined in RFC 9052, Section 5.3
-    aad: &[u8],
+    // NOTE: this should be treated as the AAD for the purposes of the cryptographic backend
+    // (RFC 9052, Section 5.3).
+    enc_structure: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
     check_for_duplicate_headers(protected, unprotected)?;
-    for key in determine_key_candidates::<B::Error, CKP>(
+    for key in determine_key_candidates::<CKP>(
         *key_provider.borrow_mut(),
         Some(protected),
         Some(unprotected),
@@ -209,7 +217,7 @@ pub(crate) fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
             protected,
             unprotected,
             ciphertext,
-            aad,
+            enc_structure,
         ) {
             Ok(v) => return Ok(v),
             Err(_e) => {
