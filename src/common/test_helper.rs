@@ -15,11 +15,11 @@
 use core::convert::identity;
 use core::fmt::{Debug, Display};
 
-use coset::CoseKey;
+use coset::{iana, CoseKey};
 use rand::{CryptoRng, Rng};
 
 use crate::common::cbor_map::ToCborMap;
-use crate::error::{AccessTokenError, CoseCipherError, MultipleCoseError};
+use crate::error::CoseCipherError;
 use crate::token::cose::encrypted::{CoseEncryptCipher, CoseKeyDistributionCipher};
 use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey};
 use crate::token::cose::CoseCipher;
@@ -85,72 +85,17 @@ where
     }
 }
 
-// Makes the tests easier later on, as we use String as the error type in there.
-impl<C, K> From<CoseCipherError<MultipleCoseError<C, K>>> for CoseCipherError<String>
-where
-    C: Display,
-    K: Display,
-{
-    fn from(x: CoseCipherError<MultipleCoseError<C, K>>) -> Self {
-        match x {
-            CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
-            CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
-            CoseCipherError::Other(x) => CoseCipherError::Other(x.to_string()),
-            CoseCipherError::UnsupportedKeyType(v) => CoseCipherError::UnsupportedKeyType(v),
-            CoseCipherError::UnsupportedCurve(v) => CoseCipherError::UnsupportedCurve(v),
-            CoseCipherError::UnsupportedAlgorithm(v) => CoseCipherError::UnsupportedAlgorithm(v),
-            CoseCipherError::UnsupportedKeyDerivation => CoseCipherError::UnsupportedKeyDerivation,
-            CoseCipherError::NoAlgorithmDeterminable => CoseCipherError::NoAlgorithmDeterminable,
-            CoseCipherError::KeyOperationNotPermitted(v, w) => {
-                CoseCipherError::KeyOperationNotPermitted(v, w)
-            }
-            CoseCipherError::KeyTypeCurveMismatch(v, w) => {
-                CoseCipherError::KeyTypeCurveMismatch(v, w)
-            }
-            CoseCipherError::KeyTypeAlgorithmMismatch(v, w) => {
-                CoseCipherError::KeyTypeAlgorithmMismatch(v, w)
-            }
-            CoseCipherError::KeyAlgorithmMismatch(v, w) => {
-                CoseCipherError::KeyAlgorithmMismatch(v, w)
-            }
-            CoseCipherError::DuplicateHeaders(v) => CoseCipherError::DuplicateHeaders(v),
-            CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
-            CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
-            CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
-            CoseCipherError::MissingHeaderParam(v) => CoseCipherError::MissingHeaderParam(v),
-            CoseCipherError::InvalidHeaderParam(v, w) => CoseCipherError::InvalidHeaderParam(v, w),
-            CoseCipherError::AadUnsupported => CoseCipherError::AadUnsupported,
-        }
-    }
-}
-
-impl<C, K> From<AccessTokenError<MultipleCoseError<C, K>>> for AccessTokenError<String>
-where
-    C: Display,
-    K: Display,
-{
-    fn from(x: AccessTokenError<MultipleCoseError<C, K>>) -> Self {
-        match x {
-            AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
-            AccessTokenError::CoseCipherError(x) => {
-                AccessTokenError::CoseCipherError(CoseCipherError::from(x))
-            }
-            AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct MockCipherAeadParams {
     key: Vec<u8>,
-    algorithm: coset::Algorithm,
+    algorithm: iana::Algorithm,
     aad: Vec<u8>,
     iv: Vec<u8>,
 }
 
 impl MockCipherAeadParams {
     fn new_with_aes_params<E: Display + Debug>(
-        algorithm: coset::Algorithm,
+        algorithm: iana::Algorithm,
         key: &CoseSymmetricKey<'_, E>,
         aad: &[u8],
         iv: &[u8],
@@ -167,13 +112,13 @@ impl MockCipherAeadParams {
 #[derive(Clone, Debug, PartialEq)]
 struct MockCipherEcdsaParams {
     key: CoseKey,
-    algorithm: coset::Algorithm,
+    algorithm: iana::Algorithm,
     target: Vec<u8>,
 }
 
 impl MockCipherEcdsaParams {
     fn new_with_ecdsa_params<E: Display + Debug>(
-        alg: coset::Algorithm,
+        alg: iana::Algorithm,
         key: &CoseEc2Key<'_, E>,
         target: &[u8],
     ) -> MockCipherEcdsaParams {
@@ -215,7 +160,7 @@ impl<R: CryptoRng + Rng> CoseCipher for MockCipher<R> {
 impl<R: CryptoRng + Rng> CoseEncryptCipher for MockCipher<R> {
     fn encrypt_aes_gcm(
         &mut self,
-        algorithm: coset::Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         plaintext: &[u8],
         aad: &[u8],
@@ -235,7 +180,7 @@ impl<R: CryptoRng + Rng> CoseEncryptCipher for MockCipher<R> {
 
     fn decrypt_aes_gcm(
         &mut self,
-        algorithm: coset::Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         ciphertext_with_tag: &[u8],
         aad: &[u8],
@@ -244,20 +189,20 @@ impl<R: CryptoRng + Rng> CoseEncryptCipher for MockCipher<R> {
         let (expected_input, plaintext) = self
             .aes_gcm_inputs
             .get(ciphertext_with_tag)
-            .ok_or(CoseCipherError::DecryptionFailure)?;
+            .ok_or(CoseCipherError::VerificationFailure)?;
         if expected_input.eq(&MockCipherAeadParams::new_with_aes_params(
             algorithm, &key, aad, iv,
         )) {
             return Ok(plaintext.clone());
         }
-        Err(CoseCipherError::DecryptionFailure)
+        Err(CoseCipherError::VerificationFailure)
     }
 }
 
 impl<R: CryptoRng + Rng> CoseSignCipher for MockCipher<R> {
     fn sign_ecdsa(
         &mut self,
-        alg: coset::Algorithm,
+        alg: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
         target: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
@@ -272,7 +217,7 @@ impl<R: CryptoRng + Rng> CoseSignCipher for MockCipher<R> {
 
     fn verify_ecdsa(
         &mut self,
-        alg: coset::Algorithm,
+        alg: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
         signature: &[u8],
         target: &[u8],
@@ -293,7 +238,7 @@ impl<R: CryptoRng + Rng> CoseSignCipher for MockCipher<R> {
 impl<R: Rng + CryptoRng> CoseKeyDistributionCipher for MockCipher<R> {
     fn aes_key_wrap(
         &mut self,
-        algorithm: coset::Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         plaintext: &[u8],
         iv: &[u8],
@@ -312,7 +257,7 @@ impl<R: Rng + CryptoRng> CoseKeyDistributionCipher for MockCipher<R> {
 
     fn aes_key_unwrap(
         &mut self,
-        algorithm: coset::Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         ciphertext: &[u8],
         iv: &[u8],
@@ -320,7 +265,7 @@ impl<R: Rng + CryptoRng> CoseKeyDistributionCipher for MockCipher<R> {
         let (expected_input, plaintext) = self
             .aes_kw_inputs
             .get(ciphertext)
-            .ok_or(CoseCipherError::DecryptionFailure)?;
+            .ok_or(CoseCipherError::VerificationFailure)?;
         if expected_input.eq(&MockCipherAeadParams::new_with_aes_params(
             algorithm,
             &key,
@@ -329,6 +274,6 @@ impl<R: Rng + CryptoRng> CoseKeyDistributionCipher for MockCipher<R> {
         )) {
             return Ok(plaintext.clone());
         }
-        Err(CoseCipherError::DecryptionFailure)
+        Err(CoseCipherError::VerificationFailure)
     }
 }

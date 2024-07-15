@@ -5,7 +5,7 @@ use core::fmt::Display;
 use core::marker::PhantomData;
 
 use ciborium::Value;
-use coset::iana::{Ec2KeyParameter, EnumI64};
+use coset::iana::EnumI64;
 use coset::{
     iana, Algorithm, AsCborValue, CoseKey, EncryptionContext, Header, KeyType, Label,
     RegisteredLabelWithPrivate,
@@ -15,19 +15,10 @@ use crate::error::CoseCipherError;
 use crate::token::cose::CoseCipher;
 
 /// Finds a key parameter by its label.
-///
-/// The provided `param_vec` *MUST* be sorted, otherwise the result is undefined.
-fn find_param_by_label<'a>(label: &Label, param_vec: &[&'a (Label, Value)]) -> Option<&'a Value> {
-    // TODO assert that parameters are sorted (Vec::is_sorted is unstable rn).
+fn find_param_by_label<'a>(label: &Label, param_vec: &'a [(Label, Value)]) -> Option<&'a Value> {
     param_vec
-        .binary_search_by(|(v, _)| v.cmp(label))
-        .ok()
-        .map(|i| &param_vec.get(i).unwrap().1)
-}
-
-#[inline]
-fn sort_params(param_vec: &mut [&(Label, Value)]) {
-    param_vec.sort_by(|(label1, _value1), (label2, _value2)| label1.cmp(label2));
+        .iter()
+        .find_map(|(l, v)| if l == label { Some(v) } else { None })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -132,14 +123,14 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseEc2Key<'a, OE> {
     fn try_from(key: &'a CoseKey) -> Result<Self, Self::Error> {
         // Unless stated otherwise, these checks are according to RFC 9053, Section 7.1.1.
 
-        let mut params: Vec<&(Label, Value)> = key.params.iter().collect();
-        sort_params(&mut params);
-
         // Curve must be set
-        let crv = find_param_by_label(&Label::Int(iana::Ec2KeyParameter::Crv.to_i64()), &params)
-            .ok_or(CoseCipherError::MissingKeyParam(
-                iana::Ec2KeyParameter::Crv.into(),
-            ))?;
+        let crv = find_param_by_label(
+            &Label::Int(iana::Ec2KeyParameter::Crv.to_i64()),
+            &key.params,
+        )
+        .ok_or(CoseCipherError::MissingKeyParam(vec![
+            iana::Ec2KeyParameter::Crv.into(),
+        ]))?;
         // Curve must be of correct type
         let crv = EllipticCurve::from_cbor_value(crv.clone()).map_err(|_e| {
             // TODO e as error source (as soon as we use core::error::Error).
@@ -173,7 +164,7 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseEc2Key<'a, OE> {
 
         // Parse parameters d and x (private key and part of the public key), must be of type
         // bstr.
-        let d = find_param_by_label(&Label::Int(iana::Ec2KeyParameter::D.to_i64()), &params)
+        let d = find_param_by_label(&Label::Int(iana::Ec2KeyParameter::D.to_i64()), &key.params)
             .map(|v| match v.as_bytes() {
                 None => Err(CoseCipherError::InvalidKeyParam(
                     iana::Ec2KeyParameter::D.into(),
@@ -182,7 +173,7 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseEc2Key<'a, OE> {
                 Some(b) => Ok(b.as_slice()),
             })
             .transpose()?;
-        let x = find_param_by_label(&Label::Int(iana::Ec2KeyParameter::X.to_i64()), &params)
+        let x = find_param_by_label(&Label::Int(iana::Ec2KeyParameter::X.to_i64()), &key.params)
             .map(|v| match v.as_bytes() {
                 None => Err(CoseCipherError::InvalidKeyParam(
                     iana::Ec2KeyParameter::X.into(),
@@ -194,7 +185,7 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseEc2Key<'a, OE> {
 
         // Parse parameter y (other half of public key), is either a bstr containing the Y
         // coordinate or a boolean indicating the sign.
-        let y = find_param_by_label(&Label::Int(iana::Ec2KeyParameter::Y.to_i64()), &params);
+        let y = find_param_by_label(&Label::Int(iana::Ec2KeyParameter::Y.to_i64()), &key.params);
         let (y, sign) = match y {
             None => (None, None),
             Some(Value::Bytes(b)) => (Some(b.as_slice()), None),
@@ -209,9 +200,11 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseEc2Key<'a, OE> {
 
         // For public keys, X and Y must be set, for private keys, at least D must be set.
         if d.is_none() && !(x.is_some() && (y.is_some() || sign.is_some())) {
-            return Err(CoseCipherError::MissingKeyParam(
+            return Err(CoseCipherError::MissingKeyParam(vec![
                 iana::Ec2KeyParameter::D.into(),
-            ));
+                iana::Ec2KeyParameter::X.into(),
+                iana::Ec2KeyParameter::Y.into(),
+            ]));
         }
 
         Ok(CoseEc2Key {
@@ -246,14 +239,15 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseOkpKey<'a, OE> {
 
     fn try_from(key: &'a CoseKey) -> Result<Self, Self::Error> {
         // Unless stated otherwise, these checks are according to RFC 9053, Section 7.2.
-        let mut params: Vec<&(Label, Value)> = key.params.iter().collect();
-        sort_params(&mut params);
 
         // Curve must be set
-        let crv = find_param_by_label(&Label::Int(iana::OkpKeyParameter::Crv.to_i64()), &params)
-            .ok_or(CoseCipherError::MissingKeyParam(
-                iana::OkpKeyParameter::Crv.into(),
-            ))?;
+        let crv = find_param_by_label(
+            &Label::Int(iana::OkpKeyParameter::Crv.to_i64()),
+            &key.params,
+        )
+        .ok_or(CoseCipherError::MissingKeyParam(vec![
+            iana::OkpKeyParameter::Crv.into(),
+        ]))?;
 
         // Curve must be of correct type
         let crv = EllipticCurve::from_cbor_value(crv.clone()).map_err(|_e| {
@@ -273,7 +267,7 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseOkpKey<'a, OE> {
         }
 
         // Parse parameters d and x (private key and public key), must be of type bstr.
-        let d = find_param_by_label(&Label::Int(iana::OkpKeyParameter::D.to_i64()), &params)
+        let d = find_param_by_label(&Label::Int(iana::OkpKeyParameter::D.to_i64()), &key.params)
             .map(|v| match v.as_bytes() {
                 None => Err(CoseCipherError::InvalidKeyParam(
                     iana::OkpKeyParameter::D.into(),
@@ -282,7 +276,7 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseOkpKey<'a, OE> {
                 Some(b) => Ok(b.as_slice()),
             })
             .transpose()?;
-        let x = find_param_by_label(&Label::Int(iana::OkpKeyParameter::X.to_i64()), &params)
+        let x = find_param_by_label(&Label::Int(iana::OkpKeyParameter::X.to_i64()), &key.params)
             .map(|v| match v.as_bytes() {
                 None => Err(CoseCipherError::InvalidKeyParam(
                     iana::OkpKeyParameter::X.into(),
@@ -294,9 +288,10 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseOkpKey<'a, OE> {
 
         // For public keys, at least X must be set, for private keys, at least D must be set.
         if d.is_none() && x.is_none() {
-            return Err(CoseCipherError::MissingKeyParam(
+            return Err(CoseCipherError::MissingKeyParam(vec![
                 iana::OkpKeyParameter::D.into(),
-            ));
+                iana::OkpKeyParameter::X.into(),
+            ]));
         }
 
         Ok(CoseOkpKey {
@@ -326,17 +321,15 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseSymmetricKey<'a, OE> {
 
     fn try_from(key: &'a CoseKey) -> Result<Self, Self::Error> {
         // Unless stated otherwise, these checks are according to RFC 9053, Section 7.3.
-        let mut params: Vec<&(Label, Value)> = key.params.iter().collect();
-        sort_params(&mut params);
 
         // Parse key value, must be of type bstr and be set.
         let k = find_param_by_label(
             &Label::Int(iana::SymmetricKeyParameter::K.to_i64()),
-            &params,
+            &key.params,
         )
-        .ok_or(CoseCipherError::MissingKeyParam(
+        .ok_or(CoseCipherError::MissingKeyParam(vec![
             iana::SymmetricKeyParameter::K.into(),
-        ))?;
+        ]))?;
 
         let k = k
             .as_bytes()
@@ -524,33 +517,33 @@ where
     }
 }
 
-fn symmetric_key_size<BE: Display>(algorithm: &Algorithm) -> Result<usize, CoseCipherError<BE>> {
+fn symmetric_key_size<BE: Display>(
+    algorithm: iana::Algorithm,
+) -> Result<usize, CoseCipherError<BE>> {
     match algorithm {
-        Algorithm::Assigned(
-            iana::Algorithm::A128GCM
-            | iana::Algorithm::AES_CCM_16_64_128
-            | iana::Algorithm::AES_CCM_64_64_128
-            | iana::Algorithm::AES_CCM_16_128_128
-            | iana::Algorithm::AES_CCM_64_128_128
-            | iana::Algorithm::A128KW,
-        ) => Ok(16),
-        Algorithm::Assigned(iana::Algorithm::A192GCM | iana::Algorithm::A192KW) => Ok(24),
-        Algorithm::Assigned(
-            iana::Algorithm::A256GCM
-            | iana::Algorithm::AES_CCM_16_64_256
-            | iana::Algorithm::AES_CCM_64_64_256
-            | iana::Algorithm::AES_CCM_16_128_256
-            | iana::Algorithm::AES_CCM_64_128_256
-            | iana::Algorithm::A256KW,
-        ) => Ok(32),
-        _ => Err(CoseCipherError::UnsupportedAlgorithm(algorithm.clone())),
+        iana::Algorithm::A128GCM
+        | iana::Algorithm::AES_CCM_16_64_128
+        | iana::Algorithm::AES_CCM_64_64_128
+        | iana::Algorithm::AES_CCM_16_128_128
+        | iana::Algorithm::AES_CCM_64_128_128
+        | iana::Algorithm::A128KW => Ok(16),
+        iana::Algorithm::A192GCM | iana::Algorithm::A192KW => Ok(24),
+        iana::Algorithm::A256GCM
+        | iana::Algorithm::AES_CCM_16_64_256
+        | iana::Algorithm::AES_CCM_64_64_256
+        | iana::Algorithm::AES_CCM_16_128_256
+        | iana::Algorithm::AES_CCM_64_128_256
+        | iana::Algorithm::A256KW => Ok(32),
+        _ => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm.clone(),
+        ))),
     }
 }
 
-pub(crate) fn ensure_valid_aes_key<'a, BE: Display>(
-    algorithm: &Algorithm,
-    parsed_key: CoseParsedKey<'a, BE>,
-) -> Result<CoseSymmetricKey<'a, BE>, CoseCipherError<BE>> {
+pub(crate) fn ensure_valid_aes_key<BE: Display>(
+    algorithm: iana::Algorithm,
+    parsed_key: CoseParsedKey<BE>,
+) -> Result<CoseSymmetricKey<BE>, CoseCipherError<BE>> {
     // Checks according to RFC 9053, Section 4.1 and 4.2.
 
     // Key type must be symmetric.
@@ -559,16 +552,16 @@ pub(crate) fn ensure_valid_aes_key<'a, BE: Display>(
     } else {
         return Err(CoseCipherError::KeyTypeAlgorithmMismatch(
             parsed_key.as_ref().kty.clone(),
-            algorithm.clone(),
+            Algorithm::Assigned(algorithm),
         ));
     };
 
     // Algorithm in key must match algorithm to use.
-    if let Some(alg) = &symm_key.as_ref().alg {
-        if alg != algorithm {
+    if let Some(key_alg) = &symm_key.as_ref().alg {
+        if key_alg != &Algorithm::Assigned(algorithm) {
             return Err(CoseCipherError::KeyAlgorithmMismatch(
-                alg.clone(),
-                algorithm.clone(),
+                key_alg.clone(),
+                Algorithm::Assigned(algorithm),
             ));
         }
     }
@@ -587,33 +580,33 @@ pub(crate) fn ensure_valid_aes_key<'a, BE: Display>(
 
 pub(crate) fn generate_cek_for_alg<B: CoseCipher>(
     backend: &mut B,
-    alg: Algorithm,
+    alg: iana::Algorithm,
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
     match alg {
-        Algorithm::Assigned(
-            iana::Algorithm::A128GCM
-            | iana::Algorithm::AES_CCM_16_64_128
-            | iana::Algorithm::AES_CCM_64_64_128
-            | iana::Algorithm::AES_CCM_16_128_128
-            | iana::Algorithm::AES_CCM_64_128_128
-            | iana::Algorithm::A192GCM
-            | iana::Algorithm::A256GCM
-            | iana::Algorithm::AES_CCM_16_64_256
-            | iana::Algorithm::AES_CCM_64_64_256
-            | iana::Algorithm::AES_CCM_16_128_256
-            | iana::Algorithm::AES_CCM_64_128_256,
-        ) => {
-            let key_len = symmetric_key_size(&alg)?;
+        iana::Algorithm::A128GCM
+        | iana::Algorithm::AES_CCM_16_64_128
+        | iana::Algorithm::AES_CCM_64_64_128
+        | iana::Algorithm::AES_CCM_16_128_128
+        | iana::Algorithm::AES_CCM_64_128_128
+        | iana::Algorithm::A192GCM
+        | iana::Algorithm::A256GCM
+        | iana::Algorithm::AES_CCM_16_64_256
+        | iana::Algorithm::AES_CCM_64_64_256
+        | iana::Algorithm::AES_CCM_16_128_256
+        | iana::Algorithm::AES_CCM_64_128_256 => {
+            let key_len = symmetric_key_size(alg)?;
             let mut key = vec![0u8; key_len];
             backend.generate_rand(key.as_mut_slice())?;
             Ok(key)
         }
-        v => Err(CoseCipherError::UnsupportedAlgorithm(v)),
+        v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            v,
+        ))),
     }
 }
 
 pub fn ensure_valid_ecdsa_key<'a, BE: Display>(
-    algorithm: &Algorithm,
+    algorithm: iana::Algorithm,
     parsed_key: CoseParsedKey<'a, BE>,
     key_should_be_private: bool,
 ) -> Result<CoseEc2Key<'a, BE>, CoseCipherError<BE>> {
@@ -625,16 +618,16 @@ pub fn ensure_valid_ecdsa_key<'a, BE: Display>(
     } else {
         return Err(CoseCipherError::KeyTypeAlgorithmMismatch(
             parsed_key.as_ref().kty.clone(),
-            algorithm.clone(),
+            Algorithm::Assigned(algorithm),
         ));
     };
 
     // If algorithm in key is set, it must match our algorithm
-    if let Some(alg) = &ec2_key.as_ref().alg {
-        if alg != algorithm {
+    if let Some(key_alg) = &ec2_key.as_ref().alg {
+        if key_alg != &Algorithm::Assigned(algorithm) {
             return Err(CoseCipherError::KeyAlgorithmMismatch(
-                alg.clone(),
-                algorithm.clone(),
+                key_alg.clone(),
+                Algorithm::Assigned(algorithm),
             ));
         }
     }
@@ -642,19 +635,19 @@ pub fn ensure_valid_ecdsa_key<'a, BE: Display>(
     // Key must contain private key information to perform signature, and either D or X and Y to
     // verify a signature.
     if key_should_be_private && ec2_key.d.is_none() {
-        return Err(CoseCipherError::MissingKeyParam(KeyParam::Ec2(
-            Ec2KeyParameter::D,
-        )));
+        return Err(CoseCipherError::MissingKeyParam(vec![
+            iana::Ec2KeyParameter::D.into(),
+        ]));
     } else if !key_should_be_private && ec2_key.d.is_none() {
         if ec2_key.x.is_none() {
-            return Err(CoseCipherError::MissingKeyParam(KeyParam::Ec2(
-                Ec2KeyParameter::X,
-            )));
+            return Err(CoseCipherError::MissingKeyParam(vec![
+                iana::Ec2KeyParameter::X.into(),
+            ]));
         }
         if ec2_key.y.is_none() {
-            return Err(CoseCipherError::MissingKeyParam(KeyParam::Ec2(
-                Ec2KeyParameter::Y,
-            )));
+            return Err(CoseCipherError::MissingKeyParam(vec![
+                iana::Ec2KeyParameter::Y.into(),
+            ]));
         }
     }
 

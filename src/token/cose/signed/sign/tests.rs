@@ -163,3 +163,13 @@ fn cose_examples_sign_self_signed<B: CoseSignCipher + CoseKeyDistributionCipher>
 ) {
     perform_cose_self_signed_test::<CoseSign, B>(test_path, backend);
 }
+
+#[rstest]
+fn ecdsa_tests<B: CoseSignCipher + CoseKeyDistributionCipher>(
+    #[files("tests/dcaf_cose_examples/ecdsa/*.json")] test_path: PathBuf,
+    #[values(OpensslContext {})] backend: B,
+) {
+    crate::token::cose::test_helper::perform_cose_self_signed_test::<CoseSign, B>(
+        test_path, backend,
+    );
+}

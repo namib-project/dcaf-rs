@@ -172,6 +172,7 @@ pub struct TestCase {
     pub fail: bool,
     pub input: TestCaseInput,
     pub intermediates: Option<TestCaseIntermediates>,
+    #[serde(default)]
     pub output: TestCaseOutput,
 }
 
@@ -278,7 +279,7 @@ pub struct TestCaseIntermediates {
     pub cek: Vec<u8>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Default)]
 pub struct TestCaseOutput {
     #[serde(deserialize_with = "hex::deserialize")]
     pub cbor: Vec<u8>,

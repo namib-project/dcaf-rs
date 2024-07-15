@@ -42,19 +42,21 @@ impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTe
 
         // Need to generate an IV. Have to do this quite ugly, because we have implemented our IV
         // generation on the header builder only.
+        let alg = if let coset::Algorithm::Assigned(alg) = encrypt_cfg
+            .protected
+            .as_ref()
+            .or(encrypt_cfg.unprotected.as_ref())
+            .unwrap()
+            .alg
+            .as_ref()
+            .unwrap()
+        {
+            alg.clone()
+        } else {
+            panic!("unknown/invalid algorithm in test case")
+        };
         let iv_generator = HeaderBuilder::new()
-            .gen_iv(
-                backend,
-                &encrypt_cfg
-                    .protected
-                    .as_ref()
-                    .or(encrypt_cfg.unprotected.as_ref())
-                    .unwrap()
-                    .alg
-                    .as_ref()
-                    .unwrap()
-                    .clone(),
-            )
+            .gen_iv(backend, alg)
             .expect("unable to generate IV")
             .build();
         let mut unprotected = encrypt_cfg.unprotected.clone().unwrap_or_default();
@@ -67,7 +69,7 @@ impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTe
                 None,
                 recipient.unprotected.as_ref(),
                 recipient.protected.as_ref(),
-            ) == Ok(coset::Algorithm::Assigned(Algorithm::Direct))
+            ) == Ok(coset::iana::Algorithm::Direct)
         {
             enc_key = recipient.key.clone();
         } else {
@@ -189,6 +191,22 @@ fn cose_examples_aes_wrap_reference_output<B: CoseEncryptCipher + CoseKeyDistrib
 #[rstest]
 fn cose_examples_aes_wrap_self_signed<B: CoseEncryptCipher + CoseKeyDistributionCipher>(
     #[files("tests/cose_examples/aes-wrap-examples/aes-wrap-*-0[45].json")] test_path: PathBuf,
+    #[values(OpensslContext {})] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+fn aes_wrap_tests<B: CoseEncryptCipher + CoseKeyDistributionCipher>(
+    #[files("tests/dcaf_cose_examples/aes-kw/*.json")] test_path: PathBuf,
+    #[values(OpensslContext {})] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+fn aes_gcm_tests<B: CoseEncryptCipher + CoseKeyDistributionCipher>(
+    #[files("tests/dcaf_cose_examples/aes-gcm/*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
     perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);

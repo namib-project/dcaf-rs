@@ -23,14 +23,14 @@ use crate::token::cose::CoseCipher;
 pub trait CoseMacCipher: CoseCipher {
     fn compute_hmac(
         &mut self,
-        algorithm: Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         input: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 
     fn verify_hmac(
         &mut self,
-        algorithm: Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         tag: &[u8],
         data: &[u8],
@@ -41,7 +41,7 @@ mod mac;
 mod mac0;
 
 pub(crate) fn is_valid_hmac_key<'a, BE: Display>(
-    algorithm: &Algorithm,
+    algorithm: iana::Algorithm,
     parsed_key: CoseParsedKey<'a, BE>,
 ) -> Result<CoseSymmetricKey<'a, BE>, CoseCipherError<BE>> {
     // Checks according to RFC 9053, Section 3.1.
@@ -52,27 +52,25 @@ pub(crate) fn is_valid_hmac_key<'a, BE: Display>(
     } else {
         return Err(CoseCipherError::KeyTypeAlgorithmMismatch(
             parsed_key.as_ref().kty.clone(),
-            algorithm.clone(),
+            Algorithm::Assigned(algorithm),
         ));
     };
 
     // Algorithm in key must match algorithm to use.
-    if let Some(alg) = &symm_key.as_ref().alg {
-        if alg != algorithm {
+    if let Some(key_alg) = &symm_key.as_ref().alg {
+        if key_alg != &Algorithm::Assigned(algorithm) {
             return Err(CoseCipherError::KeyAlgorithmMismatch(
-                alg.clone(),
-                algorithm.clone(),
+                key_alg.clone(),
+                Algorithm::Assigned(algorithm),
             ));
         }
     }
 
     // For algorithms that we know, check the key length (would lead to a cipher error later on).
     let key_len = match algorithm {
-        Algorithm::Assigned(iana::Algorithm::HMAC_256_256 | iana::Algorithm::HMAC_256_64) => {
-            Some(32)
-        }
-        Algorithm::Assigned(iana::Algorithm::HMAC_384_384) => Some(48),
-        Algorithm::Assigned(iana::Algorithm::HMAC_512_512) => Some(64),
+        iana::Algorithm::HMAC_256_256 | iana::Algorithm::HMAC_256_64 => Some(32),
+        iana::Algorithm::HMAC_384_384 => Some(48),
+        iana::Algorithm::HMAC_512_512 => Some(64),
         _ => None,
     };
 
@@ -107,21 +105,17 @@ fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider>(
         try_all_keys,
     )
     .next()
-    .ok_or(CoseCipherError::NoKeyFound)?;
+    .ok_or(CoseCipherError::NoMatchingKeyFound(Vec::new()))?;
     let parsed_key = CoseParsedKey::try_from(&key)?;
-    let algorithm = determine_algorithm(Some(&parsed_key), protected, unprotected)?;
 
-    match algorithm {
-        Algorithm::Assigned(iana::Algorithm::HMAC_256_256) => {
-            let symm_key = is_valid_hmac_key(&algorithm, parsed_key)?;
-            backend.compute_hmac(algorithm, symm_key, input)
+    match determine_algorithm(Some(&parsed_key), protected, unprotected)? {
+        alg @ iana::Algorithm::HMAC_256_256 => {
+            let symm_key = is_valid_hmac_key(alg, parsed_key)?;
+            backend.compute_hmac(alg, symm_key, input)
         }
-        v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
-        // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
-        //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
-        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
-            Err(CoseCipherError::UnsupportedAlgorithm(v.clone()))
-        }
+        alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            alg,
+        ))),
     }
 }
 
@@ -134,19 +128,15 @@ fn try_verify_with_key<B: CoseMacCipher>(
     data: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
     check_for_duplicate_headers(protected, unprotected)?;
-    let algorithm = determine_algorithm(Some(&key), Some(protected), Some(unprotected))?;
 
-    match algorithm {
-        Algorithm::Assigned(iana::Algorithm::HMAC_256_256) => {
-            let symm_key = is_valid_hmac_key(&algorithm, key)?;
-            backend.verify_hmac(algorithm, symm_key, tag, data)
+    match determine_algorithm(Some(&key), Some(protected), Some(unprotected))? {
+        alg @ iana::Algorithm::HMAC_256_256 => {
+            let symm_key = is_valid_hmac_key(alg, key)?;
+            backend.verify_hmac(alg, symm_key, tag, data)
         }
-        v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
-        // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
-        //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
-        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
-            Err(CoseCipherError::UnsupportedAlgorithm(v.clone()))
-        }
+        alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            alg,
+        ))),
     }
 }
 
@@ -160,6 +150,7 @@ pub(crate) fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider>(
     data: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
     check_for_duplicate_headers(protected, unprotected)?;
+    let mut multi_verification_errors = Vec::new();
     for key in determine_key_candidates::<CKP>(
         *key_provider.borrow_mut(),
         Some(protected),
@@ -176,12 +167,14 @@ pub(crate) fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider>(
             data,
         ) {
             Ok(v) => return Ok(v),
-            Err(_e) => {
-                // TODO better output here
+            Err(e) => {
+                multi_verification_errors.push((key.clone(), e));
                 continue;
             }
         }
     }
 
-    Err(CoseCipherError::NoKeyFound)
+    Err(CoseCipherError::NoMatchingKeyFound(
+        multi_verification_errors,
+    ))
 }

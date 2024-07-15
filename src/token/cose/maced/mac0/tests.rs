@@ -38,7 +38,7 @@ impl<B: CoseCipher + CoseMacCipher> CoseStructTestHelper<B> for CoseMac0 {
                 None,
                 recipient.unprotected.as_ref(),
                 recipient.protected.as_ref(),
-            ) == Ok(coset::Algorithm::Assigned(Algorithm::Direct))
+            ) == Ok(Algorithm::Direct)
         {
             recipient.key.clone()
         } else {

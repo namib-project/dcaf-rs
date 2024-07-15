@@ -65,12 +65,14 @@ pub trait CoseSignCipher: CoseCipher {
     ///           unsupported.
     /// * `target` - Data to be signed.
     ///
-    /// # Return Value
+    /// # Returns
     ///
     /// It is expected that the return value is a signature conforming to RFC 9053, Section 2.1,
     /// i.e. the return value should consist of the `r` and `s` values of the signature, which are
     /// each padded (at the beginning) with zeros to the key size (rounded up to the next full
     /// byte).
+    ///
+    /// # Errors
     ///
     /// In case of errors, the implementation may return any valid [CoseCipherError].
     /// For backend-specific errors, [CoseCipherError::Other] may be used to convey a
@@ -88,7 +90,7 @@ pub trait CoseSignCipher: CoseCipher {
     /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new ECDSA variants are defined).
     fn sign_ecdsa(
         &mut self,
-        alg: Algorithm,
+        alg: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
         target: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
@@ -125,10 +127,12 @@ pub trait CoseSignCipher: CoseCipher {
     ///           on this being the case.
     /// * `target` - Data that was presumably signed using the signature.
     ///
-    /// # Return Value
+    /// # Returns
     ///
     /// It is expected that the return value is Ok(()) if the provided signature is a valid ECDSA
     /// signature for the provided key.
+    ///
+    /// # Errors
     ///
     /// If the signature is not malformed, but not valid for the given `alg`, `key`,
     /// and `target`, a [CoseCipherError::VerificationFailure] must be returned.
@@ -150,7 +154,7 @@ pub trait CoseSignCipher: CoseCipher {
     /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new ECDSA variants are defined).
     fn verify_ecdsa(
         &mut self,
-        alg: Algorithm,
+        alg: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
         signature: &[u8],
         target: &[u8],
@@ -175,28 +179,24 @@ fn try_sign<B: CoseSignCipher, CKP: CoseKeyProvider>(
         false,
     )
     .next()
-    .ok_or(CoseCipherError::NoKeyFound)?;
+    .ok_or(CoseCipherError::NoMatchingKeyFound(Vec::new()))?;
     let parsed_key = CoseParsedKey::try_from(&key)?;
-    let algorithm = determine_algorithm(Some(&parsed_key), protected, unprotected)?;
 
-    let sign_fn = match algorithm {
-        Algorithm::Assigned(
-            iana::Algorithm::ES256
-            | iana::Algorithm::ES384
-            | iana::Algorithm::ES512
-            | iana::Algorithm::ES256K,
-        ) => {
+    let mut sign_fn = match determine_algorithm(Some(&parsed_key), protected, unprotected)? {
+        alg @ (iana::Algorithm::ES256
+        | iana::Algorithm::ES384
+        | iana::Algorithm::ES512
+        | iana::Algorithm::ES256K) => {
             // Check if this is a valid ECDSA key.
-            let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(&algorithm, parsed_key, true)?;
+            let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(alg, parsed_key, true)?;
 
             // Perform signing operation using backend.
-            move |tosign| backend.sign_ecdsa(algorithm, &ec2_key, tosign)
+            move |tosign| backend.sign_ecdsa(alg, &ec2_key, tosign)
         }
-        v @ Algorithm::Assigned(_) => return Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
-        // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
-        //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
-        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
-            return Err(CoseCipherError::UnsupportedAlgorithm(v.clone()))
+        alg => {
+            return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                alg,
+            )))
         }
     };
 
@@ -212,26 +212,20 @@ fn try_verify_with_key<B: CoseSignCipher>(
     toverify: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
     check_for_duplicate_headers(protected, unprotected)?;
-    let algorithm = determine_algorithm(Some(&key), Some(protected), Some(unprotected))?;
 
-    match algorithm {
-        Algorithm::Assigned(
-            iana::Algorithm::ES256
-            | iana::Algorithm::ES384
-            | iana::Algorithm::ES512
-            | iana::Algorithm::ES256K,
-        ) => {
+    match determine_algorithm(Some(&key), Some(protected), Some(unprotected))? {
+        alg @ (iana::Algorithm::ES256
+        | iana::Algorithm::ES384
+        | iana::Algorithm::ES512
+        | iana::Algorithm::ES256K) => {
             // Check if this is a valid ECDSA key.
-            let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(&algorithm, key, false)?;
+            let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(alg, key, false)?;
 
-            backend.verify_ecdsa(algorithm, &ec2_key, signature, toverify)
+            backend.verify_ecdsa(alg, &ec2_key, signature, toverify)
         }
-        v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
-        // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
-        //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
-        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
-            Err(CoseCipherError::UnsupportedAlgorithm(v.clone()))
-        }
+        alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            alg,
+        ))),
     }
 }
 
@@ -245,6 +239,7 @@ fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider>(
     toverify: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
     check_for_duplicate_headers(protected, unprotected)?;
+    let mut multi_verification_errors = Vec::new();
     for key in determine_key_candidates::<CKP>(
         key_provider,
         Some(protected),
@@ -262,12 +257,14 @@ fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider>(
             toverify,
         ) {
             Ok(()) => return Ok(()),
-            Err(_e) => {
-                // TODO better output here
+            Err(e) => {
+                multi_verification_errors.push((key.clone(), e));
                 continue;
             }
         }
     }
 
-    Err(CoseCipherError::NoKeyFound)
+    Err(CoseCipherError::NoMatchingKeyFound(
+        multi_verification_errors,
+    ))
 }

@@ -29,7 +29,7 @@ pub use encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
 pub trait CoseEncryptCipher: CoseCipher {
     fn encrypt_aes_gcm(
         &mut self,
-        algorithm: Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         plaintext: &[u8],
         aad: &[u8],
@@ -38,7 +38,7 @@ pub trait CoseEncryptCipher: CoseCipher {
 
     fn decrypt_aes_gcm(
         &mut self,
-        algorithm: Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         ciphertext_with_tag: &[u8],
         aad: &[u8],
@@ -49,7 +49,7 @@ pub trait CoseEncryptCipher: CoseCipher {
 pub trait CoseKeyDistributionCipher: CoseCipher {
     fn aes_key_wrap(
         &mut self,
-        algorithm: Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         plaintext: &[u8],
         iv: &[u8],
@@ -57,7 +57,7 @@ pub trait CoseKeyDistributionCipher: CoseCipher {
 
     fn aes_key_unwrap(
         &mut self,
-        algorithm: Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         ciphertext: &[u8],
         iv: &[u8],
@@ -68,7 +68,7 @@ pub trait HeaderBuilderExt: Sized {
     fn gen_iv<B: CoseEncryptCipher>(
         self,
         backend: &mut B,
-        alg: &Algorithm,
+        alg: iana::Algorithm,
     ) -> Result<Self, CoseCipherError<B::Error>>;
 }
 
@@ -78,14 +78,18 @@ impl HeaderBuilderExt for HeaderBuilder {
     fn gen_iv<B: CoseCipher>(
         self,
         backend: &mut B,
-        alg: &Algorithm,
+        alg: iana::Algorithm,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let iv_size = match alg {
             // AES-GCM: Nonce is fixed at 96 bits (RFC 9053, Section 4.1)
-            Algorithm::Assigned(
-                iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM,
-            ) => AES_GCM_NONCE_SIZE,
-            v => return Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+            iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => {
+                AES_GCM_NONCE_SIZE
+            }
+            v => {
+                return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                    v,
+                )))
+            }
         };
         let mut iv = vec![0; iv_size];
         backend.generate_rand(&mut iv)?;
@@ -115,16 +119,13 @@ fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
         try_all_keys,
     )
     .next()
-    .ok_or(CoseCipherError::NoKeyFound)?;
+    .ok_or(CoseCipherError::NoMatchingKeyFound(Vec::new()))?;
     let parsed_key = CoseParsedKey::try_from(&key)?;
-    let algorithm = determine_algorithm(Some(&parsed_key), protected, unprotected)?;
 
-    match algorithm {
-        Algorithm::Assigned(
-            iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM,
-        ) => {
+    match determine_algorithm(Some(&parsed_key), protected, unprotected)? {
+        alg @ (iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM) => {
             // Check if this is a valid AES key.
-            let symm_key = key::ensure_valid_aes_key::<B::Error>(&algorithm, parsed_key)?;
+            let symm_key = key::ensure_valid_aes_key::<B::Error>(alg, parsed_key)?;
 
             let iv = protected
                 .into_iter()
@@ -136,14 +137,11 @@ fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
                     iana::HeaderParameter::Iv,
                 )))?;
 
-            backend.encrypt_aes_gcm(algorithm, symm_key, plaintext, enc_structure, iv)
+            backend.encrypt_aes_gcm(alg, symm_key, plaintext, enc_structure, iv)
         }
-        v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
-        // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
-        //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
-        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
-            Err(CoseCipherError::UnsupportedAlgorithm(v.clone()))
-        }
+        alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            alg,
+        ))),
     }
 }
 
@@ -158,14 +156,11 @@ fn try_decrypt_with_key<B: CoseEncryptCipher>(
     enc_structure: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
     check_for_duplicate_headers(protected, unprotected)?;
-    let algorithm = determine_algorithm(Some(&key), Some(protected), Some(unprotected))?;
 
-    match algorithm {
-        Algorithm::Assigned(
-            iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM,
-        ) => {
+    match determine_algorithm(Some(&key), Some(protected), Some(unprotected))? {
+        alg @ (iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM) => {
             // Check if this is a valid AES key.
-            let symm_key = key::ensure_valid_aes_key::<B::Error>(&algorithm, key)?;
+            let symm_key = key::ensure_valid_aes_key::<B::Error>(alg, key)?;
 
             let iv = core::iter::once(protected)
                 .chain(core::iter::once(unprotected))
@@ -181,14 +176,11 @@ fn try_decrypt_with_key<B: CoseEncryptCipher>(
                 return Err(CoseCipherError::VerificationFailure);
             }
 
-            backend.decrypt_aes_gcm(algorithm, symm_key, ciphertext, enc_structure, iv)
+            backend.decrypt_aes_gcm(alg, symm_key, ciphertext, enc_structure, iv)
         }
-        v @ Algorithm::Assigned(_) => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
-        // TODO make this extensible? I'm unsure whether it would be worth the effort, considering
-        //      that using your own (or another non-recommended) algorithm is not a good idea anyways.
-        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_)) => {
-            Err(CoseCipherError::UnsupportedAlgorithm(v.clone()))
-        }
+        alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            alg,
+        ))),
     }
 }
 
@@ -204,6 +196,7 @@ pub(crate) fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
     enc_structure: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
     check_for_duplicate_headers(protected, unprotected)?;
+    let mut multi_verification_errors = Vec::new();
     for key in determine_key_candidates::<CKP>(
         *key_provider.borrow_mut(),
         Some(protected),
@@ -220,12 +213,14 @@ pub(crate) fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
             enc_structure,
         ) {
             Ok(v) => return Ok(v),
-            Err(_e) => {
-                // TODO better output here
+            Err(e) => {
+                multi_verification_errors.push((key.clone(), e));
                 continue;
             }
         }
     }
 
-    Err(CoseCipherError::NoKeyFound)
+    Err(CoseCipherError::NoMatchingKeyFound(
+        multi_verification_errors,
+    ))
 }

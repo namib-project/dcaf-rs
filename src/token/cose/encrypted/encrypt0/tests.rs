@@ -30,19 +30,21 @@ impl<B: CoseCipher + CoseEncryptCipher> CoseStructTestHelper<B> for CoseEncrypt0
 
         // Need to generate an IV. Have to do this quite ugly, because we have implemented our IV
         // generation on the header builder only.
+        let alg = if let coset::Algorithm::Assigned(alg) = encrypt0_cfg
+            .protected
+            .as_ref()
+            .or(encrypt0_cfg.unprotected.as_ref())
+            .unwrap()
+            .alg
+            .as_ref()
+            .unwrap()
+        {
+            alg.clone()
+        } else {
+            panic!("unknown/invalid algorithm in test case")
+        };
         let iv_generator = HeaderBuilder::new()
-            .gen_iv(
-                backend,
-                &encrypt0_cfg
-                    .protected
-                    .as_ref()
-                    .or(encrypt0_cfg.unprotected.as_ref())
-                    .unwrap()
-                    .alg
-                    .as_ref()
-                    .unwrap()
-                    .clone(),
-            )
+            .gen_iv(backend, alg)
             .expect("unable to generate IV")
             .build();
         let mut unprotected = encrypt0_cfg.unprotected.clone().unwrap_or_default();

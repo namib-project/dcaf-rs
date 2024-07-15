@@ -81,19 +81,25 @@ pub(crate) fn determine_algorithm<CE: Display>(
     parsed_key: Option<&CoseParsedKey<'_, CE>>,
     unprotected_header: Option<&Header>,
     protected_header: Option<&Header>,
-) -> Result<Algorithm, CoseCipherError<CE>> {
+) -> Result<iana::Algorithm, CoseCipherError<CE>> {
     // Check whether the algorithm has been explicitly set...
-    if let Some(Some(alg)) = protected_header.map(|v| &v.alg) {
+    let alg = if let Some(Some(alg)) = protected_header.map(|v| v.alg.clone()) {
         // ...in the protected header...
-        Ok(alg.clone())
-    } else if let Some(Some(alg)) = unprotected_header.map(|v| &v.alg) {
+        Ok(alg)
+    } else if let Some(Some(alg)) = unprotected_header.map(|v| v.alg.clone()) {
         // ...in the unprotected header...
-        Ok(alg.clone())
-    } else if let Some(alg) = &parsed_key.and_then(|v| v.as_ref().alg.clone()) {
+        Ok(alg)
+    } else if let Some(alg) = parsed_key.and_then(|v| v.as_ref().alg.clone()) {
         // ...or the key itself.
-        Ok(alg.clone())
+        Ok(alg)
     } else {
         Err(CoseCipherError::NoAlgorithmDeterminable)
+    }?;
+
+    if let Algorithm::Assigned(alg) = alg {
+        Ok(alg)
+    } else {
+        Err(CoseCipherError::UnsupportedAlgorithm(alg))
     }
 }
 

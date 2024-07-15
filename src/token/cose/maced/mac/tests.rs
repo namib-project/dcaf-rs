@@ -48,7 +48,7 @@ impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHe
                 None,
                 recipient.unprotected.as_ref(),
                 recipient.protected.as_ref(),
-            ) == Ok(coset::Algorithm::Assigned(Algorithm::Direct))
+            ) == Ok(Algorithm::Direct)
         {
             enc_key = recipient.key.clone();
         } else {
@@ -156,4 +156,14 @@ fn cose_examples_mac_self_signed<B: CoseMacCipher + CoseKeyDistributionCipher>(
     #[values(OpensslContext {})] backend: B,
 ) {
     test_helper::perform_cose_self_signed_test::<CoseMac, B>(test_path, backend);
+}
+
+#[rstest]
+fn hmac_tests<B: CoseMacCipher + CoseKeyDistributionCipher>(
+    #[files("tests/dcaf_cose_examples/hmac/*.json")] test_path: PathBuf,
+    #[values(OpensslContext {})] backend: B,
+) {
+    crate::token::cose::test_helper::perform_cose_self_signed_test::<CoseMac, B>(
+        test_path, backend,
+    );
 }

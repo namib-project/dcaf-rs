@@ -232,89 +232,86 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
 }
 
 fn determine_encrypt_key_ops_for_alg<CE: Display>(
-    alg: &Algorithm,
+    alg: iana::Algorithm,
 ) -> Result<BTreeSet<KeyOperation>, CoseCipherError<CE>> {
     Ok(BTreeSet::from_iter(match alg {
-        Algorithm::Assigned(iana::Algorithm::Direct) => {
+        iana::Algorithm::Direct => {
             // TODO maybe needs to be all operations instead
             vec![]
         }
-        Algorithm::Assigned(
-            iana::Algorithm::Direct_HKDF_AES_128
-            | iana::Algorithm::Direct_HKDF_AES_256
-            | iana::Algorithm::Direct_HKDF_SHA_256
-            | iana::Algorithm::Direct_HKDF_SHA_512
-            | iana::Algorithm::ECDH_ES_HKDF_256
-            | iana::Algorithm::ECDH_ES_HKDF_512
-            | iana::Algorithm::ECDH_SS_HKDF_256
-            | iana::Algorithm::ECDH_SS_HKDF_512
-            | iana::Algorithm::ECDH_ES_A128KW
-            | iana::Algorithm::ECDH_ES_A192KW
-            | iana::Algorithm::ECDH_ES_A256KW
-            | iana::Algorithm::ECDH_SS_A128KW
-            | iana::Algorithm::ECDH_SS_A192KW
-            | iana::Algorithm::ECDH_SS_A256KW,
-        ) => {
+
+        iana::Algorithm::Direct_HKDF_AES_128
+        | iana::Algorithm::Direct_HKDF_AES_256
+        | iana::Algorithm::Direct_HKDF_SHA_256
+        | iana::Algorithm::Direct_HKDF_SHA_512
+        | iana::Algorithm::ECDH_ES_HKDF_256
+        | iana::Algorithm::ECDH_ES_HKDF_512
+        | iana::Algorithm::ECDH_SS_HKDF_256
+        | iana::Algorithm::ECDH_SS_HKDF_512
+        | iana::Algorithm::ECDH_ES_A128KW
+        | iana::Algorithm::ECDH_ES_A192KW
+        | iana::Algorithm::ECDH_ES_A256KW
+        | iana::Algorithm::ECDH_SS_A128KW
+        | iana::Algorithm::ECDH_SS_A192KW
+        | iana::Algorithm::ECDH_SS_A256KW => {
             vec![
                 KeyOperation::Assigned(iana::KeyOperation::DeriveKey),
                 KeyOperation::Assigned(iana::KeyOperation::DeriveBits),
             ]
         }
-        Algorithm::Assigned(
-            iana::Algorithm::A128KW | iana::Algorithm::A192KW | iana::Algorithm::A256KW,
-        ) => {
+        iana::Algorithm::A128KW | iana::Algorithm::A192KW | iana::Algorithm::A256KW => {
             vec![
                 KeyOperation::Assigned(iana::KeyOperation::Encrypt),
                 KeyOperation::Assigned(iana::KeyOperation::WrapKey),
             ]
         }
-        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_) | Algorithm::Assigned(_)) => {
+        alg => {
             // Unsupported algorithm - skip over this recipient.
-            return Err(CoseCipherError::UnsupportedAlgorithm(v.clone()));
+            return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                alg,
+            )));
         }
     }))
 }
 
 fn determine_decrypt_key_ops_for_alg<CE: Display>(
-    alg: &Algorithm,
+    alg: iana::Algorithm,
 ) -> Result<BTreeSet<KeyOperation>, CoseCipherError<CE>> {
     Ok(BTreeSet::from_iter(match alg {
-        Algorithm::Assigned(iana::Algorithm::Direct) => {
+        iana::Algorithm::Direct => {
             // TODO maybe needs to be all operations instead
             vec![]
         }
-        Algorithm::Assigned(
-            iana::Algorithm::Direct_HKDF_AES_128
-            | iana::Algorithm::Direct_HKDF_AES_256
-            | iana::Algorithm::Direct_HKDF_SHA_256
-            | iana::Algorithm::Direct_HKDF_SHA_512
-            | iana::Algorithm::ECDH_ES_HKDF_256
-            | iana::Algorithm::ECDH_ES_HKDF_512
-            | iana::Algorithm::ECDH_SS_HKDF_256
-            | iana::Algorithm::ECDH_SS_HKDF_512
-            | iana::Algorithm::ECDH_ES_A128KW
-            | iana::Algorithm::ECDH_ES_A192KW
-            | iana::Algorithm::ECDH_ES_A256KW
-            | iana::Algorithm::ECDH_SS_A128KW
-            | iana::Algorithm::ECDH_SS_A192KW
-            | iana::Algorithm::ECDH_SS_A256KW,
-        ) => {
+        iana::Algorithm::Direct_HKDF_AES_128
+        | iana::Algorithm::Direct_HKDF_AES_256
+        | iana::Algorithm::Direct_HKDF_SHA_256
+        | iana::Algorithm::Direct_HKDF_SHA_512
+        | iana::Algorithm::ECDH_ES_HKDF_256
+        | iana::Algorithm::ECDH_ES_HKDF_512
+        | iana::Algorithm::ECDH_SS_HKDF_256
+        | iana::Algorithm::ECDH_SS_HKDF_512
+        | iana::Algorithm::ECDH_ES_A128KW
+        | iana::Algorithm::ECDH_ES_A192KW
+        | iana::Algorithm::ECDH_ES_A256KW
+        | iana::Algorithm::ECDH_SS_A128KW
+        | iana::Algorithm::ECDH_SS_A192KW
+        | iana::Algorithm::ECDH_SS_A256KW => {
             vec![
                 KeyOperation::Assigned(iana::KeyOperation::DeriveKey),
                 KeyOperation::Assigned(iana::KeyOperation::DeriveBits),
             ]
         }
-        Algorithm::Assigned(
-            iana::Algorithm::A128KW | iana::Algorithm::A192KW | iana::Algorithm::A256KW,
-        ) => {
+        iana::Algorithm::A128KW | iana::Algorithm::A192KW | iana::Algorithm::A256KW => {
             vec![
                 KeyOperation::Assigned(iana::KeyOperation::Decrypt),
                 KeyOperation::Assigned(iana::KeyOperation::UnwrapKey),
             ]
         }
-        v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_) | Algorithm::Assigned(_)) => {
+        alg => {
             // Unsupported algorithm - skip over this recipient.
-            return Err(CoseCipherError::UnsupportedAlgorithm(v.clone()));
+            return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                alg,
+            )));
         }
     }))
 }
@@ -358,7 +355,7 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
             };
 
         // Determine key operations that fulfill the requirements of the algorithm.
-        let operation = determine_encrypt_key_ops_for_alg(&alg)?;
+        let operation = determine_encrypt_key_ops_for_alg(alg)?;
 
         let key = determine_key_candidates::<CKP>(
             key_provider,
@@ -368,11 +365,11 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
             try_all_keys,
         )
         .next()
-        .ok_or(CoseCipherError::NoKeyFound)?;
+        .ok_or(CoseCipherError::NoMatchingKeyFound(Vec::new()))?;
         let parsed_key = CoseParsedKey::try_from(&key)?;
 
         // Direct => Key of will be used for lower layer directly, must not contain ciphertext.
-        if let Algorithm::Assigned(iana::Algorithm::Direct) = alg {
+        if iana::Algorithm::Direct == alg {
             return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
                 iana::Algorithm::Direct,
             )));
@@ -386,10 +383,8 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
         }
 
         match alg {
-            Algorithm::Assigned(
-                iana::Algorithm::A128KW | iana::Algorithm::A192KW | iana::Algorithm::A256KW,
-            ) => {
-                let symm_key = ensure_valid_aes_key(&alg, parsed_key)?;
+            alg @ (iana::Algorithm::A128KW | iana::Algorithm::A192KW | iana::Algorithm::A256KW) => {
+                let symm_key = ensure_valid_aes_key(alg, parsed_key)?;
 
                 if protected.is_some() && !protected.as_ref().unwrap().is_empty() {
                     return Err(CoseCipherError::AadUnsupported);
@@ -406,7 +401,7 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
                     |plaintext, _aad| {
                         // Ignore AAD as this is not an AEAD algorithm, just an AE algorithm.
                         backend.aes_key_wrap(
-                            alg.clone(),
+                            alg,
                             symm_key,
                             plaintext,
                             // Fixed IV, see RFC 9053, Section 6.2.1
@@ -415,9 +410,11 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
                     },
                 )
             }
-            v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_) | Algorithm::Assigned(_)) => {
+            alg => {
                 // Unsupported algorithm - skip over this recipient.
-                Err(CoseCipherError::UnsupportedAlgorithm(v.clone()))
+                Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                    alg,
+                )))
             }
         }
     }
@@ -460,7 +457,7 @@ impl CoseRecipientExt for CoseRecipient {
         };
 
         // Determine key operations that fulfill the requirements of the algorithm.
-        let operation = determine_decrypt_key_ops_for_alg(&alg)?;
+        let operation = determine_decrypt_key_ops_for_alg(alg)?;
 
         let key_candidates: Vec<CoseKey> = determine_key_candidates::<CKP>(
             key_provider,
@@ -473,17 +470,19 @@ impl CoseRecipientExt for CoseRecipient {
 
         // Direct => Key of key provider will be used for lower layer directly.
         // TODO ensure that Direct is the only method used on the message (RFC 9052, Section 8.5.1)
-        if let Algorithm::Assigned(iana::Algorithm::Direct) = alg {
+        if iana::Algorithm::Direct == alg {
             return Ok(key_candidates);
         }
+
+        let mut multi_verification_errors = Vec::new();
 
         for key in key_candidates {
             let parsed_key = CoseParsedKey::try_from(&key)?;
             match alg {
-                Algorithm::Assigned(
-                    iana::Algorithm::A128KW | iana::Algorithm::A192KW | iana::Algorithm::A256KW,
-                ) => {
-                    let symm_key = match ensure_valid_aes_key(&alg, parsed_key) {
+                alg @ (iana::Algorithm::A128KW
+                | iana::Algorithm::A192KW
+                | iana::Algorithm::A256KW) => {
+                    let symm_key = match ensure_valid_aes_key(alg, parsed_key) {
                         Ok(v) => v,
                         Err(_e) => {
                             // Key is not an AES key, skip.
@@ -512,20 +511,24 @@ impl CoseRecipientExt for CoseRecipient {
                         },
                     ) {
                         Ok(v) => return Ok(vec![CoseKeyBuilder::new_symmetric_key(v).build()]),
-                        Err(_e) => {
-                            // TODO some better output here
+                        Err(e) => {
+                            multi_verification_errors.push((key.clone(), e));
                             // Decryption using key failed, skip.
                             continue;
                         }
                     };
                 }
-                v @ (Algorithm::PrivateUse(_) | Algorithm::Text(_) | Algorithm::Assigned(_)) => {
+                alg => {
                     // Unsupported algorithm - skip over this recipient.
-                    return Err(CoseCipherError::UnsupportedAlgorithm(v.clone()));
+                    return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                        alg,
+                    )));
                 }
             }
         }
 
-        Err(CoseCipherError::NoKeyFound)
+        Err(CoseCipherError::NoMatchingKeyFound(
+            multi_verification_errors,
+        ))
     }
 }

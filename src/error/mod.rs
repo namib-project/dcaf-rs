@@ -17,7 +17,7 @@ use core::any::type_name;
 use core::fmt::{Display, Formatter};
 
 use ciborium::value::Value;
-use coset::{Algorithm, CoseError, KeyOperation, KeyType, Label};
+use coset::{Algorithm, CoseError, CoseKey, KeyOperation, KeyType, Label};
 use strum_macros::IntoStaticStr;
 
 use {alloc::format, alloc::string::String, alloc::string::ToString};
@@ -248,10 +248,8 @@ pub enum CoseCipherError<T>
 where
     T: Display,
 {
-    /// The given signature or MAC tag is either invalid or does not match the given data.
+    /// The given encrypted, signed or MAC-ed structure could not be verified and/or decrypted.
     VerificationFailure,
-    /// The given ciphertext could not be decrypted.
-    DecryptionFailure,
     /// Key type is not supported.
     UnsupportedKeyType(KeyType),
     /// Curve is not supported by coset or the chosen cryptographic backend.
@@ -273,15 +271,31 @@ where
     KeyTypeAlgorithmMismatch(KeyType, Algorithm),
     /// Algorithm provided in key does not match algorithm selected for operation.
     KeyAlgorithmMismatch(Algorithm, Algorithm),
+    /// At least one header was provided both in the protected and the unprotected bucket
+    /// simultaneously.
     DuplicateHeaders(Vec<Label>),
-    MissingKeyParam(KeyParam),
+    /// A key parameter that is required for this type of key and/or algorithm is missing.
+    ///
+    /// If multiple key parameters are provided, at least one of them (but possibly more than one)
+    /// is required (e.g. for EC keys, either D or (X and Y) must be set).
+    MissingKeyParam(Vec<KeyParam>),
+    /// A key parameter for this key has an invalid value.
     InvalidKeyParam(KeyParam, Value),
+    /// A header parameter that is required for the selected algorithm is missing.
     MissingHeaderParam(HeaderParam),
+    /// A header parameter has an invalid value.
     InvalidHeaderParam(HeaderParam, Value),
-    /// Provided algorithm does not support additional authenticated data (which also includes
-    /// protected headers).
+    /// Provided algorithm does not support additional authenticated data, but AAD was provided
+    /// (either directly or the protected header bucket is not empty).
     AadUnsupported,
-    NoKeyFound,
+    /// No suitable key for verifying this structure was found.
+    ///
+    /// Either no matching key was provided or all provided keys had an error while attempting to
+    /// verify.
+    ///
+    /// In the latter case, the error field will contain a list of all attempted keys and the
+    /// corresponding error.
+    NoMatchingKeyFound(Vec<(CoseKey, CoseCipherError<T>)>),
     /// A different error has occurred. Details are provided in the contained error.
     Other(T),
 }
@@ -297,75 +311,6 @@ where
     pub fn other_error(other: T) -> CoseCipherError<T> {
         CoseCipherError::Other(other)
     }
-
-    // TODO: Maybe there's a better way to do the below, parts of this are redundant and duplicated.
-    pub(crate) fn from_kek_error<C: Display>(
-        error: CoseCipherError<T>,
-    ) -> CoseCipherError<MultipleCoseError<T, C>> {
-        match error {
-            CoseCipherError::Other(x) => CoseCipherError::Other(MultipleCoseError::KekError(x)),
-            CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
-            CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
-            CoseCipherError::UnsupportedKeyType(v) => CoseCipherError::UnsupportedKeyType(v),
-            CoseCipherError::UnsupportedCurve(v) => CoseCipherError::UnsupportedCurve(v),
-            CoseCipherError::UnsupportedAlgorithm(v) => CoseCipherError::UnsupportedAlgorithm(v),
-            CoseCipherError::UnsupportedKeyDerivation => CoseCipherError::UnsupportedKeyDerivation,
-            CoseCipherError::NoAlgorithmDeterminable => CoseCipherError::NoAlgorithmDeterminable,
-            CoseCipherError::KeyOperationNotPermitted(v, w) => {
-                CoseCipherError::KeyOperationNotPermitted(v, w)
-            }
-            CoseCipherError::KeyTypeCurveMismatch(v, w) => {
-                CoseCipherError::KeyTypeCurveMismatch(v, w)
-            }
-            CoseCipherError::KeyTypeAlgorithmMismatch(v, w) => {
-                CoseCipherError::KeyTypeAlgorithmMismatch(v, w)
-            }
-            CoseCipherError::KeyAlgorithmMismatch(v, w) => {
-                CoseCipherError::KeyAlgorithmMismatch(v, w)
-            }
-            CoseCipherError::DuplicateHeaders(v) => CoseCipherError::DuplicateHeaders(v),
-            CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
-            CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
-            CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
-            CoseCipherError::MissingHeaderParam(v) => CoseCipherError::MissingHeaderParam(v),
-            CoseCipherError::InvalidHeaderParam(v, w) => CoseCipherError::InvalidHeaderParam(v, w),
-            CoseCipherError::AadUnsupported => CoseCipherError::AadUnsupported,
-        }
-    }
-
-    pub(crate) fn from_cek_error<K: Display>(
-        error: CoseCipherError<T>,
-    ) -> CoseCipherError<MultipleCoseError<K, T>> {
-        match error {
-            CoseCipherError::Other(x) => CoseCipherError::Other(MultipleCoseError::CekError(x)),
-            CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
-            CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
-            CoseCipherError::UnsupportedKeyType(v) => CoseCipherError::UnsupportedKeyType(v),
-            CoseCipherError::UnsupportedCurve(v) => CoseCipherError::UnsupportedCurve(v),
-            CoseCipherError::UnsupportedAlgorithm(v) => CoseCipherError::UnsupportedAlgorithm(v),
-            CoseCipherError::UnsupportedKeyDerivation => CoseCipherError::UnsupportedKeyDerivation,
-            CoseCipherError::NoAlgorithmDeterminable => CoseCipherError::NoAlgorithmDeterminable,
-            CoseCipherError::KeyOperationNotPermitted(v, w) => {
-                CoseCipherError::KeyOperationNotPermitted(v, w)
-            }
-            CoseCipherError::KeyTypeCurveMismatch(v, w) => {
-                CoseCipherError::KeyTypeCurveMismatch(v, w)
-            }
-            CoseCipherError::KeyTypeAlgorithmMismatch(v, w) => {
-                CoseCipherError::KeyTypeAlgorithmMismatch(v, w)
-            }
-            CoseCipherError::KeyAlgorithmMismatch(v, w) => {
-                CoseCipherError::KeyAlgorithmMismatch(v, w)
-            }
-            CoseCipherError::DuplicateHeaders(v) => CoseCipherError::DuplicateHeaders(v),
-            CoseCipherError::MissingKeyParam(v) => CoseCipherError::MissingKeyParam(v),
-            CoseCipherError::InvalidKeyParam(v, w) => CoseCipherError::InvalidKeyParam(v, w),
-            CoseCipherError::NoKeyFound => CoseCipherError::NoKeyFound,
-            CoseCipherError::MissingHeaderParam(v) => CoseCipherError::MissingHeaderParam(v),
-            CoseCipherError::InvalidHeaderParam(v, w) => CoseCipherError::InvalidHeaderParam(v, w),
-            CoseCipherError::AadUnsupported => CoseCipherError::AadUnsupported,
-        }
-    }
 }
 
 impl<T> Display for CoseCipherError<T>
@@ -375,8 +320,9 @@ where
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             // TODO (#14): this can probably be done better (use thiserror instead as soon as std::error::Error has been moved to core?)
-            CoseCipherError::VerificationFailure => write!(f, "data verification failed"),
-            CoseCipherError::DecryptionFailure => write!(f, "decryption failed"),
+            CoseCipherError::VerificationFailure => {
+                write!(f, "data verification and/or decryption failed")
+            }
             CoseCipherError::Other(s) => write!(f, "{s}"),
             CoseCipherError::UnsupportedKeyType(_) => write!(f, "unsupported key type"),
             CoseCipherError::UnsupportedCurve(_) => write!(f, "unsupported curve"),
@@ -403,7 +349,7 @@ where
             CoseCipherError::DuplicateHeaders(_) => write!(f, "duplicate headers"),
             CoseCipherError::MissingKeyParam(_) => write!(f, "required key parameter missing"),
             CoseCipherError::InvalidKeyParam(_, _) => write!(f, "key parameter has invalid value"),
-            CoseCipherError::NoKeyFound => {
+            CoseCipherError::NoMatchingKeyFound(_) => {
                 write!(f, "no suitable key was found for this operation")
             }
             CoseCipherError::MissingHeaderParam(_) => {
@@ -418,36 +364,6 @@ where
                     "algorithm does not support additional authenticated data"
                 )
             }
-        }
-    }
-}
-
-/// Error type used when a token for multiple recipients (i.e., `CoseEncrypt`) is decrypted.
-///
-/// In that case, the recipients may be encrypted with a different cipher (`K`) than the
-/// actual content (`C`); hence, this error type differentiates between the two.
-#[derive(Debug)]
-pub enum MultipleCoseError<K, C>
-where
-    K: Display,
-    C: Display,
-{
-    /// Used when an error occurred in the Key Encryption Key's cipher.
-    KekError(K),
-
-    /// Used when an error occurred in the Content Encryption Key's cipher.
-    CekError(C),
-}
-
-impl<K, C> Display for MultipleCoseError<K, C>
-where
-    K: Display,
-    C: Display,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match self {
-            MultipleCoseError::KekError(k) => k.fmt(f),
-            MultipleCoseError::CekError(c) => c.fmt(f),
         }
     }
 }
@@ -606,38 +522,6 @@ where
     #[must_use]
     fn from(error: CoseError) -> Self {
         AccessTokenError::CoseError(error)
-    }
-}
-
-#[allow(dead_code)]
-impl<T> AccessTokenError<T>
-where
-    T: Display,
-{
-    // TODO: Again, as in CoseCipherError, maybe there's a better way to do the below.
-
-    pub(crate) fn from_kek_error<C: Display>(
-        error: AccessTokenError<T>,
-    ) -> AccessTokenError<MultipleCoseError<T, C>> {
-        match error {
-            AccessTokenError::CoseCipherError(x) => {
-                AccessTokenError::CoseCipherError(CoseCipherError::from_kek_error(x))
-            }
-            AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
-            AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-        }
-    }
-
-    pub(crate) fn from_cek_error<K: Display>(
-        error: AccessTokenError<T>,
-    ) -> AccessTokenError<MultipleCoseError<K, T>> {
-        match error {
-            AccessTokenError::CoseCipherError(x) => {
-                AccessTokenError::CoseCipherError(CoseCipherError::from_cek_error(x))
-            }
-            AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
-            AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-        }
     }
 }
 

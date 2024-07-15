@@ -154,7 +154,7 @@
 //! ```
 
 use crate::common::cbor_values::ByteString;
-use crate::error::{AccessTokenError, CoseCipherError};
+use crate::error::AccessTokenError;
 use crate::token::cose::encrypted::{
     CoseEncrypt0BuilderExt, CoseEncrypt0Ext, CoseEncryptBuilderExt, CoseEncryptCipher,
     CoseEncryptExt, CoseKeyDistributionCipher,
@@ -291,29 +291,16 @@ where
                 .build(),
         );
         let mut cek_key = key.clone();
-        cek_key.alg = Some(ce_alg);
+        cek_key.alg = Some(Algorithm::Assigned(ce_alg));
         cek_key
     } else {
         let ce_alg = preset_algorithm?;
         let cek_v = generate_cek_for_alg(backend, ce_alg.clone())?;
-        let cek = match ce_alg {
-            Algorithm::Assigned(v) => CoseKeyBuilder::new_symmetric_key(cek_v.clone())
-                .algorithm(v)
-                .build(),
-            v => Err(CoseCipherError::UnsupportedAlgorithm(v))?,
-        };
+        let cek = CoseKeyBuilder::new_symmetric_key(cek_v.clone()).build();
 
         for key in key_iter {
             // TODO allow manually setting headers for each recipient.
             let kek_alg = determine_algorithm(Some(&CoseParsedKey::try_from(key)?), None, None)?;
-            let kek_alg = match kek_alg {
-                Algorithm::Assigned(v) => v,
-                v => {
-                    return Err(AccessTokenError::CoseCipherError(
-                        CoseCipherError::UnsupportedAlgorithm(v),
-                    ))
-                }
-            };
             let recipient_header = HeaderBuilder::new().algorithm(kek_alg).build();
             let recipient = CoseRecipientBuilder::new().try_encrypt(
                 backend,

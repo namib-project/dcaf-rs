@@ -175,12 +175,12 @@ impl CoseCipher for OpensslContext {
 impl CoseSignCipher for OpensslContext {
     fn sign_ecdsa(
         &mut self,
-        alg: Algorithm,
+        alg: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
         target: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         let (pad_size, group) = get_ecdsa_group_params(key)?;
-        let hash = get_algorithm_hash_function(&alg)?;
+        let hash = get_algorithm_hash_function(alg)?;
 
         // Possible truncation is fine, the key size will never exceed the size of an i32.
         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
@@ -189,13 +189,13 @@ impl CoseSignCipher for OpensslContext {
 
     fn verify_ecdsa(
         &mut self,
-        alg: Algorithm,
+        alg: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
         signature: &[u8],
         target: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>> {
         let (pad_size, group) = get_ecdsa_group_params(key)?;
-        let hash = get_algorithm_hash_function(&alg)?;
+        let hash = get_algorithm_hash_function(alg)?;
 
         verify_ecdsa(&group, pad_size, hash, key, signature, target)
     }
@@ -223,19 +223,15 @@ fn get_ecdsa_group_params(
 }
 
 fn get_algorithm_hash_function(
-    alg: &Algorithm,
+    alg: iana::Algorithm,
 ) -> Result<MessageDigest, CoseCipherError<CoseOpensslCipherError>> {
     match alg {
-        Algorithm::Assigned(iana::Algorithm::ES256 | iana::Algorithm::HMAC_256_256) => {
-            Ok(MessageDigest::sha256())
-        }
-        Algorithm::Assigned(iana::Algorithm::ES384 | iana::Algorithm::HMAC_384_384) => {
-            Ok(MessageDigest::sha384())
-        }
-        Algorithm::Assigned(iana::Algorithm::ES512 | iana::Algorithm::HMAC_512_512) => {
-            Ok(MessageDigest::sha512())
-        }
-        v => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+        iana::Algorithm::ES256 | iana::Algorithm::HMAC_256_256 => Ok(MessageDigest::sha256()),
+        iana::Algorithm::ES384 | iana::Algorithm::HMAC_384_384 => Ok(MessageDigest::sha384()),
+        iana::Algorithm::ES512 | iana::Algorithm::HMAC_512_512 => Ok(MessageDigest::sha512()),
+        v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            v,
+        ))),
     }
 }
 
@@ -358,13 +354,13 @@ const AES_GCM_TAG_LEN: usize = 16;
 impl CoseEncryptCipher for OpensslContext {
     fn encrypt_aes_gcm(
         &mut self,
-        algorithm: Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         plaintext: &[u8],
         aad: &[u8],
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        let cipher = algorithm_to_cipher(&algorithm)?;
+        let cipher = algorithm_to_cipher(algorithm)?;
         let mut auth_tag = vec![0; AES_GCM_TAG_LEN];
         let mut ciphertext = encrypt_aead(cipher, key.k, Some(iv), aad, plaintext, &mut auth_tag)
             .map_err(CoseCipherError::from)?;
@@ -375,40 +371,42 @@ impl CoseEncryptCipher for OpensslContext {
 
     fn decrypt_aes_gcm(
         &mut self,
-        algorithm: Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         ciphertext_with_tag: &[u8],
         aad: &[u8],
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        let cipher = algorithm_to_cipher(&algorithm)?;
+        let cipher = algorithm_to_cipher(algorithm)?;
 
         let auth_tag = &ciphertext_with_tag[(ciphertext_with_tag.len() - AES_GCM_TAG_LEN)..];
         let ciphertext = &ciphertext_with_tag[..(ciphertext_with_tag.len() - AES_GCM_TAG_LEN)];
 
         decrypt_aead(cipher, key.k, Some(iv), aad, ciphertext, auth_tag)
-            .map_err(|_e| CoseCipherError::DecryptionFailure)
+            .map_err(|_e| CoseCipherError::VerificationFailure)
     }
 }
 
 fn algorithm_to_cipher(
-    algorithm: &Algorithm,
+    algorithm: iana::Algorithm,
 ) -> Result<Cipher, CoseCipherError<CoseOpensslCipherError>> {
     match algorithm {
-        Algorithm::Assigned(iana::Algorithm::A128GCM) => Ok(Cipher::aes_128_gcm()),
-        Algorithm::Assigned(iana::Algorithm::A192GCM) => Ok(Cipher::aes_192_gcm()),
-        Algorithm::Assigned(iana::Algorithm::A256GCM) => Ok(Cipher::aes_256_gcm()),
-        Algorithm::Assigned(iana::Algorithm::A128KW) => Ok(Cipher::aes_128_ecb()),
-        Algorithm::Assigned(iana::Algorithm::A192KW) => Ok(Cipher::aes_192_ecb()),
-        Algorithm::Assigned(iana::Algorithm::A256KW) => Ok(Cipher::aes_256_ecb()),
-        v => Err(CoseCipherError::UnsupportedAlgorithm(v.clone())),
+        iana::Algorithm::A128GCM => Ok(Cipher::aes_128_gcm()),
+        iana::Algorithm::A192GCM => Ok(Cipher::aes_192_gcm()),
+        iana::Algorithm::A256GCM => Ok(Cipher::aes_256_gcm()),
+        iana::Algorithm::A128KW => Ok(Cipher::aes_128_ecb()),
+        iana::Algorithm::A192KW => Ok(Cipher::aes_192_ecb()),
+        iana::Algorithm::A256KW => Ok(Cipher::aes_256_ecb()),
+        v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            v,
+        ))),
     }
 }
 
 impl CoseKeyDistributionCipher for OpensslContext {
     fn aes_key_wrap(
         &mut self,
-        _algorithm: Algorithm,
+        _algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         plaintext: &[u8],
         iv: &[u8],
@@ -428,7 +426,7 @@ impl CoseKeyDistributionCipher for OpensslContext {
 
     fn aes_key_unwrap(
         &mut self,
-        _algorithm: Algorithm,
+        _algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         ciphertext: &[u8],
         iv: &[u8],
@@ -448,7 +446,7 @@ impl CoseKeyDistributionCipher for OpensslContext {
 }
 
 fn compute_hmac(
-    algorithm: &Algorithm,
+    algorithm: iana::Algorithm,
     key: &CoseSymmetricKey<'_, CoseOpensslCipherError>,
     input: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<CoseOpensslCipherError>> {
@@ -463,21 +461,21 @@ fn compute_hmac(
 impl CoseMacCipher for OpensslContext {
     fn compute_hmac(
         &mut self,
-        algorithm: Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         data: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        compute_hmac(&algorithm, &key, data)
+        compute_hmac(algorithm, &key, data)
     }
 
     fn verify_hmac(
         &mut self,
-        algorithm: Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         tag: &[u8],
         data: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>> {
-        let hmac = compute_hmac(&algorithm, &key, data)?;
+        let hmac = compute_hmac(algorithm, &key, data)?;
         // Use openssl::memcmp::eq to prevent timing attacks.
         if openssl::memcmp::eq(hmac.as_slice(), tag) {
             Ok(())
