@@ -22,8 +22,8 @@ use strum_macros::IntoStaticStr;
 
 use {alloc::format, alloc::string::String, alloc::string::ToString};
 
-use crate::token::cose::header_util::HeaderParam;
-use crate::token::cose::key::{EllipticCurve, KeyParam};
+use crate::token::cose::HeaderParam;
+use crate::token::cose::{EllipticCurve, KeyParam};
 use core::{marker::PhantomData, num::TryFromIntError};
 
 /// Error type used when the parameter of the type `T` couldn't be
@@ -365,6 +365,12 @@ where
                 )
             }
         }
+    }
+}
+
+impl<T: Display> From<T> for CoseCipherError<T> {
+    fn from(value: T) -> Self {
+        CoseCipherError::other_error(value)
     }
 }
 

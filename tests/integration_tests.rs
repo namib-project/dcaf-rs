@@ -16,11 +16,12 @@ use coset::iana::EllipticCurve::P_256;
 use coset::{iana, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, Label};
 use dcaf::common::cbor_map::ToCborMap;
 use dcaf::token::cose::CoseCipher;
+use dcaf::token::cose::CoseSignCipher;
 use dcaf::ProofOfPossessionKey::PlainCoseKey;
 use dcaf::{
     sign_access_token, verify_access_token, AccessTokenRequest, AccessTokenResponse, AceProfile,
-    AuthServerRequestCreationHint, CoseSignCipher, ErrorCode, ErrorResponse, GrantType,
-    TextEncodedScope, TokenType,
+    AuthServerRequestCreationHint, ErrorCode, ErrorResponse, GrantType, TextEncodedScope,
+    TokenType,
 };
 use rand::{CryptoRng, Error, RngCore};
 use rstest::rstest;

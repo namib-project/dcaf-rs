@@ -13,7 +13,45 @@ use crate::token::cose::recipient::CoseNestedRecipientSearchContext;
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
+/// Extensions to the [CoseMacBuilder] type that enable usage of cryptographic backends.
 pub trait CoseMacBuilderExt: Sized {
+    /// Attempts to compute the MAC using a cryptographic backend.
+    ///
+    /// Note that you still have to ensure that the key is available to the recipient somehow, i.e.
+    /// by adding [CoseRecipient] structures where suitable.
+    ///
+    /// # Parameters
+    ///
+    /// - `backend`      - cryptographic backend to use.
+    /// - `key_provider` - provider for cryptographic keys to use (if you already know the
+    ///                    corresponding key, simply provide an immutable borrow of it).
+    /// - `protected`    - protected headers for the resulting [CoseMac] instance. Will override
+    ///                    headers previously set using [CoseMacBuilder::protected].
+    /// - `unprotected`  - unprotected headers for the resulting [CoseMac] instance. Will override
+    ///                    headers previously set using [CoseMacBuilder::unprotected].
+    /// - `payload`      - payload which should be added to the resulting [CoseMac] instance and
+    ///                    for which the MAC should be calculated. Will override a payload
+    ///                    previously set using [CoseMacBuilder::payload].
+    /// - `external_aad` - provider of additional authenticated data that should be included in the
+    ///                    MAC calculation.
+    ///
+    /// # Errors
+    ///
+    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// or otherwise unsuitable for MAC calculation, this function will return the most fitting
+    /// [CoseCipherError] for the specific type of error.
+    ///
+    /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
+    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// Refer to the backend module's documentation for information on the possible errors that may
+    /// occur.
+    ///
+    /// If the COSE object is not malformed, but the key provider does not provide a key, a
+    /// [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    ///
+    /// # Examples
+    ///
+    /// TODO
     fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
@@ -63,7 +101,46 @@ impl CoseMacBuilderExt for CoseMacBuilder {
     }
 }
 
+/// Extensions to the [CoseMac] type that enable usage of cryptographic backends.
 pub trait CoseMacExt {
+    /// Attempts to verify the MAC using a cryptographic backend.
+    ///
+    /// Note that [CoseRecipient]s are not considered for key lookup here, the key provider must
+    /// provide the key used directly for MAC calculation.
+    /// If your key provider can/should be able to provide the key for a contained [CoseRecipient],
+    /// not for the [CoseMac] instance itself, use [CoseMac::try_verify_with_recipients] instead.
+    ///
+    /// # Parameters
+    ///
+    /// - `backend`      - cryptographic backend to use.
+    /// - `key_provider` - provider for cryptographic keys to use (if you already know the
+    ///                    corresponding key, simply provide an immutable borrow of it).
+    /// - `external_aad` - provider of additional authenticated data that should be included in the
+    ///                    MAC calculation.
+    ///
+    /// # Errors
+    ///
+    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// or otherwise unsuitable for MAC calculation, this function will return the most fitting
+    /// [CoseCipherError] for the specific type of error.
+    ///
+    /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
+    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// Refer to the backend module's documentation for information on the possible errors that may
+    /// occur.
+    ///
+    /// If the COSE object is not malformed, but MAC verification fails for all key candidates
+    /// provided by the key provider a [CoseCipherError::NoMatchingKeyFound] error will be
+    /// returned.
+    ///
+    /// The error will then contain a list of attempted keys and the corresponding error that led to
+    /// the verification error for that key.
+    /// For an invalid MAC for an otherwise valid and suitable object+key pairing, this would
+    /// usually be a [CoseCipherError::VerificationFailure].
+    ///
+    /// # Examples
+    ///
+    /// TODO
     fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
@@ -72,6 +149,39 @@ pub trait CoseMacExt {
         external_aad: &mut CAP,
     ) -> Result<(), CoseCipherError<B::Error>>;
 
+    /// Attempts to verify the MAC using a cryptographic backend, performing a search through the
+    /// contained [CoseRecipient]s in order to decrypt the content encryption key (CEK).
+    ///
+    /// # Parameters
+    ///
+    /// - `backend`      - cryptographic backend to use.
+    /// - `key_provider` - provider for cryptographic keys to use (if you already know the
+    ///                    corresponding key, simply provide an immutable borrow of it).
+    /// - `external_aad` - provider of additional authenticated data that should be included in the
+    ///                    MAC calculation.
+    ///
+    /// # Errors
+    ///
+    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// or otherwise unsuitable for MAC calculation, this function will return the most fitting
+    /// [CoseCipherError] for the specific type of error.
+    ///
+    /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
+    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// Refer to the backend module's documentation for information on the possible errors that may
+    /// occur.
+    ///
+    /// If the COSE object is not malformed, but MAC verification fails for all key candidates
+    /// provided by the key provider a *TODO* error will be returned.
+    ///
+    /// The error will then contain a list of attempted keys and the corresponding error that led to
+    /// the verification error for that key.
+    /// For an invalid MAC for an otherwise valid and suitable object+key pairing, this would
+    /// usually be a [CoseCipherError::VerificationFailure].
+    ///
+    /// # Examples
+    ///
+    /// TODO
     fn try_verify_with_recipients<
         B: CoseKeyDistributionCipher + CoseMacCipher,
         CKP: CoseKeyProvider,
@@ -124,6 +234,7 @@ impl CoseMacExt for CoseMac {
     ) -> Result<(), CoseCipherError<B::Error>> {
         let backend = Rc::new(RefCell::new(backend));
         let key_provider = Rc::new(RefCell::new(key_provider));
+        // TODO handle iterator errors.
         let mut nested_recipient_key_provider = CoseNestedRecipientSearchContext::new(
             &self.recipients,
             Rc::clone(&backend),

@@ -1,4 +1,3 @@
-#![cfg(all(test, feature = "std"))]
 use std::path::PathBuf;
 
 use coset::{CoseError, CoseKey, CoseSign1, CoseSign1Builder, Header};
@@ -12,7 +11,7 @@ use crate::token::cose::test_helper::{
     perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,
 };
 use crate::token::cose::CoseCipher;
-use crate::CoseSignCipher;
+use crate::token::cose::CoseSignCipher;
 
 impl<B: CoseCipher + CoseSignCipher> CoseStructTestHelper<B> for CoseSign1 {
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self {

@@ -155,18 +155,18 @@
 
 use crate::common::cbor_values::ByteString;
 use crate::error::AccessTokenError;
-use crate::token::cose::encrypted::{
+use crate::token::cose::CoseCipher;
+pub use crate::token::cose::CoseSignCipher;
+use ciborium::value::Value;
+use cose::determine_algorithm;
+use cose::CoseRecipientBuilderExt;
+use cose::{generate_cek_for_alg, CoseKeyProvider, CoseParsedKey};
+use cose::{
     CoseEncrypt0BuilderExt, CoseEncrypt0Ext, CoseEncryptBuilderExt, CoseEncryptCipher,
     CoseEncryptExt, CoseKeyDistributionCipher,
 };
-use crate::token::cose::header_util::determine_algorithm;
-use crate::token::cose::key::{generate_cek_for_alg, CoseKeyProvider, CoseParsedKey};
-use crate::token::cose::recipient::CoseRecipientBuilderExt;
-pub use crate::token::cose::signed::CoseSignCipher;
-use crate::token::cose::CoseCipher;
-use ciborium::value::Value;
-use cose::signed::{CoseSign1BuilderExt, CoseSign1Ext};
-use cose::signed::{CoseSignBuilderExt, CoseSignExt};
+use cose::{CoseSign1BuilderExt, CoseSign1Ext};
+use cose::{CoseSignBuilderExt, CoseSignExt};
 use coset::cwt::ClaimsSet;
 use coset::{
     iana, Algorithm, AsCborValue, CborSerializable, CoseEncrypt, CoseEncrypt0, CoseEncrypt0Builder,
@@ -175,6 +175,7 @@ use coset::{
     ProtectedHeader,
 };
 
+/// `coset` extensions that enable COSE operations using predefined cryptographic backends.
 pub mod cose;
 #[cfg(test)]
 mod tests;
@@ -295,7 +296,7 @@ where
         cek_key
     } else {
         let ce_alg = preset_algorithm?;
-        let cek_v = generate_cek_for_alg(backend, ce_alg.clone())?;
+        let cek_v = generate_cek_for_alg(backend, ce_alg)?;
         let cek = CoseKeyBuilder::new_symmetric_key(cek_v.clone()).build();
 
         for key in key_iter {

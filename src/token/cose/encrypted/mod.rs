@@ -3,7 +3,7 @@ use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
-use coset::{iana, Algorithm, Header, HeaderBuilder, KeyOperation};
+use coset::{iana, Algorithm, Header, KeyOperation};
 
 use crate::error::CoseCipherError;
 use crate::token::cose::header_util::{
@@ -18,14 +18,6 @@ mod encrypt0;
 pub use encrypt::{CoseEncryptBuilderExt, CoseEncryptExt};
 pub use encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
 
-/// Provides basic operations for encrypting and decrypting COSE structures.
-///
-/// This will be used by [`encrypt_access_token`] and [`decrypt_access_token`] (as well as the
-/// variants for multiple recipients: [`encrypt_access_token_multiple`]
-/// and [`decrypt_access_token_multiple`]) to apply the
-/// corresponding cryptographic operations to the constructed token bytestring.
-/// The [`set_headers` method](CoseCipher::set_headers) can be used to set parameters this
-/// cipher requires to be set.
 pub trait CoseEncryptCipher: CoseCipher {
     fn encrypt_aes_gcm(
         &mut self,
@@ -62,39 +54,6 @@ pub trait CoseKeyDistributionCipher: CoseCipher {
         ciphertext: &[u8],
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
-}
-
-pub trait HeaderBuilderExt: Sized {
-    fn gen_iv<B: CoseEncryptCipher>(
-        self,
-        backend: &mut B,
-        alg: iana::Algorithm,
-    ) -> Result<Self, CoseCipherError<B::Error>>;
-}
-
-const AES_GCM_NONCE_SIZE: usize = 12;
-
-impl HeaderBuilderExt for HeaderBuilder {
-    fn gen_iv<B: CoseCipher>(
-        self,
-        backend: &mut B,
-        alg: iana::Algorithm,
-    ) -> Result<Self, CoseCipherError<B::Error>> {
-        let iv_size = match alg {
-            // AES-GCM: Nonce is fixed at 96 bits (RFC 9053, Section 4.1)
-            iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => {
-                AES_GCM_NONCE_SIZE
-            }
-            v => {
-                return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-                    v,
-                )))
-            }
-        };
-        let mut iv = vec![0; iv_size];
-        backend.generate_rand(&mut iv)?;
-        Ok(self.iv(iv))
-    }
 }
 
 fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(

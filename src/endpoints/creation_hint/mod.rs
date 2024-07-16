@@ -10,7 +10,7 @@
  */
 
 //! Contains the data model for
-//! [Authorization Server Request Creation Hints](self::AuthServerRequestCreationHint),
+//! [Authorization Server Request Creation Hints](AuthServerRequestCreationHint),
 //! as described in [RFC 9200, section 5.3](https://www.rfc-editor.org/rfc/rfc9200#name-as-request-creation-hints).
 //!
 //! See the documentation of [`AuthServerRequestCreationHint`] for details and an example.
@@ -124,7 +124,7 @@ mod builder {
 ///
 /// One part of this is converting enum types from and to their CBOR abbreviations in
 /// [`cbor_abbreviations`](crate::constants::cbor_abbreviations),
-/// another part is implementing the [`ToCborMap`](crate::ToCborMap) type for the
+/// another part is implementing the [`ToCborMap`](ToCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
     #[cfg(not(feature = "std"))]

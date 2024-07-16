@@ -1,15 +1,21 @@
 use core::fmt::{Debug, Display};
 
-use crate::error::CoseCipherError;
-
 pub mod crypto_impl;
-pub mod encrypted;
-pub mod header_util;
-pub mod key;
-pub mod signed;
+mod encrypted;
+mod header_util;
+mod key;
+mod signed;
 
-pub mod maced;
-pub mod recipient;
+mod maced;
+mod recipient;
+
+pub use encrypted::*;
+pub use header_util::*;
+pub use key::*;
+pub use maced::*;
+pub use recipient::*;
+pub use signed::*;
+
 #[cfg(all(test, feature = "std"))]
 pub(crate) mod test_helper;
 
@@ -20,5 +26,11 @@ pub trait CoseCipher {
     /// Fill the given buffer with random bytes.
     ///
     /// Mainly used for IV or key generation.
-    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>>;
+    ///
+    /// # Errors
+    ///
+    /// Implementations may return errors if the generation of random bytes fails for any reason.
+    /// If errors can occur, implementors should add the possible errors and the situations under
+    /// which they occur to their documentation.
+    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), Self::Error>;
 }

@@ -21,11 +21,16 @@ fn find_param_by_label<'a>(label: &Label, param_vec: &'a [(Label, Value)]) -> Op
         .find_map(|(l, v)| if l == label { Some(v) } else { None })
 }
 
+/// An IANA-defined key parameter for a [CoseKey].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum KeyParam {
+    /// Key parameters that are not specific for a certain key type.
     Common(iana::KeyParameter),
+    /// Key parameters specific to EC2 elliptic curve keys.
     Ec2(iana::Ec2KeyParameter),
+    /// Key parameters specific to OKP elliptic curve keys.
     Okp(iana::OkpKeyParameter),
+    /// Key parameters specific to symmetric keys.
     Symmetric(iana::SymmetricKeyParameter),
 }
 
@@ -55,9 +60,15 @@ impl From<iana::SymmetricKeyParameter> for KeyParam {
 
 #[derive(Clone, Debug, PartialEq)]
 
+/// A parsed view into a [CoseKey] instance.
+///
+/// Allows for easier access to the key's parameters.
 pub enum CoseParsedKey<'a, OE: Display> {
+    /// An EC2 elliptic curve key.
     Ec2(CoseEc2Key<'a, OE>),
+    /// An OKP elliptic curve key.
     Okp(CoseOkpKey<'a, OE>),
+    /// A symmetric key.
     Symmetric(CoseSymmetricKey<'a, OE>),
 }
 
@@ -104,15 +115,34 @@ impl<'a, OE: Display> From<CoseSymmetricKey<'a, OE>> for CoseParsedKey<'a, OE> {
     }
 }
 
+/// Types of elliptic curves.
 pub type EllipticCurve = RegisteredLabelWithPrivate<iana::EllipticCurve>;
 
+/// A parsed view into a parsed EC2 elliptic curve [CoseKey].
+///
+/// If this key contains public key information, the public key component will be either defined
+/// using the X and Y coordinates or using the X coordinate and the sign of the public key point.
+///
+/// In the CBOR representation of this key, the sign and Y coordinate are both represented as
+/// different types of the same map field (`y`), see
+/// <https://datatracker.ietf.org/doc/html/rfc9053#section-7.1.1>.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoseEc2Key<'a, OE: Display> {
+    /// Key that is referenced by this view.
     generic: &'a CoseKey,
+    /// Elliptic curve this key belongs to.
     pub crv: EllipticCurve,
+    /// The private key coordinate of this EC2 key.
     pub d: Option<&'a [u8]>,
+    /// The X public key coordinate of this EC2 key.
     pub x: Option<&'a [u8]>,
+    /// The Y public key coordinate of this EC2 key.
+    ///
+    /// Mutually exclusive with the `sign` field, i.e. only one of them should be set.
     pub y: Option<&'a [u8]>,
+    /// The sign of the public key coordinate of this EC2 key.
+    ///
+    /// Mutually exclusive with the `y` field, i.e. only one of them should be set.
     pub sign: Option<bool>,
     _backend_error_type: PhantomData<OE>,
 }
@@ -225,11 +255,16 @@ impl<'a, OE: Display> AsRef<CoseKey> for CoseEc2Key<'a, OE> {
     }
 }
 
+/// A parsed view into an OKP elliptic curve [CoseKey].
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoseOkpKey<'a, OE: Display> {
+    /// Key that is referenced by this view.
     generic: &'a CoseKey,
+    /// Elliptic curve that this key belongs to.
     pub crv: EllipticCurve,
+    /// Private key component of this elliptic curve key.
     pub d: Option<&'a [u8]>,
+    /// Public key component of this elliptic curve key.
     pub x: Option<&'a [u8]>,
     _backend_error_type: PhantomData<OE>,
 }
@@ -310,9 +345,12 @@ impl<'a, OE: Display> AsRef<CoseKey> for CoseOkpKey<'a, OE> {
     }
 }
 
+/// A parsed view into a symmetric [CoseKey].
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoseSymmetricKey<'a, OE: Display> {
+    /// Key that is referenced by this view.
     generic: &'a CoseKey,
+    /// Key data of this key.
     pub k: &'a [u8],
     _backend_error_type: PhantomData<OE>,
 }
@@ -352,8 +390,9 @@ impl<'a, OE: Display> AsRef<CoseKey> for CoseSymmetricKey<'a, OE> {
     }
 }
 
+/// A trait for types that can provide [CoseKey]s for COSE structure operations.
 pub trait CoseKeyProvider {
-    /// Look up a key for the signature based on the provided Key ID hint.
+    /// Look up a key for the signature based on the provided `key_id` hint.
     ///
     /// The iterator returned should contain all [CoseKey]s of the provider that have a key ID
     /// matching the one provided, or all [CoseKey]s available if key_id is None.
@@ -419,8 +458,19 @@ impl CoseKeyProvider for &CoseKey {
     }
 }
 
+/// A trait for types that can determine the corresponding Additional Authenticated Data to be
+/// provided for a given COSE structure.
 pub trait CoseAadProvider: BorrowMut<Self> {
-    /// Look up the additional authenticated data to verify for a given signature.
+    /// Look up the additional authenticated data for the given COSE structure.
+    ///
+    /// # Parameters
+    ///
+    /// - `context`     - Type of object that should be encrypted with AAD.
+    ///                   If the AAD should be provided for a non-encrypted object, `context` is
+    ///                   `None`.
+    /// - `protected`   - Protected headers for the COSE structure for which AAD should be provided.
+    /// - `unprotected` - Unprotected headers for the COSE structure for which AAD should be
+    ///                   provided.
     fn lookup_aad(
         &mut self,
         context: Option<EncryptionContext>,
@@ -535,7 +585,7 @@ fn symmetric_key_size<BE: Display>(
         | iana::Algorithm::AES_CCM_64_128_256
         | iana::Algorithm::A256KW => Ok(32),
         _ => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-            algorithm.clone(),
+            algorithm,
         ))),
     }
 }
@@ -605,11 +655,11 @@ pub(crate) fn generate_cek_for_alg<B: CoseCipher>(
     }
 }
 
-pub fn ensure_valid_ecdsa_key<'a, BE: Display>(
+pub(crate) fn ensure_valid_ecdsa_key<BE: Display>(
     algorithm: iana::Algorithm,
-    parsed_key: CoseParsedKey<'a, BE>,
+    parsed_key: CoseParsedKey<BE>,
     key_should_be_private: bool,
-) -> Result<CoseEc2Key<'a, BE>, CoseCipherError<BE>> {
+) -> Result<CoseEc2Key<BE>, CoseCipherError<BE>> {
     // Checks according to RFC 9053, Section 2.1 or RFC 8812, Section 3.2.
 
     // Key type must be EC2

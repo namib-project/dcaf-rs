@@ -17,9 +17,6 @@ use crate::token::cose::header_util::{
 use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey, KeyParam};
 use crate::token::cose::CoseCipher;
 
-/// Provides basic operations for generating and verifying MAC tags for COSE structures.
-///
-/// This trait is currently not used by any access token function.
 pub trait CoseMacCipher: CoseCipher {
     fn compute_hmac(
         &mut self,
@@ -40,10 +37,10 @@ pub trait CoseMacCipher: CoseCipher {
 mod mac;
 mod mac0;
 
-pub(crate) fn is_valid_hmac_key<'a, BE: Display>(
+pub(crate) fn is_valid_hmac_key<BE: Display>(
     algorithm: iana::Algorithm,
-    parsed_key: CoseParsedKey<'a, BE>,
-) -> Result<CoseSymmetricKey<'a, BE>, CoseCipherError<BE>> {
+    parsed_key: CoseParsedKey<BE>,
+) -> Result<CoseSymmetricKey<BE>, CoseCipherError<BE>> {
     // Checks according to RFC 9053, Section 3.1.
 
     // Key type must be symmetric.

@@ -35,7 +35,7 @@ mod sign1;
 /// The [`set_headers` method](CoseCipher::set_headers) can be used to set parameters
 /// this cipher requires to be set.
 pub trait CoseSignCipher: CoseCipher {
-    /// Cryptographically signs the `target` value with the `key` using ECDSA and returns the
+    /// Cryptographically signs the `payload` value with the `key` using ECDSA and returns the
     /// signature.
     ///
     /// # Arguments
@@ -59,11 +59,13 @@ pub trait CoseSignCipher: CoseCipher {
     ///           Note that curve and hash bit sizes do not necessarily match.
     ///           Implementations may assume the struct field `d` (the private key) to always be set
     ///           and panic if this is not the case.
-    ///           The fields `x` and `y` (the public key) may be used by implementations if they are
-    ///           set. If they are not, implementations may either derive the public key from `d` or
-    ///           return a [CoseCipherError::UnsupportedKeyDerivation] if this derivation is
-    ///           unsupported.
-    /// * `target` - Data to be signed.
+    ///           The fields `x` and (`y` or `sign`) (the public key) may be used by implementations
+    ///           if they are set. If they are not, implementations may either derive the public key
+    ///           from `d` or return a [CoseCipherError::UnsupportedKeyDerivation] if this
+    ///           derivation is unsupported.
+    ///           If calculation of the public key from the `x` coordinate and `sign` is not
+    ///           supported, a [CoseCipherError::UnsupportedKeyDerivation] may be returned as well.
+    /// * `payload` - Data to be signed.
     ///
     /// # Returns
     ///
@@ -92,10 +94,10 @@ pub trait CoseSignCipher: CoseCipher {
         &mut self,
         alg: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
-        target: &[u8],
+        payload: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 
-    /// Verifies the `signature` using the given `key` and `target` (plaintext) using ECDSA.
+    /// Verifies the `signature` using the given `key` and `payload` (plaintext) using ECDSA.
     ///
     /// # Arguments
     ///
@@ -116,16 +118,20 @@ pub trait CoseSignCipher: CoseCipher {
     ///           algorithm, the implementation may return [CoseCipherError::UnsupportedAlgorithm]
     ///           or panic.
     ///           Note that curve and hash bit sizes do not necessarily match.
-    ///           The fields x and y (the public key) may be used by implementations if they are
-    ///           set. If they are not, implementations may either derive the public key from `d` or
-    ///           return a [CoseCipherError::UnsupportedKeyDerivation] if this derivation is
-    ///           unsupported.
-    /// * `signature` - the signature to verify. This signature should be a valid signature
+    ///           Implementations may assume that either `d` or (`x` and (`y` xor `sign`)) are set.
+    ///           The fields x and (y or sign) (the public key) may be used by implementations if
+    ///           they are set.
+    ///           If they are not, but the private key `d` is present, implementations may either
+    ///           derive the public key from `d` (if present) or return a
+    ///           [CoseCipherError::UnsupportedKeyDerivation] if this derivation is unsupported.
+    ///           If calculation of the public key from the `x` coordinate and `sign` is not
+    ///           supported, a [CoseCipherError::UnsupportedKeyDerivation] may be returned as well.
+    /// * `sig` - the signature to verify. This signature should be a valid signature
     ///           conforming to RFC 9053, Section 2.1 (i.e. the `r` and `s` values of the signature
     ///           are each padded with zeros at the beginning to the key size rounded up to the next
-    ///           full byte), but as this is user-provided input, the implementation should not rely
+    ///           full byte), but as this is user-provided input, the implementation must not rely
     ///           on this being the case.
-    /// * `target` - Data that was presumably signed using the signature.
+    /// * `payload` - Data that was presumably signed using the signature.
     ///
     /// # Returns
     ///
@@ -135,7 +141,7 @@ pub trait CoseSignCipher: CoseCipher {
     /// # Errors
     ///
     /// If the signature is not malformed, but not valid for the given `alg`, `key`,
-    /// and `target`, a [CoseCipherError::VerificationFailure] must be returned.
+    /// and `payload`, a [CoseCipherError::VerificationFailure] must be returned.
     ///
     /// In case of other errors, the implementation may return any valid [CoseCipherError]
     /// (including [CoseCipherError::VerificationFailure]).
@@ -145,9 +151,9 @@ pub trait CoseSignCipher: CoseCipher {
     /// # Panics
     ///
     /// Implementations may panic if the provided algorithm is not an ECDSA algorithm, the
-    /// provided key is not part of a curve suitable for ECDSA, neither the `x` and `y` fields nor
-    /// the `d` field of the provided key are set or if an unrecoverable backend error occurs that
-    /// necessitates a panic (at their own discretion).
+    /// provided key is not part of a curve suitable for ECDSA, neither the `x` and (`y` or `sign`)
+    /// fields nor the `d` field of the provided key are set or if an unrecoverable backend error
+    /// occurs that necessitates a panic (at their own discretion).
     /// In the last of the above cases, additional panics should be documented on the backend level.
     ///
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
@@ -156,8 +162,8 @@ pub trait CoseSignCipher: CoseCipher {
         &mut self,
         alg: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
-        signature: &[u8],
-        target: &[u8],
+        sig: &[u8],
+        payload: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>>;
 }
 

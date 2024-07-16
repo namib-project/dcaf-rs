@@ -72,13 +72,13 @@ where
 #[derive(Debug, PartialEq, Clone, IntoStaticStr)]
 #[allow(clippy::large_enum_variant)] // size difference of ~300 bytes is acceptable
 pub enum ProofOfPossessionKey {
-    /// An unencrypted [`CoseKey`](coset::CoseKey) used to represent an asymmetric public key or
+    /// An unencrypted [`CoseKey`](CoseKey) used to represent an asymmetric public key or
     /// (if the CWT it's contained in is encrypted) a symmetric key.
     ///
     /// For details, see [section 3.2 of RFC 8747](https://datatracker.ietf.org/doc/html/rfc8747#section-3.2).
     PlainCoseKey(CoseKey),
 
-    /// An encrypted [`CoseKey`](coset::CoseKey) used to represent a symmetric key.
+    /// An encrypted [`CoseKey`](CoseKey) used to represent a symmetric key.
     ///
     /// For details, see [section 3.3 of RFC 8747](https://datatracker.ietf.org/doc/html/rfc8747#section-3.3).
     EncryptedCoseKey(CoseEncrypt0),
@@ -178,11 +178,11 @@ mod conversion {
             if let Ok(Value::Integer(i)) = Value::deserialize(deserializer) {
                 Ok(CborMapValue(
                     i32::try_from(i)
-                        .map_err(|_| D::Error::custom("CBOR map key too high for i32"))?
+                        .map_err(|_| Error::custom("CBOR map key too high for i32"))?
                         .into(),
                 ))
             } else {
-                Err(D::Error::custom("CBOR map value must be an Integer"))
+                Err(Error::custom("CBOR map value must be an Integer"))
             }
         }
     }

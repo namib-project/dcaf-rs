@@ -1,4 +1,3 @@
-#![cfg(all(test, feature = "std"))]
 use std::path::PathBuf;
 
 use coset::{CoseEncrypt0, CoseEncrypt0Builder, CoseError, CoseKey, HeaderBuilder};
@@ -6,7 +5,8 @@ use rstest::rstest;
 
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
 use crate::token::cose::encrypted::encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
-use crate::token::cose::encrypted::{CoseEncryptCipher, HeaderBuilderExt};
+use crate::token::cose::encrypted::CoseEncryptCipher;
+use crate::token::cose::header_util::HeaderBuilderExt;
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, perform_cose_reference_output_test,
     perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,
@@ -39,12 +39,12 @@ impl<B: CoseCipher + CoseEncryptCipher> CoseStructTestHelper<B> for CoseEncrypt0
             .as_ref()
             .unwrap()
         {
-            alg.clone()
+            alg
         } else {
             panic!("unknown/invalid algorithm in test case")
         };
         let iv_generator = HeaderBuilder::new()
-            .gen_iv(backend, alg)
+            .gen_iv(backend, *alg)
             .expect("unable to generate IV")
             .build();
         let mut unprotected = encrypt0_cfg.unprotected.clone().unwrap_or_default();
@@ -89,7 +89,7 @@ impl<B: CoseCipher + CoseEncryptCipher> CoseStructTestHelper<B> for CoseEncrypt0
             .map(|v| {
                 let mut key_with_alg = v.key.clone();
                 if key_with_alg.alg.is_none() {
-                    key_with_alg.alg = v.alg.map(coset::Algorithm::Assigned);
+                    key_with_alg.alg = v.alg.clone();
                 }
                 key_with_alg
             })

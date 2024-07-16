@@ -1119,7 +1119,7 @@ mod conversion {
             D: Deserializer<'de>,
         {
             Scope::try_from(Value::deserialize(deserializer)?)
-                .map_err(|x| D::Error::custom(x.to_string()))
+                .map_err(|x| Error::custom(x.to_string()))
         }
     }
 }

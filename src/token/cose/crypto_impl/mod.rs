@@ -13,5 +13,6 @@
 //! [`CoseEncryptCipher`](crate::CoseEncryptCipher), [`CoseSignCipher`](crate::CoseSignCipher),
 //! [`CoseMacCipher`](crate::CoseMacCipher)) for different cryptographic libraries.
 
+/// Cryptographic backend based on the OpenSSL library (accessed using the `openssl` crate).
 #[cfg(feature = "openssl")]
 pub mod openssl;

@@ -317,6 +317,47 @@ fn determine_decrypt_key_ops_for_alg<CE: Display>(
 }
 
 pub trait CoseRecipientBuilderExt: Sized {
+    /// Attempts to encrypt the provided payload/key using a cryptographic backend.
+    ///
+    /// Note that you still have to ensure that the key is available to the recipient somehow, i.e.
+    /// by adding nested [CoseRecipient] structures where suitable.
+    ///
+    /// # Parameters
+    ///
+    /// - `backend`      - cryptographic backend to use.
+    /// - `key_provider` - provider for cryptographic keys to use (if you already know the
+    ///                    corresponding key, simply provide an immutable borrow of it).
+    /// - `context`      - Context under which this recipient was encrypted.
+    /// - `protected`    - protected headers for the resulting [CoseEncrypt] instance. Will override
+    ///                    headers previously set using [CoseEncryptBuilder::protected].
+    /// - `unprotected`  - unprotected headers for the resulting [CoseEncrypt] instance. Will
+    ///                    override headers previously set using [CoseEncryptBuilder::unprotected].
+    /// - `payload`      - payload which should be added to the resulting [CoseMac0] instance and
+    ///                    for which the MAC should be calculated. Will override a payload
+    ///                    previously set using [CoseEncryptBuilder::payload].
+    /// - `external_aad` - provider of additional authenticated data that should be included in the
+    ///                    MAC calculation.
+    ///
+    /// # Errors
+    ///
+    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// or otherwise unsuitable for MAC calculation, this function will return the most fitting
+    /// [CoseCipherError] for the specific type of error.
+    ///
+    /// If Additional Authenticated Data is provided even though the chosen algorithm is not an AEAD
+    /// algorithm, a [CoseCipherError::AadUnsupported] will be returned.
+    ///
+    /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
+    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// Refer to the backend module's documentation for information on the possible errors that may
+    /// occur.
+    ///
+    /// If the COSE object is not malformed, but the key provider does not provide a key, a
+    /// [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    ///
+    /// # Examples
+    ///
+    /// TODO
     fn try_encrypt<B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         self,
         backend: &mut B,
@@ -339,7 +380,7 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
         context: EncryptionContext,
         protected: Option<Header>,
         unprotected: Option<Header>,
-        plaintext: &[u8],
+        payload: &[u8],
         external_aad: &mut CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let mut builder = self;
@@ -392,7 +433,7 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
 
                 builder.try_create_ciphertext(
                     context,
-                    plaintext,
+                    payload,
                     external_aad.lookup_aad(
                         Some(context),
                         protected.as_ref(),
@@ -421,6 +462,45 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
 }
 
 pub trait CoseRecipientExt {
+    /// Attempts to decrypt the key contained in this object using a cryptographic backend.
+    ///
+    /// Note that nested [CoseRecipient]s are not considered for key lookup here, the key provider
+    /// must provide the key used directly for MAC calculation.
+    ///
+    /// # Parameters
+    ///
+    /// - `backend`      - cryptographic backend to use.
+    /// - `key_provider` - provider for cryptographic keys to use (if you already know the
+    ///                    corresponding key, simply provide an immutable borrow of it).
+    /// - `context`      - Context under which this recipient was encrypted.
+    /// - `external_aad` - provider of additional authenticated data that should be authenticated
+    ///                    while decrypting (only for AEAD algorithms).
+    ///
+    /// # Errors
+    ///
+    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// or otherwise unsuitable for decryption, this function will return the most fitting
+    /// [CoseCipherError] for the specific type of error.
+    ///
+    /// If Additional Authenticated Data is provided even though the chosen algorithm is not an AEAD
+    /// algorithm, a [CoseCipherError::AadUnsupported] will be returned.
+    ///
+    /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
+    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// Refer to the backend module's documentation for information on the possible errors that may
+    /// occur.
+    ///
+    /// If the COSE object is not malformed, but signature verification fails for all key candidates
+    /// provided by the key provider a [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    ///
+    /// The error will then contain a list of attempted keys and the corresponding error that led to
+    /// the verification error for that key.
+    /// For an invalid MAC for an otherwise valid and suitable object+key pairing, this would
+    /// usually be a [CoseCipherError::VerificationFailure].
+    ///
+    /// # Examples
+    ///
+    /// TODO
     fn try_decrypt<B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
         &self,
         backend: &mut B,
@@ -502,7 +582,7 @@ impl CoseRecipientExt for CoseRecipient {
                         |ciphertext, _aad| {
                             // Ignore AAD as this is not an AEAD algorithm, just an AE algorithm.
                             backend.aes_key_unwrap(
-                                alg.clone(),
+                                alg,
                                 symm_key,
                                 ciphertext,
                                 // Fixed IV, see RFC 9053, Section 6.2.1

@@ -1,4 +1,3 @@
-#![cfg(all(test, feature = "std"))]
 use core::convert::Infallible;
 use std::path::PathBuf;
 
@@ -11,10 +10,8 @@ use rstest::rstest;
 
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
 use crate::token::cose::encrypted::encrypt::{CoseEncryptBuilderExt, CoseEncryptExt};
-use crate::token::cose::encrypted::{
-    CoseEncryptCipher, CoseKeyDistributionCipher, HeaderBuilderExt,
-};
-use crate::token::cose::header_util::determine_algorithm;
+use crate::token::cose::encrypted::{CoseEncryptCipher, CoseKeyDistributionCipher};
+use crate::token::cose::header_util::{determine_algorithm, HeaderBuilderExt};
 use crate::token::cose::key::CoseSymmetricKey;
 use crate::token::cose::recipient::CoseRecipientBuilderExt;
 use crate::token::cose::test_helper::{
@@ -40,7 +37,7 @@ impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTe
             .first()
             .expect("test case has no recipient");
 
-        // Need to generate an IV. Have to do this quite ugly, because we have implemented our IV
+        // Need to generate an IV. Have to do this quite uglily, because we have implemented our IV
         // generation on the header builder only.
         let alg = if let coset::Algorithm::Assigned(alg) = encrypt_cfg
             .protected
@@ -51,12 +48,12 @@ impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTe
             .as_ref()
             .unwrap()
         {
-            alg.clone()
+            alg
         } else {
             panic!("unknown/invalid algorithm in test case")
         };
         let iv_generator = HeaderBuilder::new()
-            .gen_iv(backend, alg)
+            .gen_iv(backend, *alg)
             .expect("unable to generate IV")
             .build();
         let mut unprotected = encrypt_cfg.unprotected.clone().unwrap_or_default();
@@ -64,7 +61,7 @@ impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTe
 
         let mut recipient_struct_builder = CoseRecipientBuilder::from(recipient.clone());
         let enc_key: CoseKey;
-        if recipient.alg == Some(Algorithm::Direct)
+        if recipient.alg == Some(coset::Algorithm::Assigned(Algorithm::Direct))
             || determine_algorithm::<Infallible>(
                 None,
                 recipient.unprotected.as_ref(),
@@ -137,7 +134,7 @@ impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTe
             .map(|v| {
                 let mut key_with_alg = v.key.clone();
                 if key_with_alg.alg.is_none() {
-                    key_with_alg.alg = v.alg.map(coset::Algorithm::Assigned);
+                    key_with_alg.alg = v.alg.clone();
                 }
                 key_with_alg
             })

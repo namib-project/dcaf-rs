@@ -5,10 +5,10 @@ use std::path::PathBuf;
 use crate::token::cose::CoseCipher;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use coset::iana::{Algorithm, EnumI64};
+use coset::iana::EnumI64;
 use coset::{
-    iana, AsCborValue, CborSerializable, CoseError, CoseKey, CoseKeyBuilder, CoseRecipientBuilder,
-    Header, HeaderBuilder, Label, TaggedCborSerializable,
+    iana, Algorithm, AsCborValue, CborSerializable, CoseError, CoseKey, CoseKeyBuilder,
+    CoseRecipientBuilder, Header, HeaderBuilder, Label, TaggedCborSerializable,
 };
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
@@ -89,21 +89,21 @@ where
 
 fn string_to_algorithm<'de, D: Deserializer<'de>>(
     alg: Option<&str>,
-) -> Result<Option<Algorithm>, D::Error> {
+) -> Result<Option<iana::Algorithm>, D::Error> {
     match alg {
-        Some("ES256") => Ok(Some(Algorithm::ES256)),
-        Some("ES384") => Ok(Some(Algorithm::ES384)),
-        Some("ES512") => Ok(Some(Algorithm::ES512)),
-        Some("A128GCM") => Ok(Some(Algorithm::A128GCM)),
-        Some("A192GCM") => Ok(Some(Algorithm::A192GCM)),
-        Some("A256GCM") => Ok(Some(Algorithm::A256GCM)),
-        Some("A128KW") => Ok(Some(Algorithm::A128KW)),
-        Some("A192KW") => Ok(Some(Algorithm::A192KW)),
-        Some("A256KW") => Ok(Some(Algorithm::A256KW)),
-        Some("HS256") => Ok(Some(Algorithm::HMAC_256_256)),
-        Some("HS384") => Ok(Some(Algorithm::HMAC_384_384)),
-        Some("HS512") => Ok(Some(Algorithm::HMAC_512_512)),
-        Some("direct") => Ok(Some(Algorithm::Direct)),
+        Some("ES256") => Ok(Some(iana::Algorithm::ES256)),
+        Some("ES384") => Ok(Some(iana::Algorithm::ES384)),
+        Some("ES512") => Ok(Some(iana::Algorithm::ES512)),
+        Some("A128GCM") => Ok(Some(iana::Algorithm::A128GCM)),
+        Some("A192GCM") => Ok(Some(iana::Algorithm::A192GCM)),
+        Some("A256GCM") => Ok(Some(iana::Algorithm::A256GCM)),
+        Some("A128KW") => Ok(Some(iana::Algorithm::A128KW)),
+        Some("A192KW") => Ok(Some(iana::Algorithm::A192KW)),
+        Some("A256KW") => Ok(Some(iana::Algorithm::A256KW)),
+        Some("HS256") => Ok(Some(iana::Algorithm::HMAC_256_256)),
+        Some("HS384") => Ok(Some(iana::Algorithm::HMAC_384_384)),
+        Some("HS512") => Ok(Some(iana::Algorithm::HMAC_512_512)),
+        Some("direct") => Ok(Some(iana::Algorithm::Direct)),
         None => Ok(None),
         _ => Err(de::Error::custom("could not parse test case algorithm")),
     }
@@ -161,7 +161,7 @@ where
     } else {
         return Ok(None);
     };
-    string_to_algorithm::<D>(alg.as_str())
+    Ok(string_to_algorithm::<D>(alg.as_str())?.map(Algorithm::Assigned))
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -253,7 +253,7 @@ pub struct TestCaseRecipient {
     #[serde(deserialize_with = "deserialize_header", default)]
     pub protected: Option<Header>,
     #[serde(deserialize_with = "deserialize_algorithm", default)]
-    pub alg: Option<Algorithm>,
+    pub alg: Option<coset::Algorithm>,
     #[serde(deserialize_with = "hex::deserialize", default)]
     pub external: Vec<u8>,
     #[serde(default)]

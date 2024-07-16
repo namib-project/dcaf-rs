@@ -87,7 +87,7 @@ mod pop {
         // which can change after serialization)
         fn transform_header(key: ProofOfPossessionKey) -> ProofOfPossessionKey {
             if let EncryptedCoseKey(enc) = key {
-                ProofOfPossessionKey::EncryptedCoseKey(CoseEncrypt0 {
+                EncryptedCoseKey(CoseEncrypt0 {
                     protected: ProtectedHeader {
                         original_data: None,
                         ..enc.protected

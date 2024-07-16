@@ -1,5 +1,3 @@
-#![cfg(all(test, feature = "std"))]
-
 use std::path::PathBuf;
 
 use coset::{CoseError, CoseKey, CoseSign, CoseSignBuilder, CoseSignatureBuilder, Header};
@@ -13,7 +11,7 @@ use crate::token::cose::test_helper::{
     perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,
 };
 use crate::token::cose::CoseCipher;
-use crate::CoseSignCipher;
+use crate::token::cose::CoseSignCipher;
 
 impl<B: CoseCipher + CoseSignCipher + CoseKeyDistributionCipher> CoseStructTestHelper<B>
     for CoseSign
@@ -95,7 +93,7 @@ impl<B: CoseCipher + CoseSignCipher + CoseKeyDistributionCipher> CoseStructTestH
             .map(|v| {
                 let mut key_with_alg = v.key.clone();
                 if key_with_alg.alg.is_none() {
-                    key_with_alg.alg = v.alg.map(coset::Algorithm::Assigned);
+                    key_with_alg.alg = v.alg.clone();
                 }
                 key_with_alg
             })

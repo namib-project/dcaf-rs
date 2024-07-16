@@ -14,11 +14,11 @@
 //! This crate implements the ACE-OAuth
 //! (Authentication and Authorization for Constrained Environments using the OAuth 2.0 Framework)
 //! framework as defined in [RFC 9200](https://www.rfc-editor.org/rfc/rfc9200).
-//! Key features include CBOR-(de-)serializable data models such as [`AccessTokenRequest`](crate::endpoints::token_req::AccessTokenRequest),
+//! Key features include CBOR-(de-)serializable data models such as [`AccessTokenRequest`](AccessTokenRequest),
 //! as well as the possibility to create COSE encrypted/signed access tokens
 //! (as described in the standard) along with decryption/verification functions.
 //! Implementations of the cryptographic functions must be provided by the user by implementing
-//! [`CoseEncryptCipher`](crate::token::CoseEncryptCipher) or [`CoseSignCipher`](crate::token::CoseSignCipher).
+//! [`CoseEncryptCipher`](token::CoseEncryptCipher) or [`CoseSignCipher`](token::CoseSignCipher).
 //!
 //! Note that actually transmitting the serialized values (e.g., via CoAP) or providing more complex
 //! features not mentioned in the ACE-OAuth RFC (e.g., a permission management system for
@@ -57,10 +57,10 @@
 //! ## Data models
 //! [For example](https://www.rfc-editor.org/rfc/rfc9200#figure-6),
 //! let's assume you (the client) want to request an access token from an Authorization Server.
-//! For this, you'd need to create an [`AccessTokenRequest`](crate::endpoints::token_req::AccessTokenRequest), which has to include at least a
-//! `client_id`. We'll also specify an audience, a scope (using [`TextEncodedScope`](crate::common::scope::TextEncodedScope)---note that
-//! [binary-encoded scopes](crate::common::scope::BinaryEncodedScope) or [AIF-encoded scopes](crate::common::scope::AifEncodedScope) would also work), as well as a
-//! [`ProofOfPossessionKey`](crate::common::cbor_values::ProofOfPossessionKey) (the key the access token should be bound to) in the `req_cnf` field.
+//! For this, you'd need to create an [`AccessTokenRequest`](AccessTokenRequest), which has to include at least a
+//! `client_id`. We'll also specify an audience, a scope (using [`TextEncodedScope`](TextEncodedScope)---note that
+//! [binary-encoded scopes](BinaryEncodedScope) or [AIF-encoded scopes](AifEncodedScope) would also work), as well as a
+//! [`ProofOfPossessionKey`](ProofOfPossessionKey) (the key the access token should be bound to) in the `req_cnf` field.
 //!
 //! Creating, serializing and then de-serializing such a structure would look like this:
 //! ```
@@ -216,38 +216,38 @@
 //!
 //! ## Token Endpoint
 //! The most commonly used models will probably be the token endpoint's
-//! [`AccessTokenRequest`](crate::endpoints::token_req::AccessTokenRequest) and
-//! [`AccessTokenResponse`](crate::endpoints::token_req::AccessTokenResponse)
+//! [`AccessTokenRequest`](AccessTokenRequest) and
+//! [`AccessTokenResponse`](AccessTokenResponse)
 //! described in [section 5.8 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8).
-//! In case of an error, an [`ErrorResponse`](crate::endpoints::token_req::ErrorResponse)
+//! In case of an error, an [`ErrorResponse`](ErrorResponse)
 //! should be used.
 //!
 //! After an initial Unauthorized Resource Request Message, an
-//! [`AuthServerRequestCreationHint`](crate::endpoints::creation_hint::AuthServerRequestCreationHint)
+//! [`AuthServerRequestCreationHint`](AuthServerRequestCreationHint)
 //! can be used to provide additional information to the client, as described in
 //! [section 5.3 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.3).
 //!
 //! ## Common Data Types
 //! Some types used across multiple scenarios include:
-//! - [`Scope`](crate::common::scope::Scope) (as described in
+//! - [`Scope`](Scope) (as described in
 //!   [section 5.8.1 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.1)),
-//!   either as a [`TextEncodedScope`](crate::common::scope::TextEncodedScope),
-//!   a [`BinaryEncodedScope`](crate::common::scope::BinaryEncodedScope) or
-//!   an [`AifEncodedScope`](crate::common::scope::AifEncodedScope).
-//! - [`ProofOfPossessionKey`](crate::common::cbor_values::ProofOfPossessionKey) as specified in
+//!   either as a [`TextEncodedScope`](TextEncodedScope),
+//!   a [`BinaryEncodedScope`](BinaryEncodedScope) or
+//!   an [`AifEncodedScope`](AifEncodedScope).
+//! - [`ProofOfPossessionKey`](ProofOfPossessionKey) as specified in
 //!   [section 3.1 of RFC 8747](https://www.rfc-editor.org/rfc/rfc8747#section-3.1).
 //!   For example, this will be used in the access token's `cnf` claim.
 //! - While not really a data type, various constants representing values used in ACE-OAuth
-//!   are provided in the [`constants`](crate::common::constants) module.
+//!   are provided in the [`constants`](constants) module.
 //!
 //! # Creating Access Tokens
-//! In order to create access tokens, you can use either [`encrypt_access_token`](crate::token::encrypt_access_token)
-//! or [`sign_access_token`](crate::token::sign_access_token),
+//! In order to create access tokens, you can use either [`encrypt_access_token`](encrypt_access_token)
+//! or [`sign_access_token`](sign_access_token),
 //! depending on whether you want the access token to be wrapped in a
 //! `COSE_Encrypt0` or `COSE_Sign1` structure. Support for a combination of both is planned for the
 //! future. In case you want to create a token intended for multiple recipients (each with their
-//! own key), you can use [`encrypt_access_token_multiple`](crate::token::encrypt_access_token_multiple)
-//! or [`sign_access_token_multiple`](crate::token::sign_access_token_multiple).
+//! own key), you can use [`encrypt_access_token_multiple`](encrypt_access_token_multiple)
+//! or [`sign_access_token_multiple`](sign_access_token_multiple).
 //!
 //! Both functions take a [`ClaimsSet`](coset::cwt::ClaimsSet) containing the claims that
 //! shall be part of the access token, a key used to encrypt or sign the token,
@@ -255,35 +255,36 @@
 //! further below) identified by type parameter `T`.
 //! Note that if the headers you pass in set fields which the cipher wants to set as well,
 //! the function will fail with a `HeaderAlreadySet` error.
-//! The function will return a [`Result`](::core::result::Result) of the opaque
-//! [`ByteString`](crate::common::cbor_values::ByteString) containing the access token.
+//! The function will return a [`Result`](Result) of the opaque
+//! [`ByteString`](ByteString) containing the access token.
 //!
 //! # Verifying and Decrypting Access Tokens
-//! In order to verify or decrypt existing access tokens represented as [`ByteString`](crate::common::cbor_values::ByteString)s,
-//! use [`verify_access_token`](crate::token::verify_access_token) or
-//! [`decrypt_access_token`](crate::token::decrypt_access_token) respectively.
+//! In order to verify or decrypt existing access tokens represented as [`ByteString`](ByteString)s,
+//! use [`verify_access_token`](verify_access_token) or
+//! [`decrypt_access_token`](decrypt_access_token) respectively.
 //! In case the token was created for multiple recipients (each with their own key),
-//! use [`verify_access_token_multiple`](crate::token::verify_access_token_multiple)
-//! or [`decrypt_access_token_multiple`](crate::token::decrypt_access_token_multiple).
+//! use [`verify_access_token_multiple`](verify_access_token_multiple)
+//! or [`decrypt_access_token_multiple`](decrypt_access_token_multiple).
 //!
 //! Both functions take the access token, a `key` used to decrypt or verify, optional `aad`
 //! (additional authenticated data) and a cipher implementing cryptographic operations identified
 //! by type parameter `T`.
 //!
-//! [`decrypt_access_token`](crate::token::decrypt_access_token) will return a result containing
+//! [`decrypt_access_token`](decrypt_access_token) will return a result containing
 //! the decrypted [`ClaimsSet`](coset::cwt::ClaimsSet).
-//! [`verify_access_token`](crate::token::verify_access_token) will return an empty result which
-//! indicates that the token was successfully verified---an [`Err`](::core::result::Result)
+//! [`verify_access_token`](verify_access_token) will return an empty result which
+//! indicates that the token was successfully verified---an [`Err`](Result)
 //! would indicate failure.
 //!
 //! # Extracting Headers from an Access Token
 //! Regardless of whether a token was signed, encrypted, or MAC-tagged, you can extract its
-//! headers using [`get_token_headers`](crate::token::get_token_headers),
+//! headers using [`get_token_headers`](get_token_headers),
 //! which will return an option containing both
-//! unprotected and protected headers (or which will be [`None`](core::option::Option::None) in case
+//! unprotected and protected headers (or which will be [`None`](None) in case
 //! the token is invalid).
 //!
 //! # COSE Cipher
+//! TODO rewrite this.
 //! As mentioned before, cryptographic functions are outside the scope of this crate.
 //! For this reason, the various COSE cipher traits exist; namely,
 //! [`CoseEncryptCipher`](token::CoseEncryptCipher), [`CoseSignCipher`](token::CoseSignCipher),
@@ -344,18 +345,9 @@ pub use endpoints::token_req::{
 };
 #[doc(inline)]
 pub use token::{
-    //decrypt_access_token, decrypt_access_token_multiple, encrypt_access_token,
-    //encrypt_access_token_multiple,
-    get_token_headers,
-    sign_access_token,
-    sign_access_token_multiple,
-    verify_access_token,
-    verify_access_token_multiple,
-    //CoseEncryptCipher,
-    //CoseMacCipher,
-    CoseSignCipher,
-    //MultipleEncryptCipher,
-    //MultipleMacCipher,
+    decrypt_access_token, decrypt_access_token_multiple, encrypt_access_token,
+    encrypt_access_token_multiple, get_token_headers, sign_access_token,
+    sign_access_token_multiple, verify_access_token, verify_access_token_multiple,
 };
 
 pub mod common;

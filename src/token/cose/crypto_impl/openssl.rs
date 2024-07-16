@@ -57,8 +57,14 @@ impl From<openssl::aes::KeyError> for CoseOpensslCipherError {
     }
 }
 
-impl<T: Into<CoseOpensslCipherError>> From<T> for CoseCipherError<CoseOpensslCipherError> {
-    fn from(value: T) -> Self {
+impl From<ErrorStack> for CoseCipherError<CoseOpensslCipherError> {
+    fn from(value: ErrorStack) -> Self {
+        CoseCipherError::Other(value.into())
+    }
+}
+
+impl From<openssl::aes::KeyError> for CoseCipherError<CoseOpensslCipherError> {
+    fn from(value: openssl::aes::KeyError) -> Self {
         CoseCipherError::Other(value.into())
     }
 }
@@ -167,8 +173,8 @@ impl OpensslContext {
 impl CoseCipher for OpensslContext {
     type Error = CoseOpensslCipherError;
 
-    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>> {
-        openssl::rand::rand_bytes(buf).map_err(CoseCipherError::from)
+    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
+        openssl::rand::rand_bytes(buf).map_err(CoseOpensslCipherError::from)
     }
 }
 

@@ -1,4 +1,3 @@
-#![cfg(all(test, feature = "std"))]
 use core::convert::Infallible;
 use std::path::PathBuf;
 
@@ -43,7 +42,7 @@ impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHe
 
         let mut recipient_struct_builder = CoseRecipientBuilder::from(recipient.clone());
         let enc_key: CoseKey;
-        if recipient.alg == Some(Algorithm::Direct)
+        if recipient.alg == Some(coset::Algorithm::Assigned(Algorithm::Direct))
             || determine_algorithm::<Infallible>(
                 None,
                 recipient.unprotected.as_ref(),
@@ -111,7 +110,7 @@ impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHe
             .map(|v| {
                 let mut key_with_alg = v.key.clone();
                 if key_with_alg.alg.is_none() {
-                    key_with_alg.alg = v.alg.map(coset::Algorithm::Assigned);
+                    key_with_alg.alg = v.alg.clone();
                 }
                 key_with_alg
             })

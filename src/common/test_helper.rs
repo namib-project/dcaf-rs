@@ -20,10 +20,10 @@ use rand::{CryptoRng, Rng};
 
 use crate::common::cbor_map::ToCborMap;
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypted::{CoseEncryptCipher, CoseKeyDistributionCipher};
-use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey};
 use crate::token::cose::CoseCipher;
-use crate::CoseSignCipher;
+use crate::token::cose::CoseSignCipher;
+use crate::token::cose::{CoseEc2Key, CoseSymmetricKey};
+use crate::token::cose::{CoseEncryptCipher, CoseKeyDistributionCipher};
 use alloc::collections::BTreeMap;
 use core::convert::Infallible;
 use {
@@ -151,7 +151,7 @@ impl<R: CryptoRng + Rng> MockCipher<R> {
 impl<R: CryptoRng + Rng> CoseCipher for MockCipher<R> {
     type Error = Infallible;
 
-    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), CoseCipherError<Self::Error>> {
+    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
         self.rng.fill_bytes(buf);
         Ok(())
     }
