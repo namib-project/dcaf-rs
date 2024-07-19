@@ -2,10 +2,9 @@ use alloc::boxed::Box;
 use alloc::collections::{BTreeSet, VecDeque};
 use alloc::rc::Rc;
 use alloc::vec::Vec;
+use core::borrow::Borrow;
 use core::cell::RefCell;
 use core::fmt::Display;
-use core::marker::PhantomData;
-
 use coset::{
     iana, Algorithm, CoseKey, CoseKeyBuilder, CoseRecipient, CoseRecipientBuilder,
     EncryptionContext, Header, KeyOperation,
@@ -16,51 +15,51 @@ use crate::token::cose::encrypted::CoseKeyDistributionCipher;
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
 use crate::token::cose::key::ensure_valid_aes_key;
 use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider, CoseParsedKey};
+use crate::token::cose::{try_cose_crypto_operation, InvertedAadProvider};
 
 pub(crate) struct CoseNestedRecipientSearchContext<
     'a,
     B: CoseKeyDistributionCipher,
     CKP: CoseKeyProvider,
+    AAD: CoseAadProvider,
 > {
     recipient_iter: &'a Vec<CoseRecipient>,
     backend: Rc<RefCell<&'a mut B>>,
-    key_provider: Rc<RefCell<&'a mut CKP>>,
-    try_all_keys: bool,
+    key_provider: &'a CKP,
+    aad_provider: Rc<InvertedAadProvider<AAD>>,
     context: EncryptionContext,
-    _key_lifetime_marker: PhantomData<&'a CKP>,
 }
 
-impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
-    CoseNestedRecipientSearchContext<'a, B, CKP>
+impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvider>
+    CoseNestedRecipientSearchContext<'a, B, CKP, AAD>
 {
     pub(crate) fn new(
         recipient_iter: &'a Vec<CoseRecipient>,
         backend: Rc<RefCell<&'a mut B>>,
-        key_provider: Rc<RefCell<&'a mut CKP>>,
-        try_all_keys: bool,
+        key_provider: &'a CKP,
+        aad_provider: AAD,
         context: EncryptionContext,
-    ) -> CoseNestedRecipientSearchContext<'a, B, CKP> {
+    ) -> CoseNestedRecipientSearchContext<'a, B, CKP, AAD> {
         CoseNestedRecipientSearchContext {
             recipient_iter,
             backend,
             key_provider,
-            try_all_keys,
+            aad_provider: Rc::new(InvertedAadProvider(aad_provider)),
             context,
-            _key_lifetime_marker: PhantomData,
         }
     }
 }
 
-impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider> CoseKeyProvider
-    for CoseNestedRecipientSearchContext<'a, B, CKP>
+impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvider> CoseKeyProvider
+    for CoseNestedRecipientSearchContext<'a, B, CKP, AAD>
 {
-    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
+    fn lookup_key(&self, key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>> {
         let mut iter: Box<dyn Iterator<Item = CoseKey>> = Box::new(CoseNestedRecipientIterator {
             iteration_state: vec![self.recipient_iter.iter()],
             recipient_stack: vec![],
             backend: Rc::clone(&self.backend),
-            key_provider: Rc::clone(&self.key_provider),
-            try_all_keys: self.try_all_keys,
+            key_provider: self.key_provider,
+            aad_provider: Rc::clone(&self.aad_provider),
             current_key_candidates: VecDeque::default(),
             current_candidates_position: 0,
             last_error: None,
@@ -74,20 +73,25 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider> CoseKeyProvider
     }
 }
 
-struct CoseNestedRecipientIterator<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider> {
+struct CoseNestedRecipientIterator<
+    'a,
+    B: CoseKeyDistributionCipher,
+    CKP: CoseKeyProvider,
+    AAD: CoseAadProvider,
+> {
     iteration_state: Vec<alloc::slice::Iter<'a, CoseRecipient>>,
     recipient_stack: Vec<&'a CoseRecipient>,
     backend: Rc<RefCell<&'a mut B>>,
-    key_provider: Rc<RefCell<&'a mut CKP>>,
-    try_all_keys: bool,
+    key_provider: &'a CKP,
+    aad_provider: Rc<InvertedAadProvider<AAD>>,
     current_key_candidates: VecDeque<CoseKey>,
     current_candidates_position: usize,
     last_error: Option<CoseCipherError<B::Error>>,
     context: EncryptionContext,
 }
 
-impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider> Iterator
-    for CoseNestedRecipientIterator<'a, B, CKP>
+impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvider> Iterator
+    for CoseNestedRecipientIterator<'a, B, CKP, AAD>
 {
     type Item = CoseKey;
 
@@ -177,8 +181,8 @@ pub(crate) fn struct_to_recipient_context(ctx: EncryptionContext) -> EncryptionC
     }
 }
 
-impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
-    CoseNestedRecipientIterator<'a, B, CKP>
+impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvider>
+    CoseNestedRecipientIterator<'a, B, CKP, AAD>
 {
     fn attempt_to_decrypt_nested(
         &mut self,
@@ -190,13 +194,13 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
             EncryptionContext::RecRecipient
         };
         // Attempt to decrypt leaf node, return (non-search-terminating) error if that doesn't work.
-        let mut current_keys: Vec<CoseKey> = leaf_recipient.try_decrypt(
-            *self.backend.borrow_mut(),
-            *self.key_provider.borrow_mut(),
-            self.try_all_keys,
-            ctx,
-            &mut (&[] as &[u8]),
-        )?;
+        let mut current_keys: Vec<CoseKey> = leaf_recipient
+            .try_decrypt::<_, _, &InvertedAadProvider<AAD>>(
+                *self.backend.borrow_mut(),
+                self.key_provider,
+                ctx,
+                self.aad_provider.borrow(),
+            )?;
 
         let iter = self.recipient_stack.iter().copied().rev();
 
@@ -207,13 +211,11 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider>
                 struct_to_recipient_context(self.context)
             };
 
-            match recipient.try_decrypt(
+            match recipient.try_decrypt::<_, _, &InvertedAadProvider<AAD>>(
                 *self.backend.borrow_mut(),
-                *self.key_provider.borrow_mut(),
-                // Use all keys in current_keys for intermediates.
-                true,
+                &current_keys,
                 ctx,
-                &mut (&[] as &[u8]),
+                self.aad_provider.borrow(),
             ) {
                 Ok(v) => current_keys = v,
                 Err(e @ CoseCipherError::UnsupportedAlgorithm(_)) => return Err(e),
@@ -279,8 +281,18 @@ fn determine_decrypt_key_ops_for_alg<CE: Display>(
 ) -> Result<BTreeSet<KeyOperation>, CoseCipherError<CE>> {
     Ok(BTreeSet::from_iter(match alg {
         iana::Algorithm::Direct => {
-            // TODO maybe needs to be all operations instead
-            vec![]
+            vec![
+                KeyOperation::Assigned(iana::KeyOperation::WrapKey),
+                KeyOperation::Assigned(iana::KeyOperation::UnwrapKey),
+                KeyOperation::Assigned(iana::KeyOperation::MacCreate),
+                KeyOperation::Assigned(iana::KeyOperation::MacVerify),
+                KeyOperation::Assigned(iana::KeyOperation::Encrypt),
+                KeyOperation::Assigned(iana::KeyOperation::Decrypt),
+                KeyOperation::Assigned(iana::KeyOperation::DeriveBits),
+                KeyOperation::Assigned(iana::KeyOperation::DeriveKey),
+                KeyOperation::Assigned(iana::KeyOperation::Sign),
+                KeyOperation::Assigned(iana::KeyOperation::Verify),
+            ]
         }
         iana::Algorithm::Direct_HKDF_AES_128
         | iana::Algorithm::Direct_HKDF_AES_256
@@ -358,35 +370,42 @@ pub trait CoseRecipientBuilderExt: Sized {
     /// # Examples
     ///
     /// TODO
-    fn try_encrypt<B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_encrypt<
+        B: CoseKeyDistributionCipher,
+        CKP: CoseKeyProvider,
+        CAP: CoseAadProvider + ?Sized,
+    >(
         self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
+        key_provider: &CKP,
         context: EncryptionContext,
         protected: Option<Header>,
         unprotected: Option<Header>,
         plaintext: &[u8],
-        external_aad: &mut CAP,
+        external_aad: CAP,
     ) -> Result<Self, CoseCipherError<B::Error>>;
 }
 
 impl CoseRecipientBuilderExt for CoseRecipientBuilder {
-    fn try_encrypt<B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_encrypt<
+        B: CoseKeyDistributionCipher,
+        CKP: CoseKeyProvider,
+        CAP: CoseAadProvider + ?Sized,
+    >(
         self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
+        key_provider: &CKP,
+
         context: EncryptionContext,
         protected: Option<Header>,
         unprotected: Option<Header>,
         payload: &[u8],
-        external_aad: &mut CAP,
+        external_aad: CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let mut builder = self;
 
         let alg =
-            match determine_algorithm::<B::Error>(None, unprotected.as_ref(), protected.as_ref()) {
+            match determine_algorithm::<B::Error>(None, protected.as_ref(), unprotected.as_ref()) {
                 Ok(v) => v,
                 Err(e) => {
                     // A CoseRecipient MUST always have an algorithm set (see RFC 9052,
@@ -395,26 +414,61 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
                 }
             };
 
-        // Determine key operations that fulfill the requirements of the algorithm.
-        let operation = determine_encrypt_key_ops_for_alg(alg)?;
-
-        let key = determine_key_candidates::<CKP>(
-            key_provider,
-            protected.as_ref(),
-            unprotected.as_ref(),
-            operation,
-            try_all_keys,
-        )
-        .next()
-        .ok_or(CoseCipherError::NoMatchingKeyFound(Vec::new()))?;
-        let parsed_key = CoseParsedKey::try_from(&key)?;
-
         // Direct => Key of will be used for lower layer directly, must not contain ciphertext.
         if iana::Algorithm::Direct == alg {
             return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
                 iana::Algorithm::Direct,
             )));
         }
+
+        // TODO return an error if IV is set in headers?
+
+        // Determine key operations that fulfill the requirements of the algorithm.
+        let operation = determine_encrypt_key_ops_for_alg(alg)?;
+
+        builder = builder.try_create_ciphertext(
+            context,
+            payload,
+            external_aad
+                .lookup_aad(Some(context), protected.as_ref(), unprotected.as_ref())
+                .unwrap_or(&[] as &[u8]),
+            |plaintext, _aad| {
+                try_cose_crypto_operation(
+                    key_provider,
+                    protected.as_ref(),
+                    unprotected.as_ref(),
+                    operation,
+                    |key, alg, protected, _unprotected| {
+                        let parsed_key = CoseParsedKey::try_from(key)?;
+                        match alg {
+                            iana::Algorithm::A128KW
+                            | iana::Algorithm::A192KW
+                            | iana::Algorithm::A256KW => {
+                                let symm_key = ensure_valid_aes_key(alg, parsed_key)?;
+
+                                if protected.is_some() && !protected.as_ref().unwrap().is_empty() {
+                                    return Err(CoseCipherError::AadUnsupported);
+                                }
+
+                                backend.aes_key_wrap(
+                                    alg,
+                                    symm_key,
+                                    plaintext,
+                                    // Fixed IV, see RFC 9053, Section 6.2.1
+                                    &[0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6],
+                                )
+                            }
+                            alg => {
+                                // Unsupported algorithm - skip over this recipient.
+                                Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                                    alg,
+                                )))
+                            }
+                        }
+                    },
+                )
+            },
+        )?;
 
         if let Some(protected) = &protected {
             builder = builder.protected(protected.clone());
@@ -423,41 +477,7 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
             builder = builder.unprotected(unprotected.clone());
         }
 
-        match alg {
-            alg @ (iana::Algorithm::A128KW | iana::Algorithm::A192KW | iana::Algorithm::A256KW) => {
-                let symm_key = ensure_valid_aes_key(alg, parsed_key)?;
-
-                if protected.is_some() && !protected.as_ref().unwrap().is_empty() {
-                    return Err(CoseCipherError::AadUnsupported);
-                }
-
-                builder.try_create_ciphertext(
-                    context,
-                    payload,
-                    external_aad.lookup_aad(
-                        Some(context),
-                        protected.as_ref(),
-                        unprotected.as_ref(),
-                    ),
-                    |plaintext, _aad| {
-                        // Ignore AAD as this is not an AEAD algorithm, just an AE algorithm.
-                        backend.aes_key_wrap(
-                            alg,
-                            symm_key,
-                            plaintext,
-                            // Fixed IV, see RFC 9053, Section 6.2.1
-                            &[0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6],
-                        )
-                    },
-                )
-            }
-            alg => {
-                // Unsupported algorithm - skip over this recipient.
-                Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-                    alg,
-                )))
-            }
-        }
+        Ok(builder)
     }
 }
 
@@ -501,29 +521,36 @@ pub trait CoseRecipientExt {
     /// # Examples
     ///
     /// TODO
-    fn try_decrypt<B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_decrypt<
+        B: CoseKeyDistributionCipher,
+        CKP: CoseKeyProvider,
+        CAP: CoseAadProvider + ?Sized,
+    >(
         &self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
+        key_provider: &CKP,
+
         context: EncryptionContext,
-        external_aad: &mut CAP,
+        external_aad: CAP,
     ) -> Result<Vec<CoseKey>, CoseCipherError<B::Error>>;
 }
 
 impl CoseRecipientExt for CoseRecipient {
-    fn try_decrypt<B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_decrypt<
+        B: CoseKeyDistributionCipher,
+        CKP: CoseKeyProvider,
+        CAP: CoseAadProvider + ?Sized,
+    >(
         &self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
+        key_provider: &CKP,
         context: EncryptionContext,
-        external_aad: &mut CAP,
+        external_aad: CAP,
     ) -> Result<Vec<CoseKey>, CoseCipherError<B::Error>> {
         let alg = match determine_algorithm::<B::Error>(
             None,
-            Some(&self.unprotected),
             Some(&self.protected.header),
+            Some(&self.unprotected),
         ) {
             Ok(v) => v,
             Err(e) => {
@@ -539,76 +566,79 @@ impl CoseRecipientExt for CoseRecipient {
         // Determine key operations that fulfill the requirements of the algorithm.
         let operation = determine_decrypt_key_ops_for_alg(alg)?;
 
-        let key_candidates: Vec<CoseKey> = determine_key_candidates::<CKP>(
-            key_provider,
-            Some(&self.protected.header),
-            Some(&self.unprotected),
-            operation,
-            try_all_keys,
-        )
-        .collect();
-
         // Direct => Key of key provider will be used for lower layer directly.
         // TODO ensure that Direct is the only method used on the message (RFC 9052, Section 8.5.1)
         if iana::Algorithm::Direct == alg {
-            return Ok(key_candidates);
-        }
-
-        let mut multi_verification_errors = Vec::new();
-
-        for key in key_candidates {
-            let parsed_key = CoseParsedKey::try_from(&key)?;
-            match alg {
-                alg @ (iana::Algorithm::A128KW
-                | iana::Algorithm::A192KW
-                | iana::Algorithm::A256KW) => {
-                    let symm_key = match ensure_valid_aes_key(alg, parsed_key) {
-                        Ok(v) => v,
-                        Err(_e) => {
-                            // Key is not an AES key, skip.
-                            continue;
-                        }
-                    };
-                    if !self.protected.is_empty() {
-                        return Err(CoseCipherError::AadUnsupported);
-                    }
-                    match self.decrypt(
-                        context,
-                        external_aad.lookup_aad(
-                            Some(context),
-                            Some(&self.protected.header),
-                            Some(&self.unprotected),
-                        ),
-                        |ciphertext, _aad| {
-                            // Ignore AAD as this is not an AEAD algorithm, just an AE algorithm.
-                            backend.aes_key_unwrap(
-                                alg,
-                                symm_key,
-                                ciphertext,
-                                // Fixed IV, see RFC 9053, Section 6.2.1
-                                &[0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6],
-                            )
-                        },
-                    ) {
-                        Ok(v) => return Ok(vec![CoseKeyBuilder::new_symmetric_key(v).build()]),
-                        Err(e) => {
-                            multi_verification_errors.push((key.clone(), e));
-                            // Decryption using key failed, skip.
-                            continue;
-                        }
-                    };
-                }
-                alg => {
-                    // Unsupported algorithm - skip over this recipient.
-                    return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-                        alg,
-                    )));
+            let mut successful_candidates = Vec::new();
+            let mut multi_verification_errors = Vec::new();
+            for kc in determine_key_candidates::<CKP, B::Error>(
+                key_provider,
+                Some(&self.protected.header),
+                Some(&self.unprotected),
+                operation,
+            )
+            .map(|kc| kc.map(|(key, _alg)| key))
+            {
+                match kc {
+                    Ok(v) => successful_candidates.push(v),
+                    Err(e) => multi_verification_errors.push(e),
                 }
             }
+            if successful_candidates.is_empty() {
+                return Err(CoseCipherError::NoMatchingKeyFound(
+                    multi_verification_errors,
+                ));
+            }
+            return Ok(successful_candidates);
         }
 
-        Err(CoseCipherError::NoMatchingKeyFound(
-            multi_verification_errors,
-        ))
+        match self.decrypt(
+            context,
+            external_aad
+                .lookup_aad(
+                    Some(context),
+                    Some(&self.protected.header),
+                    Some(&self.unprotected),
+                )
+                .unwrap_or(&[] as &[u8]),
+            |ciphertext, _aad| {
+                try_cose_crypto_operation(
+                    key_provider,
+                    Some(&self.protected.header),
+                    Some(&self.unprotected),
+                    operation,
+                    |key, alg, _protected, _unprotected| {
+                        let parsed_key = CoseParsedKey::try_from(key)?;
+                        match alg {
+                            iana::Algorithm::A128KW
+                            | iana::Algorithm::A192KW
+                            | iana::Algorithm::A256KW => {
+                                let symm_key = ensure_valid_aes_key(alg, parsed_key)?;
+                                if !self.protected.is_empty() {
+                                    return Err(CoseCipherError::AadUnsupported);
+                                }
+                                // Ignore AAD as this is not an AEAD algorithm, just an AE algorithm.
+                                backend.aes_key_unwrap(
+                                    alg,
+                                    symm_key,
+                                    ciphertext,
+                                    // Fixed IV, see RFC 9053, Section 6.2.1
+                                    &[0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6],
+                                )
+                            }
+                            alg => {
+                                // Unsupported algorithm
+                                Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                                    alg,
+                                )))
+                            }
+                        }
+                    },
+                )
+            },
+        ) {
+            Ok(v) => Ok(vec![CoseKeyBuilder::new_symmetric_key(v).build()]),
+            Err(e) => Err(e),
+        }
     }
 }

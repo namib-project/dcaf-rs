@@ -57,28 +57,28 @@ pub trait CoseEncryptBuilderExt: Sized {
     /// # Examples
     ///
     /// TODO
-    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
+        key_provider: &CKP,
+
         protected: Option<Header>,
         unprotected: Option<Header>,
         payload: &[u8],
-        external_aad: &mut CAP,
+        external_aad: CAP,
     ) -> Result<Self, CoseCipherError<B::Error>>;
 }
 
 impl CoseEncryptBuilderExt for CoseEncryptBuilder {
-    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
+        key_provider: &CKP,
+
         protected: Option<Header>,
         unprotected: Option<Header>,
         payload: &[u8],
-        external_aad: &mut CAP,
+        external_aad: CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let mut builder = self;
         if let Some(protected) = &protected {
@@ -89,18 +89,19 @@ impl CoseEncryptBuilderExt for CoseEncryptBuilder {
         }
         builder.try_create_ciphertext(
             payload,
-            external_aad.lookup_aad(
-                Some(EncryptionContext::CoseEncrypt),
-                protected.as_ref(),
-                unprotected.as_ref(),
-            ),
+            external_aad
+                .lookup_aad(
+                    Some(EncryptionContext::CoseEncrypt),
+                    protected.as_ref(),
+                    unprotected.as_ref(),
+                )
+                .unwrap_or(&[] as &[u8]),
             |plaintext, aad| {
                 encrypted::try_encrypt(
                     backend,
                     key_provider,
                     protected.as_ref(),
                     unprotected.as_ref(),
-                    try_all_keys,
                     plaintext,
                     aad,
                 )
@@ -151,12 +152,12 @@ pub trait CoseEncryptExt {
     /// # Examples
     ///
     /// TODO
-    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         &self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
-        external_aad: &mut CAP,
+        key_provider: &CKP,
+
+        external_aad: CAP,
     ) -> Result<Vec<u8>, CoseCipherError<B::Error>>;
 
     /// Attempts to decrypt the payload contained in this object using a cryptographic backend,
@@ -199,39 +200,39 @@ pub trait CoseEncryptExt {
     fn try_decrypt_with_recipients<
         B: CoseKeyDistributionCipher + CoseEncryptCipher,
         CKP: CoseKeyProvider,
-        CAP: CoseAadProvider,
+        CAP: CoseAadProvider + ?Sized,
     >(
         &self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
-        external_aad: &mut CAP,
+        key_provider: &CKP,
+
+        external_aad: CAP,
     ) -> Result<Vec<u8>, CoseCipherError<B::Error>>;
 }
 
 impl CoseEncryptExt for CoseEncrypt {
-    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         &self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
-        external_aad: &mut CAP,
+        key_provider: &CKP,
+
+        external_aad: CAP,
     ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
         let backend = Rc::new(RefCell::new(backend));
-        let key_provider = Rc::new(RefCell::new(key_provider));
         self.decrypt(
-            external_aad.lookup_aad(
-                Some(EncryptionContext::CoseEncrypt),
-                Some(&self.protected.header),
-                Some(&self.unprotected),
-            ),
+            external_aad
+                .lookup_aad(
+                    Some(EncryptionContext::CoseEncrypt),
+                    Some(&self.protected.header),
+                    Some(&self.unprotected),
+                )
+                .unwrap_or(&[] as &[u8]),
             |ciphertext, aad| {
                 try_decrypt(
-                    &backend,
-                    &key_provider,
+                    backend,
+                    key_provider,
                     &self.protected.header,
                     &self.unprotected,
-                    try_all_keys,
                     ciphertext,
                     aad,
                 )
@@ -242,36 +243,35 @@ impl CoseEncryptExt for CoseEncrypt {
     fn try_decrypt_with_recipients<
         B: CoseKeyDistributionCipher + CoseEncryptCipher,
         CKP: CoseKeyProvider,
-        CAP: CoseAadProvider,
+        CAP: CoseAadProvider + ?Sized,
     >(
         &self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
-        external_aad: &mut CAP,
+        key_provider: &CKP,
+        external_aad: CAP,
     ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
         let backend = Rc::new(RefCell::new(backend));
-        let key_provider = Rc::new(RefCell::new(key_provider));
-        let mut nested_recipient_key_provider = CoseNestedRecipientSearchContext::new(
+        let nested_recipient_key_provider = CoseNestedRecipientSearchContext::new(
             &self.recipients,
             Rc::clone(&backend),
-            Rc::clone(&key_provider),
-            try_all_keys,
+            key_provider,
+            &external_aad,
             struct_to_recipient_context(EncryptionContext::CoseEncrypt),
         );
         self.decrypt(
-            external_aad.lookup_aad(
-                Some(EncryptionContext::CoseEncrypt),
-                Some(&self.protected.header),
-                Some(&self.unprotected),
-            ),
+            external_aad
+                .lookup_aad(
+                    Some(EncryptionContext::CoseEncrypt),
+                    Some(&self.protected.header),
+                    Some(&self.unprotected),
+                )
+                .unwrap_or(&[] as &[u8]),
             |ciphertext, aad| {
                 try_decrypt(
-                    &backend,
-                    &Rc::new(RefCell::new(&mut nested_recipient_key_provider)),
+                    backend,
+                    &nested_recipient_key_provider,
                     &self.protected.header,
                     &self.unprotected,
-                    true,
                     ciphertext,
                     aad,
                 )

@@ -151,7 +151,7 @@ fn test_scenario<B: CoseCipher + CoseSignCipher>(
 
     assert_eq!(request, result);
     let expires_in: u32 = 3600;
-    let token = sign_access_token::<B>(
+    let token = sign_access_token(
         &mut backend,
         &key,
         ClaimsSetBuilder::new()
@@ -164,7 +164,7 @@ fn test_scenario<B: CoseCipher + CoseSignCipher>(
             )
             .build(),
         // TODO: Proper headers
-        Some(aad.as_slice()),
+        &aad.as_slice(),
         Some(unprotected_headers),
         Some(protected_headers),
     )
@@ -180,12 +180,11 @@ fn test_scenario<B: CoseCipher + CoseSignCipher>(
     let result = pseudo_send_receive(response.clone())?;
     assert_eq!(response, result);
 
-    verify_access_token::<B, _>(
+    verify_access_token(
         &mut backend,
         &mut &key,
-        false,
         &response.access_token,
-        Some(aad.as_slice()),
+        &aad.as_slice(),
     )
     .map_err(|x| x.to_string())?;
 

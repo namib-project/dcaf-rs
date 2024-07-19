@@ -11,11 +11,8 @@ pub use mac::{CoseMacBuilderExt, CoseMacExt};
 pub use mac0::{CoseMac0BuilderExt, CoseMac0Ext};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::header_util::{
-    check_for_duplicate_headers, determine_algorithm, determine_key_candidates,
-};
 use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey, CoseSymmetricKey, KeyParam};
-use crate::token::cose::CoseCipher;
+use crate::token::cose::{header_util, CoseCipher};
 
 pub trait CoseMacCipher: CoseCipher {
     fn compute_hmac(
@@ -85,93 +82,57 @@ pub(crate) fn is_valid_hmac_key<BE: Display>(
 
 fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
-    key_provider: &mut CKP,
+    key_provider: &CKP,
     protected: Option<&Header>,
     unprotected: Option<&Header>,
-    try_all_keys: bool,
     input: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    if let (Some(protected), Some(unprotected)) = (protected, unprotected) {
-        check_for_duplicate_headers(protected, unprotected)?;
-    }
-    let key = determine_key_candidates::<CKP>(
+    header_util::try_cose_crypto_operation(
         key_provider,
         protected,
         unprotected,
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::MacCreate)]),
-        try_all_keys,
+        |key, alg, _protected, _unprotected| {
+            let parsed_key = CoseParsedKey::try_from(key)?;
+
+            match alg {
+                iana::Algorithm::HMAC_256_256 => {
+                    let symm_key = is_valid_hmac_key(alg, parsed_key)?;
+                    backend.compute_hmac(alg, symm_key, input)
+                }
+                alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                    alg,
+                ))),
+            }
+        },
     )
-    .next()
-    .ok_or(CoseCipherError::NoMatchingKeyFound(Vec::new()))?;
-    let parsed_key = CoseParsedKey::try_from(&key)?;
-
-    match determine_algorithm(Some(&parsed_key), protected, unprotected)? {
-        alg @ iana::Algorithm::HMAC_256_256 => {
-            let symm_key = is_valid_hmac_key(alg, parsed_key)?;
-            backend.compute_hmac(alg, symm_key, input)
-        }
-        alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-            alg,
-        ))),
-    }
-}
-
-fn try_verify_with_key<B: CoseMacCipher>(
-    backend: &mut B,
-    key: CoseParsedKey<B::Error>,
-    protected: &Header,
-    unprotected: &Header,
-    tag: &[u8],
-    data: &[u8],
-) -> Result<(), CoseCipherError<B::Error>> {
-    check_for_duplicate_headers(protected, unprotected)?;
-
-    match determine_algorithm(Some(&key), Some(protected), Some(unprotected))? {
-        alg @ iana::Algorithm::HMAC_256_256 => {
-            let symm_key = is_valid_hmac_key(alg, key)?;
-            backend.verify_hmac(alg, symm_key, tag, data)
-        }
-        alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-            alg,
-        ))),
-    }
 }
 
 pub(crate) fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider>(
     backend: &Rc<RefCell<&mut B>>,
-    key_provider: &Rc<RefCell<&mut CKP>>,
+    key_provider: &CKP,
     protected: &Header,
     unprotected: &Header,
-    try_all_keys: bool,
     tag: &[u8],
     data: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
-    check_for_duplicate_headers(protected, unprotected)?;
-    let mut multi_verification_errors = Vec::new();
-    for key in determine_key_candidates::<CKP>(
-        *key_provider.borrow_mut(),
+    header_util::try_cose_crypto_operation(
+        key_provider,
         Some(protected),
         Some(unprotected),
-        BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Decrypt)]),
-        try_all_keys,
-    ) {
-        match try_verify_with_key(
-            *backend.borrow_mut(),
-            CoseParsedKey::try_from(&key)?,
-            protected,
-            unprotected,
-            tag,
-            data,
-        ) {
-            Ok(v) => return Ok(v),
-            Err(e) => {
-                multi_verification_errors.push((key.clone(), e));
-                continue;
-            }
-        }
-    }
+        BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::MacVerify)]),
+        |key, alg, _protected, _unprotected| {
+            let parsed_key = CoseParsedKey::try_from(key)?;
 
-    Err(CoseCipherError::NoMatchingKeyFound(
-        multi_verification_errors,
-    ))
+            match alg {
+                iana::Algorithm::HMAC_256_256 => {
+                    let symm_key = is_valid_hmac_key(alg, parsed_key)?;
+                    (*backend.borrow_mut()).verify_hmac(alg, symm_key, tag, data)
+                }
+                alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                    alg,
+                ))),
+            }
+        },
+    )
 }

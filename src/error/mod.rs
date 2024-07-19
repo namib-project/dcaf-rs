@@ -17,7 +17,7 @@ use core::any::type_name;
 use core::fmt::{Display, Formatter};
 
 use ciborium::value::Value;
-use coset::{Algorithm, CoseError, CoseKey, KeyOperation, KeyType, Label};
+use coset::{Algorithm, CoseError, CoseKey, CoseRecipient, KeyOperation, KeyType, Label};
 use strum_macros::IntoStaticStr;
 
 use {alloc::format, alloc::string::String, alloc::string::ToString};
@@ -264,7 +264,7 @@ where
     /// headers or the key itself).
     NoAlgorithmDeterminable,
     /// The provided key does not support the given operation.
-    KeyOperationNotPermitted(BTreeSet<KeyOperation>, KeyOperation),
+    KeyOperationNotPermitted(BTreeSet<KeyOperation>, BTreeSet<KeyOperation>),
     /// Key in given curve must be in different format.
     KeyTypeCurveMismatch(KeyType, EllipticCurve),
     /// Provided algorithm requires a different key type.
@@ -296,6 +296,11 @@ where
     /// In the latter case, the error field will contain a list of all attempted keys and the
     /// corresponding error.
     NoMatchingKeyFound(Vec<(CoseKey, CoseCipherError<T>)>),
+    /// TODO docs
+    NoDecryptableRecipientFound(
+        Vec<(CoseRecipient, Vec<(CoseKey, CoseCipherError<T>)>)>,
+        Vec<(CoseKey, CoseCipherError<T>)>,
+    ),
     /// A different error has occurred. Details are provided in the contained error.
     Other(T),
 }

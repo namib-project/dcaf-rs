@@ -1,13 +1,14 @@
-use alloc::boxed::Box;
+use alloc::borrow::ToOwned;
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 use core::fmt::Display;
 
+use alloc::borrow::Borrow;
 use coset::iana::EnumI64;
 use coset::{iana, Algorithm, CoseKey, Header, HeaderBuilder, KeyOperation, Label};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::key::{CoseKeyProvider, CoseParsedKey};
+use crate::token::cose::key::CoseKeyProvider;
 use crate::token::cose::{CoseCipher, CoseEncryptCipher};
 
 /// A header parameter that can be used in a COSE header.
@@ -79,25 +80,29 @@ pub(crate) fn check_for_duplicate_headers<E: Display>(
     }
 }
 
+/// Determines the value of a header param based on the provided `protected` and `unprotected`
+/// header buckets and the `accessor` function that determines the header parameter from a header
+/// reference.
+pub(crate) fn determine_header_param<F: Fn(&Header) -> Option<T>, T>(
+    protected_header: Option<&Header>,
+    unprotected_header: Option<&Header>,
+    accessor: F,
+) -> Option<T> {
+    protected_header
+        .into_iter()
+        .chain(unprotected_header)
+        .find_map(accessor)
+}
+
 /// Determines the algorithm to use for the signing operation based on the supplied key and headers.
 pub(crate) fn determine_algorithm<CE: Display>(
-    parsed_key: Option<&CoseParsedKey<'_, CE>>,
-    unprotected_header: Option<&Header>,
+    parsed_key: Option<&CoseKey>,
     protected_header: Option<&Header>,
+    unprotected_header: Option<&Header>,
 ) -> Result<iana::Algorithm, CoseCipherError<CE>> {
-    // Check whether the algorithm has been explicitly set...
-    let alg = if let Some(Some(alg)) = protected_header.map(|v| v.alg.clone()) {
-        // ...in the protected header...
-        Ok(alg)
-    } else if let Some(Some(alg)) = unprotected_header.map(|v| v.alg.clone()) {
-        // ...in the unprotected header...
-        Ok(alg)
-    } else if let Some(alg) = parsed_key.and_then(|v| v.as_ref().alg.clone()) {
-        // ...or the key itself.
-        Ok(alg)
-    } else {
-        Err(CoseCipherError::NoAlgorithmDeterminable)
-    }?;
+    let alg = determine_header_param(protected_header, unprotected_header, |h| h.alg.clone())
+        .or_else(|| parsed_key.and_then(|k| k.alg.clone()))
+        .ok_or(CoseCipherError::NoAlgorithmDeterminable)?;
 
     if let Algorithm::Assigned(alg) = alg {
         Ok(alg)
@@ -106,26 +111,56 @@ pub(crate) fn determine_algorithm<CE: Display>(
     }
 }
 
-pub(crate) fn determine_key_candidates<'a, CKP: CoseKeyProvider>(
-    key_provider: &'a mut CKP,
+/// Queries the key provider for keys and checks for each returned key whether it is a possible
+/// candidate for the operation and algorithm.
+///
+/// Returns an iterator that for each key returned by the key provider either returns the key plus
+/// algorithm to use or the corresponding error that describes the reason why this key is not
+/// suitable.
+///
+/// This function performs the algorithm-independent checks for whether a key is a suitable
+/// candidate, but not any algorithm-specific checks (e.g. required key parameters, key length,
+/// etc.). Those will have to be checked by the caller.
+pub(crate) fn determine_key_candidates<'a, CKP: CoseKeyProvider, CE: Display>(
+    key_provider: &'a CKP,
     protected: Option<&'a Header>,
     unprotected: Option<&'a Header>,
     operation: BTreeSet<KeyOperation>,
-    try_all_keys: bool,
-) -> Box<dyn Iterator<Item = CoseKey> + 'a> {
-    let key_id = if try_all_keys {
-        None
-    } else {
-        protected
-            .map(|v| v.key_id.as_slice())
-            .filter(|v| !v.is_empty())
-            .or_else(|| unprotected.map(|v| v.key_id.as_slice()))
-            .filter(|v| !v.is_empty())
-    };
+) -> impl Iterator<Item = Result<(CoseKey, iana::Algorithm), (CoseKey, CoseCipherError<CE>)>> + 'a {
+    let key_id = protected
+        .map(|v| v.key_id.as_slice())
+        .filter(|v| !v.is_empty())
+        .or_else(|| unprotected.map(|v| v.key_id.as_slice()))
+        .filter(|v| !v.is_empty());
 
-    Box::new(key_provider.lookup_key(key_id).filter(move |k| {
-        k.key_ops.is_empty() || k.key_ops.intersection(&operation).next().is_some()
-    }))
+    key_provider.lookup_key(key_id).map(move |k| {
+        let k_borrow: &CoseKey = k.borrow();
+        if !k_borrow.key_ops.is_empty()
+            && k_borrow.key_ops.intersection(&operation).next().is_some()
+        {
+            return Err((
+                k_borrow.clone(),
+                CoseCipherError::KeyOperationNotPermitted(
+                    k_borrow.key_ops.clone(),
+                    operation.clone(),
+                ),
+            ));
+        }
+        let chosen_alg = determine_algorithm(Some(k_borrow), protected, unprotected)
+            .map_err(|e| (k_borrow.clone(), e))?;
+        if let Some(key_alg) = k_borrow.alg.as_ref() {
+            if Algorithm::Assigned(chosen_alg) != *key_alg {
+                return Err((
+                    k_borrow.clone(),
+                    CoseCipherError::KeyAlgorithmMismatch(
+                        key_alg.clone(),
+                        Algorithm::Assigned(chosen_alg),
+                    ),
+                ));
+            }
+        }
+        Ok((k_borrow.to_owned(), chosen_alg))
+    })
 }
 
 pub trait HeaderBuilderExt: Sized {
@@ -159,4 +194,37 @@ impl HeaderBuilderExt for HeaderBuilder {
         backend.generate_rand(&mut iv)?;
         Ok(self.iv(iv))
     }
+}
+
+pub(crate) fn try_cose_crypto_operation<BE: Display, CKP: CoseKeyProvider, F, R>(
+    key_provider: &CKP,
+    protected: Option<&Header>,
+    unprotected: Option<&Header>,
+    key_ops: BTreeSet<KeyOperation>,
+    mut op: F,
+) -> Result<R, CoseCipherError<BE>>
+where
+    F: FnMut(
+        &CoseKey,
+        iana::Algorithm,
+        Option<&Header>,
+        Option<&Header>,
+    ) -> Result<R, CoseCipherError<BE>>,
+{
+    if let (Some(protected), Some(unprotected)) = (protected, unprotected) {
+        check_for_duplicate_headers(protected, unprotected)?;
+    }
+    let mut multi_verification_errors = Vec::new();
+    for kc in determine_key_candidates::<CKP, BE>(key_provider, protected, unprotected, key_ops) {
+        multi_verification_errors.push(match kc {
+            Ok((key, alg)) => match op(&key, alg, protected, unprotected) {
+                Err(e) => (key, e),
+                v => return v,
+            },
+            Err(e) => e,
+        });
+    }
+    Err(CoseCipherError::NoMatchingKeyFound(
+        multi_verification_errors,
+    ))
 }

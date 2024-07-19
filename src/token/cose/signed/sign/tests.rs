@@ -43,11 +43,11 @@ impl<B: CoseCipher + CoseSignCipher + CoseKeyDistributionCipher> CoseStructTestH
                 signature = signature.protected(protected.clone());
             }
             sign = sign
-                .try_add_sign::<_, &CoseKey, &[u8]>(
+                .try_add_sign(
                     backend,
-                    &mut &signer.key,
+                    &signer.key,
                     signature.build(),
-                    &mut signer.external.as_slice(),
+                    signer.external.as_slice(),
                 )
                 .expect("unable to sign Sign object");
         }
@@ -98,9 +98,13 @@ impl<B: CoseCipher + CoseSignCipher + CoseKeyDistributionCipher> CoseStructTestH
                 key_with_alg
             })
             .collect();
-        let mut aads = test_case.signers.iter().map(|v| v.external.as_slice());
+        let aads: Vec<(Vec<u8>, &[u8])> = test_case
+            .signers
+            .iter()
+            .map(|v| (v.key.key_id.clone(), v.external.as_slice()))
+            .collect();
 
-        let verify_result = self.try_verify(backend, &mut &keys, false, &mut &mut aads);
+        let verify_result = self.try_verify(backend, &keys, &aads);
 
         if case.fail {
             verify_result.expect_err("invalid token was successfully verified");

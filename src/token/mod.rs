@@ -155,12 +155,12 @@
 
 use crate::common::cbor_values::ByteString;
 use crate::error::AccessTokenError;
-use crate::token::cose::CoseCipher;
 pub use crate::token::cose::CoseSignCipher;
+use crate::token::cose::{CoseAadProvider, CoseCipher};
 use ciborium::value::Value;
 use cose::determine_algorithm;
 use cose::CoseRecipientBuilderExt;
-use cose::{generate_cek_for_alg, CoseKeyProvider, CoseParsedKey};
+use cose::{generate_cek_for_alg, CoseKeyProvider};
 use cose::{
     CoseEncrypt0BuilderExt, CoseEncrypt0Ext, CoseEncryptBuilderExt, CoseEncryptCipher,
     CoseEncryptExt, CoseKeyDistributionCipher,
@@ -206,11 +206,11 @@ mod tests;
 /// let token: ByteString = encrypt_access_token::<FakeCrypto, FakeRng>(&key, claims.clone(), None, None, None, rng)?;
 /// assert_eq!(decrypt_access_token::<FakeCrypto>(&key, &token, None)?, claims);
 /// ```
-pub fn encrypt_access_token<T>(
+pub fn encrypt_access_token<T, AAD: CoseAadProvider + ?Sized>(
     backend: &mut T,
     key: &CoseKey,
     claims: ClaimsSet,
-    external_aad: Option<&[u8]>,
+    external_aad: &AAD,
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
@@ -220,12 +220,11 @@ where
     CoseEncrypt0Builder::new()
         .try_encrypt(
             backend,
-            &mut &*key,
-            true,
+            key,
             protected_header,
             unprotected_header,
             claims.to_vec()?.as_slice(),
-            &mut external_aad.unwrap_or(&[]),
+            external_aad,
         )?
         .build()
         .to_vec()
@@ -257,11 +256,11 @@ where
 ///    vec![&key1, &key2], claims.clone(), None, None, None rng
 /// )?;
 /// ```
-pub fn encrypt_access_token_multiple<'a, T, I>(
+pub fn encrypt_access_token_multiple<'a, T, I, AAD: CoseAadProvider + ?Sized>(
     backend: &mut T,
     keys: I,
     claims: ClaimsSet,
-    external_aad: Option<&[u8]>,
+    external_aad: &AAD,
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
@@ -273,14 +272,14 @@ where
     let mut result = CoseEncryptBuilder::new();
     let mut key_iter = keys.into_iter();
     let preset_algorithm =
-        determine_algorithm(None, unprotected_header.as_ref(), protected_header.as_ref());
+        determine_algorithm(None, protected_header.as_ref(), unprotected_header.as_ref());
 
     let cek = if key_iter.len() == 1 && preset_algorithm.is_err() {
         let key = key_iter.next().unwrap();
         let ce_alg = determine_algorithm(
-            Some(&CoseParsedKey::try_from(key)?),
-            unprotected_header.as_ref(),
+            Some(key),
             protected_header.as_ref(),
+            unprotected_header.as_ref(),
         )?;
         let recipient_header = HeaderBuilder::new()
             .algorithm(iana::Algorithm::Direct)
@@ -301,17 +300,16 @@ where
 
         for key in key_iter {
             // TODO allow manually setting headers for each recipient.
-            let kek_alg = determine_algorithm(Some(&CoseParsedKey::try_from(key)?), None, None)?;
+            let kek_alg = determine_algorithm(Some(key), None, None)?;
             let recipient_header = HeaderBuilder::new().algorithm(kek_alg).build();
             let recipient = CoseRecipientBuilder::new().try_encrypt(
                 backend,
-                &mut &*key,
-                true,
+                key,
                 EncryptionContext::EncRecipient,
                 None,
                 Some(recipient_header),
                 cek_v.as_slice(),
-                &mut (&[] as &[u8]),
+                None,
             )?;
 
             result = result.add_recipient(recipient.build());
@@ -321,12 +319,11 @@ where
 
     result = result.try_encrypt(
         backend,
-        &mut &cek,
-        true,
+        &cek,
         protected_header,
         unprotected_header,
         claims.to_vec()?.as_slice(),
-        &mut external_aad.unwrap_or(&[]),
+        external_aad,
     )?;
     result.build().to_vec().map_err(AccessTokenError::from)
 }
@@ -357,11 +354,11 @@ where
 /// let token: ByteString = sign_access_token::<FakeCrypto, FakeRng>(&key, claims, None, None, None, rng)?;
 /// assert!(verify_access_token::<FakeCrypto>(&key, &token, None).is_ok());
 /// ```
-pub fn sign_access_token<T>(
+pub fn sign_access_token<T, AAD: CoseAadProvider + ?Sized>(
     backend: &mut T,
     key: &CoseKey,
     claims: ClaimsSet,
-    external_aad: Option<&[u8]>,
+    external_aad: &AAD,
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
@@ -372,10 +369,10 @@ where
         .payload(claims.to_vec()?)
         .try_sign(
             backend,
-            &mut &*key,
+            key,
             protected_header,
             unprotected_header,
-            &mut external_aad.unwrap_or(&[]),
+            external_aad,
         )?
         .build()
         .to_vec()
@@ -407,11 +404,11 @@ where
 ///     rng
 /// )?;
 /// ```
-pub fn sign_access_token_multiple<'a, T, I>(
+pub fn sign_access_token_multiple<'a, T, I, AAD: CoseAadProvider + ?Sized>(
     backend: &mut T,
     keys: I,
     claims: ClaimsSet,
-    external_aad: Option<&[u8]>,
+    external_aad: &AAD,
     unprotected_header: Option<Header>,
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
@@ -427,12 +424,7 @@ where
         builder = builder.protected(protected);
     }
     for (key, signature) in keys {
-        builder = builder.try_add_sign::<T, &CoseKey, &[u8]>(
-            backend,
-            &mut &*key,
-            signature,
-            &mut external_aad.unwrap_or(&[]),
-        )?;
+        builder = builder.try_add_sign::<T, &CoseKey, _>(backend, &key, signature, external_aad)?;
     }
 
     builder.build().to_vec().map_err(AccessTokenError::from)
@@ -507,19 +499,19 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
 ///   (e.g., if it's not in fact a [`CoseSign1`] structure but rather something else).
 /// - When there's a verification error coming from the cipher `T`
 ///   (e.g., if the `token`'s data does not match its signature).
-pub fn verify_access_token<T, CKP>(
+pub fn verify_access_token<T, CKP, AAD: CoseAadProvider + ?Sized>(
     backend: &mut T,
-    key_provider: &mut CKP,
-    try_all_keys: bool,
+    key_provider: &CKP,
+
     token: &ByteString,
-    mut external_aad: Option<&[u8]>,
+    external_aad: &AAD,
 ) -> Result<(), AccessTokenError<T::Error>>
 where
     T: CoseSignCipher,
     CKP: CoseKeyProvider,
 {
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
-    sign.try_verify(backend, key_provider, try_all_keys, &mut external_aad)
+    sign.try_verify(backend, key_provider, external_aad)
         .map_err(AccessTokenError::from)
 }
 
@@ -538,19 +530,19 @@ where
 ///   (e.g., if it's not in fact a [`CoseSign`] structure but rather something else).
 /// - When there's a verification error coming from the cipher `T`
 ///   (e.g., if the `token`'s data does not match its signature).
-pub fn verify_access_token_multiple<T, CKP>(
+pub fn verify_access_token_multiple<T, CKP, AAD: CoseAadProvider + ?Sized>(
     backend: &mut T,
-    key_provider: &mut CKP,
-    try_all_keys: bool,
+    key_provider: &CKP,
+
     token: &ByteString,
-    mut external_aad: Option<&[u8]>,
+    external_aad: &AAD,
 ) -> Result<(), AccessTokenError<T::Error>>
 where
     T: CoseSignCipher,
     CKP: CoseKeyProvider,
 {
     let sign = CoseSign::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
-    sign.try_verify(backend, key_provider, try_all_keys, &mut external_aad)?;
+    sign.try_verify(backend, key_provider, external_aad)?;
     Ok(())
 }
 
@@ -570,24 +562,19 @@ where
 /// - When there's a decryption error coming from the cipher given by `T`.
 /// - When the deserialized and decrypted [`CoseEncrypt0`] structure does not contain a valid
 ///   [`ClaimsSet`].
-pub fn decrypt_access_token<T, CKP>(
+pub fn decrypt_access_token<T, CKP, AAD: CoseAadProvider + ?Sized>(
     backend: &mut T,
-    key_provider: &mut CKP,
-    try_all_keys: bool,
+    key_provider: &CKP,
+
     token: &ByteString,
-    external_aad: Option<&[u8]>,
+    external_aad: &AAD,
 ) -> Result<ClaimsSet, AccessTokenError<T::Error>>
 where
     T: CoseEncryptCipher,
     CKP: CoseKeyProvider,
 {
     let encrypt = CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
-    let result = encrypt.try_decrypt(
-        backend,
-        key_provider,
-        try_all_keys,
-        &mut external_aad.unwrap_or(&[] as &[u8]),
-    )?;
+    let result = encrypt.try_decrypt(backend, key_provider, external_aad)?;
     ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from)
 }
 
@@ -610,23 +597,18 @@ where
 ///   [`ClaimsSet`].
 /// - When the [`CoseEncrypt`] contains either multiple matching recipients or none at all for
 ///   the given `kek`.
-pub fn decrypt_access_token_multiple<T, CKP>(
+pub fn decrypt_access_token_multiple<T, CKP, AAD: CoseAadProvider + ?Sized>(
     backend: &mut T,
-    key_provider: &mut CKP,
-    try_all_keys: bool,
+    key_provider: &CKP,
+
     token: &ByteString,
-    external_aad: Option<&[u8]>,
+    external_aad: &AAD,
 ) -> Result<ClaimsSet, AccessTokenError<T::Error>>
 where
     T: CoseEncryptCipher + CoseKeyDistributionCipher,
     CKP: CoseKeyProvider,
 {
     let encrypt = CoseEncrypt::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
-    let result = encrypt.try_decrypt_with_recipients(
-        backend,
-        key_provider,
-        try_all_keys,
-        &mut external_aad.unwrap_or(&[] as &[u8]),
-    )?;
+    let result = encrypt.try_decrypt_with_recipients(backend, key_provider, external_aad)?;
     ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from)
 }

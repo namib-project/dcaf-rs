@@ -234,7 +234,7 @@ fn test_encrypt_decrypt(
         &mut backend,
         &key,
         claims.clone(),
-        Some(&aad),
+        &aad.as_slice(),
         Some(unprotected_header.clone()),
         Some(protected_header.clone()),
     )?;
@@ -242,7 +242,7 @@ fn test_encrypt_decrypt(
     assert_header_is_part_of(&unprotected_header, &unprotected);
     assert_header_is_part_of(&protected_header, &protected.header);
     assert_eq!(
-        decrypt_access_token(&mut backend, &mut &key, false, &encrypted, Some(&aad))?,
+        decrypt_access_token(&mut backend, &key, &encrypted, &aad.as_slice())?,
         claims
     );
     Ok(())
@@ -272,7 +272,7 @@ fn test_encrypt_decrypt_multiple(
         &mut backend,
         vec![&key1, &key2],
         claims.clone(),
-        Some(&aad),
+        &aad,
         Some(unprotected_header.clone()),
         Some(protected_header.clone()),
     )?;
@@ -281,17 +281,11 @@ fn test_encrypt_decrypt_multiple(
     assert_header_is_part_of(&protected_header, &protected.header);
     for key in vec![key1, key2] {
         assert_eq!(
-            &decrypt_access_token_multiple(&mut backend, &mut &key, false, &encrypted, Some(&aad))?,
+            &decrypt_access_token_multiple(&mut backend, &key, &encrypted, &aad)?,
             &claims
         );
     }
-    let failed = decrypt_access_token_multiple(
-        &mut backend,
-        &mut &invalid_key1,
-        false,
-        &encrypted,
-        Some(&aad),
-    );
+    let failed = decrypt_access_token_multiple(&mut backend, &invalid_key1, &encrypted, &aad);
     assert!(failed
         .err()
         .filter(|x| matches!(
@@ -299,13 +293,7 @@ fn test_encrypt_decrypt_multiple(
             AccessTokenError::CoseCipherError(CoseCipherError::NoMatchingKeyFound(_))
         ))
         .is_some());
-    let failed = decrypt_access_token_multiple(
-        &mut backend,
-        &mut &invalid_key2,
-        false,
-        &encrypted,
-        Some(&aad),
-    );
+    let failed = decrypt_access_token_multiple(&mut backend, &invalid_key2, &encrypted, &aad);
     assert!(failed
         .err()
         .filter(|x| matches!(
@@ -328,7 +316,7 @@ fn test_encrypt_decrypt_match_multiple(
         &mut backend,
         vec![&key1, &key1],
         claims,
-        Some(&aad),
+        &aad,
         Some(unprotected_header.clone()),
         Some(protected_header.clone()),
     )?;
@@ -336,7 +324,7 @@ fn test_encrypt_decrypt_match_multiple(
     assert_header_is_part_of(&unprotected_header, &unprotected);
     assert_header_is_part_of(&protected_header, &protected.header);
     // In the future, this should only be an error in "strict mode".
-    decrypt_access_token_multiple(&mut backend, &mut &key1, false, &encrypted, Some(&aad))
+    decrypt_access_token_multiple(&mut backend, &key1, &encrypted, &aad)
         .expect("error while decrypting");
     Ok(())
 }
@@ -354,7 +342,7 @@ fn test_encrypt_decrypt_invalid_header(
         &mut backend,
         &key,
         claims.clone(),
-        Some(&aad),
+        &aad,
         Some(unprotected_invalid),
         Some(protected_header),
     );
@@ -374,7 +362,7 @@ fn test_encrypt_decrypt_invalid_header(
         &mut backend,
         &key,
         claims,
-        Some(&aad),
+        &aad,
         Some(unprotected_header),
         Some(protected_invalid),
     );
@@ -406,7 +394,7 @@ fn test_sign_verify() -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as C
         &mut backend,
         &key,
         claims,
-        Some(&aad),
+        &aad,
         Some(unprotected_header.clone()),
         Some(protected_header.clone()),
     )?;
@@ -417,7 +405,7 @@ fn test_sign_verify() -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as C
         get_token_headers(&signed).ok_or(AccessTokenError::<Infallible>::UnknownCoseStructure)?;
     assert_header_is_part_of(&unprotected_header, &unprotected);
     assert_header_is_part_of(&protected_header, &protected.header);
-    verify_access_token(&mut backend, &mut &key, false, &signed, Some(&aad))?;
+    verify_access_token(&mut backend, &key, &signed, &aad)?;
     Ok(())
 }
 
@@ -446,7 +434,7 @@ fn test_sign_verify_multiple(
             (&key2, CoseSignature::default()),
         ],
         claims,
-        Some(&aad),
+        &aad,
         Some(unprotected_header.clone()),
         Some(protected_header.clone()),
     )?;
@@ -455,33 +443,25 @@ fn test_sign_verify_multiple(
     assert_header_is_part_of(&unprotected_header, &unprotected);
     assert_header_is_part_of(&protected_header, &protected.header);
     for key in vec![key1, key2] {
-        verify_access_token_multiple(&mut backend, &mut &key, false, &signed, Some(&aad))?;
+        verify_access_token_multiple(&mut backend, &key, &signed, &aad)?;
     }
-    assert!(verify_access_token_multiple(
-        &mut backend,
-        &mut &invalid_key1,
-        false,
-        &signed,
-        Some(&aad)
-    )
-    .err()
-    .filter(|x| matches!(
-        x,
-        AccessTokenError::CoseCipherError(CoseCipherError::VerificationFailure)
-    ))
-    .is_some());
-    assert!(verify_access_token_multiple(
-        &mut backend,
-        &mut &invalid_key2,
-        false,
-        &signed,
-        Some(&aad)
-    )
-    .err()
-    .filter(|x| matches!(
-        x,
-        AccessTokenError::CoseCipherError(CoseCipherError::VerificationFailure)
-    ))
-    .is_some());
+    assert!(
+        verify_access_token_multiple(&mut backend, &invalid_key1, &signed, &aad)
+            .err()
+            .filter(|x| matches!(
+                x,
+                AccessTokenError::CoseCipherError(CoseCipherError::VerificationFailure)
+            ))
+            .is_some()
+    );
+    assert!(
+        verify_access_token_multiple(&mut backend, &invalid_key2, &signed, &aad)
+            .err()
+            .filter(|x| matches!(
+                x,
+                AccessTokenError::CoseCipherError(CoseCipherError::VerificationFailure)
+            ))
+            .is_some()
+    );
     Ok(())
 }

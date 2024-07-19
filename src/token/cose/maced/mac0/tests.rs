@@ -35,8 +35,8 @@ impl<B: CoseCipher + CoseMacCipher> CoseStructTestHelper<B> for CoseMac0 {
         let enc_key = if recipient.alg == Some(coset::Algorithm::Assigned(Algorithm::Direct))
             || determine_algorithm::<Infallible>(
                 None,
-                recipient.unprotected.as_ref(),
                 recipient.protected.as_ref(),
+                recipient.unprotected.as_ref(),
             ) == Ok(Algorithm::Direct)
         {
             recipient.key.clone()
@@ -54,12 +54,11 @@ impl<B: CoseCipher + CoseMacCipher> CoseStructTestHelper<B> for CoseMac0 {
         let mac0 = mac0
             .try_compute(
                 backend,
-                &mut &enc_key,
-                false,
+                &enc_key,
                 mac0_cfg.protected.clone(),
                 Some(unprotected),
                 case.input.plaintext.clone().into_bytes(),
-                &mut mac0_cfg.external.as_slice(),
+                mac0_cfg.external.as_slice(),
             )
             .expect("unable to encrypt Mac0 object");
 
@@ -101,9 +100,9 @@ impl<B: CoseCipher + CoseMacCipher> CoseStructTestHelper<B> for CoseMac0 {
                 key_with_alg
             })
             .collect();
-        let mut aad = test_case.external.as_slice();
+        let aad = test_case.external.as_slice();
 
-        let verify_result = self.try_verify(backend, &mut &keys, false, &mut aad);
+        let verify_result = self.try_verify(backend, &keys, aad);
 
         if case.fail {
             verify_result.expect_err("invalid token was successfully verified");

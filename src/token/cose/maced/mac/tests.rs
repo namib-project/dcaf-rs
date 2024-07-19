@@ -45,8 +45,8 @@ impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHe
         if recipient.alg == Some(coset::Algorithm::Assigned(Algorithm::Direct))
             || determine_algorithm::<Infallible>(
                 None,
-                recipient.unprotected.as_ref(),
                 recipient.protected.as_ref(),
+                recipient.unprotected.as_ref(),
             ) == Ok(Algorithm::Direct)
         {
             enc_key = recipient.key.clone();
@@ -64,13 +64,12 @@ impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHe
             recipient_struct_builder = recipient_struct_builder
                 .try_encrypt(
                     backend,
-                    &mut &recipient.key,
-                    true,
+                    &recipient.key,
                     EncryptionContext::EncRecipient,
                     recipient.protected.clone(),
                     recipient.unprotected.clone(),
                     parsed_key.k,
-                    &mut (&[] as &[u8]),
+                    &[] as &[u8],
                 )
                 .expect("unable to create CoseRecipient structure");
         }
@@ -78,12 +77,11 @@ impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHe
         mac.add_recipient(recipient_struct_builder.build())
             .try_compute(
                 backend,
-                &mut &enc_key,
-                false,
+                &enc_key,
                 mac_cfg.protected.clone(),
                 Some(unprotected),
                 case.input.plaintext.clone().into_bytes(),
-                &mut mac_cfg.external.as_slice(),
+                mac_cfg.external.as_slice(),
             )
             .expect("unable to encrypt Encrypt object")
             .build()
@@ -115,9 +113,9 @@ impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHe
                 key_with_alg
             })
             .collect();
-        let mut aad = test_case.external.as_slice();
+        let aad = test_case.external.as_slice();
 
-        let verify_result = self.try_verify_with_recipients(backend, &mut &keys, false, &mut aad);
+        let verify_result = self.try_verify_with_recipients(backend, &keys, aad);
 
         if case.fail {
             verify_result.expect_err("invalid token was successfully verified");

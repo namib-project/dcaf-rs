@@ -27,10 +27,10 @@ impl<B: CoseCipher + CoseSignCipher> CoseStructTestHelper<B> for CoseSign1 {
             .payload(case.input.plaintext.clone().into_bytes())
             .try_sign(
                 backend,
-                &mut &sign1_cfg.key,
+                &sign1_cfg.key,
                 sign1_cfg.protected.clone(),
                 sign1_cfg.unprotected.clone(),
-                &mut sign1_cfg.external.as_slice(),
+                sign1_cfg.external.as_slice(),
             )
             .expect("unable to sign Sign1 object")
             .build()
@@ -52,7 +52,7 @@ impl<B: CoseCipher + CoseSignCipher> CoseStructTestHelper<B> for CoseSign1 {
         let sign1_case = case.input.sign0.as_ref().expect("expected Sign1 test case");
         let key: CoseKey = sign1_case.key.clone();
 
-        let verify_result = self.try_verify(backend, &mut &key, false, &mut &*sign1_case.external);
+        let verify_result = self.try_verify(backend, &key, sign1_case.external.as_slice());
 
         if case.fail {
             verify_result.expect_err("invalid token was successfully verified");

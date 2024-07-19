@@ -44,29 +44,27 @@ pub trait CoseMac0BuilderExt: Sized {
     /// # Examples
     ///
     /// TODO
-    fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
+        key_provider: &CKP,
         protected: Option<Header>,
         unprotected: Option<Header>,
         // TODO remove payload (can be set individually)
         payload: Vec<u8>,
-        external_aad: &mut CAP,
+        external_aad: CAP,
     ) -> Result<Self, CoseCipherError<B::Error>>;
 }
 
 impl CoseMac0BuilderExt for CoseMac0Builder {
-    fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
+        key_provider: &CKP,
         protected: Option<Header>,
         unprotected: Option<Header>,
         payload: Vec<u8>,
-        external_aad: &mut CAP,
+        external_aad: CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let mut builder = self;
         if let Some(protected) = &protected {
@@ -77,14 +75,15 @@ impl CoseMac0BuilderExt for CoseMac0Builder {
         }
         builder = builder.payload(payload);
         builder.try_create_tag(
-            external_aad.lookup_aad(None, protected.as_ref(), unprotected.as_ref()),
+            external_aad
+                .lookup_aad(None, protected.as_ref(), unprotected.as_ref())
+                .unwrap_or(&[] as &[u8]),
             |input| {
                 try_compute(
                     backend,
                     key_provider,
                     protected.as_ref(),
                     unprotected.as_ref(),
-                    try_all_keys,
                     input,
                 )
             },
@@ -148,8 +147,7 @@ pub trait CoseMac0Ext {
     ///     cose_object.try_verify(
     ///         &mut OpensslContext::new(),
     ///         &mut &key,
-    ///         false,
-    ///         &mut aad.as_slice()
+    ///         &aad
     ///     ).is_ok()
     /// );
     /// ```
@@ -186,41 +184,38 @@ pub trait CoseMac0Ext {
     ///         cose_object.try_verify(
     ///             &mut OpensslContext::new(),
     ///             &mut &key,
-    ///             true,
-    ///             &mut aad.as_slice()
+    ///             &aad
     ///         ),
     ///         Err(CoseCipherError::NoMatchingKeyFound(_))
     ///     )
     /// );
     /// ```
-    fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         &self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
-        external_aad: &mut CAP,
+        key_provider: &CKP,
+        external_aad: CAP,
     ) -> Result<(), CoseCipherError<B::Error>>;
 }
 
 impl CoseMac0Ext for CoseMac0 {
-    fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         &self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
-        external_aad: &mut CAP,
+        key_provider: &CKP,
+        external_aad: CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
         let backend = Rc::new(RefCell::new(backend));
-        let key_provider = Rc::new(RefCell::new(key_provider));
         self.verify_tag(
-            external_aad.lookup_aad(None, Some(&self.protected.header), Some(&self.unprotected)),
+            external_aad
+                .lookup_aad(None, Some(&self.protected.header), Some(&self.unprotected))
+                .unwrap_or(&[] as &[u8]),
             |tag, input| {
                 try_verify(
                     &backend,
-                    &key_provider,
+                    key_provider,
                     &self.protected.header,
                     &self.unprotected,
-                    try_all_keys,
                     tag,
                     input,
                 )

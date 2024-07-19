@@ -53,12 +53,11 @@ impl<B: CoseCipher + CoseEncryptCipher> CoseStructTestHelper<B> for CoseEncrypt0
         encrypt0
             .try_encrypt(
                 backend,
-                &mut &recipient.key,
-                false,
+                &recipient.key,
                 encrypt0_cfg.protected.clone(),
                 Some(unprotected),
-                &case.input.plaintext.clone().into_bytes(),
-                &mut encrypt0_cfg.external.as_slice(),
+                case.input.plaintext.clone().into_bytes().as_slice(),
+                encrypt0_cfg.external.as_slice(),
             )
             .expect("unable to encrypt Encrypt0 object")
             .build()
@@ -94,9 +93,9 @@ impl<B: CoseCipher + CoseEncryptCipher> CoseStructTestHelper<B> for CoseEncrypt0
                 key_with_alg
             })
             .collect();
-        let mut aad = test_case.external.as_slice();
+        let aad = test_case.external.as_slice();
 
-        let verify_result = self.try_decrypt(backend, &mut &keys, false, &mut aad);
+        let verify_result = self.try_decrypt(backend, &keys, aad);
 
         if case.fail {
             verify_result.expect_err("invalid token was successfully verified");

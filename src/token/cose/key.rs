@@ -1,10 +1,9 @@
-use alloc::boxed::Box;
+use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
-use core::borrow::BorrowMut;
+use ciborium::Value;
+use core::borrow::Borrow;
 use core::fmt::Display;
 use core::marker::PhantomData;
-
-use ciborium::Value;
 use coset::iana::EnumI64;
 use coset::{
     iana, Algorithm, AsCborValue, CoseKey, EncryptionContext, Header, KeyType, Label,
@@ -12,7 +11,7 @@ use coset::{
 };
 
 use crate::error::CoseCipherError;
-use crate::token::cose::CoseCipher;
+use crate::token::cose::{determine_header_param, CoseCipher};
 
 /// Finds a key parameter by its label.
 fn find_param_by_label<'a>(label: &Label, param_vec: &'a [(Label, Value)]) -> Option<&'a Value> {
@@ -391,12 +390,18 @@ impl<'a, OE: Display> AsRef<CoseKey> for CoseSymmetricKey<'a, OE> {
 }
 
 /// A trait for types that can provide [CoseKey]s for COSE structure operations.
-pub trait CoseKeyProvider {
+pub trait CoseKeyProvider: Sized {
     /// Look up a key for the signature based on the provided `key_id` hint.
     ///
     /// The iterator returned should contain all [CoseKey]s of the provider that have a key ID
     /// matching the one provided, or all [CoseKey]s available if key_id is None.
-    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey>;
+    fn lookup_key(&self, key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>>;
+
+    /// Create a [CoseKeyProvider] filtering this key providers output for keys with key IDs
+    /// matching the COSE structure's header.
+    fn match_key_ids(self) -> KeyProviderFilterMatchingKeyId<Self> {
+        KeyProviderFilterMatchingKeyId(self)
+    }
 }
 
 // Unfortunately, this implementation is exclusive with the implementation for &CoseKey, because at
@@ -416,51 +421,58 @@ pub trait CoseKeyProvider {
     }
 }*/
 
-impl CoseKeyProvider for &Vec<&CoseKey> {
-    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
-        let mut iter: Box<dyn Iterator<Item = &CoseKey>> = Box::new(self.clone().into_iter());
-        if let Some(kid) = key_id {
-            let test = Vec::from(kid);
-            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == test));
-        }
-        iter.cloned()
+impl CoseKeyProvider for Vec<&CoseKey> {
+    fn lookup_key(&self, _key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>> {
+        self.clone().into_iter()
     }
 }
 
-impl CoseKeyProvider for &Vec<CoseKey> {
-    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
-        let mut iter: Box<dyn Iterator<Item = &CoseKey>> = Box::new(self.iter());
-
-        if let Some(kid) = key_id {
-            let kid = Vec::from(kid);
-            iter = Box::new(iter.filter(move |k| k.key_id.as_slice() == kid));
-        }
-        iter.cloned()
+impl CoseKeyProvider for Vec<CoseKey> {
+    fn lookup_key(&self, _key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>> {
+        self.iter()
     }
 }
 
 impl CoseKeyProvider for Option<&CoseKey> {
-    fn lookup_key(&mut self, key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
-        let ret: Box<dyn Iterator<Item = &CoseKey>> = match (self, &key_id) {
-            (Some(key), Some(key_id)) if key.key_id.as_slice() != *key_id => {
-                Box::new(core::iter::empty())
-            }
-            (Some(key), Some(_key_id)) => Box::new(core::iter::once(*key)),
-            (v, _) => Box::new(v.iter().copied()),
-        };
-        ret.cloned()
+    fn lookup_key(&self, _key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>> {
+        self.iter().copied()
     }
 }
 
-impl CoseKeyProvider for &CoseKey {
-    fn lookup_key(&mut self, _key_id: Option<&[u8]>) -> impl Iterator<Item = CoseKey> {
-        core::iter::once(self.clone())
+impl CoseKeyProvider for Option<CoseKey> {
+    fn lookup_key(&self, _key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>> {
+        self.iter()
+    }
+}
+
+impl CoseKeyProvider for CoseKey {
+    fn lookup_key(&self, _key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>> {
+        core::iter::once(self)
+    }
+}
+
+/// [CoseKeyProvider] that filters another [CoseKeyProvider]s output to only output keys with
+/// key IDs matching the ones provided in the COSE structure's headers.
+pub struct KeyProviderFilterMatchingKeyId<T: CoseKeyProvider>(T);
+
+impl<T: CoseKeyProvider> CoseKeyProvider for KeyProviderFilterMatchingKeyId<T> {
+    fn lookup_key(&self, key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>> {
+        self.0.lookup_key(key_id).filter(move |k| {
+            let k: &CoseKey = k.borrow();
+            key_id.map_or(true, |lookup_kid| k.key_id.as_slice().eq(lookup_kid))
+        })
+    }
+}
+
+impl<T: CoseKeyProvider> CoseKeyProvider for &T {
+    fn lookup_key(&self, key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>> {
+        (*self).lookup_key(key_id)
     }
 }
 
 /// A trait for types that can determine the corresponding Additional Authenticated Data to be
 /// provided for a given COSE structure.
-pub trait CoseAadProvider: BorrowMut<Self> {
+pub trait CoseAadProvider: Sized {
     /// Look up the additional authenticated data for the given COSE structure.
     ///
     /// # Parameters
@@ -472,98 +484,240 @@ pub trait CoseAadProvider: BorrowMut<Self> {
     /// - `unprotected` - Unprotected headers for the COSE structure for which AAD should be
     ///                   provided.
     fn lookup_aad(
-        &mut self,
+        &self,
         context: Option<EncryptionContext>,
         protected: Option<&Header>,
         unprotected: Option<&Header>,
-    ) -> &[u8];
+    ) -> Option<&[u8]>;
+
+    /// Lookup up the additional authenticated data for nested COSE structures nested inside the
+    /// one whose decryption was actually requested.
+    ///
+    /// For the provided implementations, this will usually return an empty slice.
+    /// If you want to provide AAD for nested structures, either use a tuple
+    /// `(CoseAadProvider, CoseAadProvider)` or provide a tuple `(CoseAadProvider, bool)`.
+    ///
+    /// In the first case, the second arguments' [CoseAadProvider::lookup_aad]
+    /// will be used as [CoseAadProvider::lookup_nested_aad] if its
+    /// [CoseAadProvider::lookup_nested_aad] returns `None`.
+    ///
+    /// In the latter case, the boolean argument specifies whether [CoseAadProvider::lookup_aad]
+    /// should be used as a fallback if [CoseAadProvider::lookup_nested_aad] returns `None`.
+    ///
+    /// # Parameters
+    ///
+    /// - `context`     - Type of object that should be encrypted with AAD.
+    ///                   If the AAD should be provided for a non-encrypted object, `context` is
+    ///                   `None`.
+    /// - `protected`   - Protected headers for the COSE structure for which AAD should be provided.
+    /// - `unprotected` - Unprotected headers for the COSE structure for which AAD should be
+    ///                   provided.
+    #[allow(unused)]
+    fn lookup_nested_aad(
+        &self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        None
+    }
 }
 
-// See above, impossible due to missing specialization feature.
-/*impl<'a, T: Iterator<Item = &'a [u8]>> CoseAadProvider for &mut T {
-    fn lookup_aad(&mut self, _signature: &CoseSignature) -> &'a [u8] {
-        self.next().map(|v| v.as_ref()).unwrap_or(&[] as &[u8])
+impl CoseAadProvider for Vec<u8> {
+    fn lookup_aad(
+        &self,
+        _context: Option<EncryptionContext>,
+        _protected: Option<&Header>,
+        _unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        Some(self.as_ref())
     }
-}*/
+}
 
 impl CoseAadProvider for &[u8] {
     fn lookup_aad(
-        &mut self,
-        context: Option<EncryptionContext>,
+        &self,
+        _context: Option<EncryptionContext>,
         _protected: Option<&Header>,
         _unprotected: Option<&Header>,
-    ) -> &[u8] {
-        match context {
-            Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => self,
-            Some(
-                EncryptionContext::EncRecipient
-                | EncryptionContext::MacRecipient
-                | EncryptionContext::RecRecipient,
-            ) => &[] as &[u8],
-        }
+    ) -> Option<&[u8]> {
+        Some(self)
     }
 }
 
 impl CoseAadProvider for Option<&[u8]> {
     fn lookup_aad(
-        &mut self,
-        context: Option<EncryptionContext>,
+        &self,
+        _context: Option<EncryptionContext>,
         _protected: Option<&Header>,
         _unprotected: Option<&Header>,
-    ) -> &[u8] {
-        match context {
-            Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => {
-                self.unwrap_or(&[] as &[u8])
-            }
-            Some(
-                EncryptionContext::EncRecipient
-                | EncryptionContext::MacRecipient
-                | EncryptionContext::RecRecipient,
-            ) => &[] as &[u8],
-        }
+    ) -> Option<&[u8]> {
+        *self
     }
 }
 
-impl<'a, 'b: 'a> CoseAadProvider for core::slice::Iter<'a, &'b [u8]> {
-    fn lookup_aad(
-        &mut self,
-        context: Option<EncryptionContext>,
-        _protected: Option<&Header>,
-        _unprotected: Option<&Header>,
-    ) -> &[u8] {
-        match context {
-            Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => {
-                self.next().copied().unwrap_or(&[] as &[u8])
-            }
-            Some(
-                EncryptionContext::EncRecipient
-                | EncryptionContext::MacRecipient
-                | EncryptionContext::RecRecipient,
-            ) => &[] as &[u8],
-        }
-    }
-}
-
-impl<'a, 'b: 'a, I: Iterator, F> CoseAadProvider for &'a mut core::iter::Map<I, F>
-where
-    F: FnMut(I::Item) -> &'b [u8],
+/// Look up additional authenticated data based on the key ID
+#[cfg(feature = "std")]
+impl<AAD: AsRef<[u8]>, S: core::hash::BuildHasher> CoseAadProvider
+    for std::collections::HashMap<&[u8], AAD, S>
 {
     fn lookup_aad(
-        &mut self,
-        context: Option<EncryptionContext>,
-        _protected: Option<&Header>,
-        _unprotected: Option<&Header>,
-    ) -> &[u8] {
-        match context {
-            Some(EncryptionContext::CoseEncrypt | EncryptionContext::CoseEncrypt0) | None => {
-                self.next().unwrap_or(&[] as &[u8])
+        &self,
+        _context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        determine_header_param(protected, unprotected, |v| {
+            if v.key_id.is_empty() {
+                None
+            } else {
+                Some(v.key_id.clone())
             }
-            Some(
-                EncryptionContext::EncRecipient
-                | EncryptionContext::MacRecipient
-                | EncryptionContext::RecRecipient,
-            ) => &[] as &[u8],
+        })
+        .and_then(|kid| self.get(kid.as_slice()))
+        .map(AsRef::as_ref)
+    }
+}
+
+/// Look up additional authenticated data based on the key ID
+impl<AAD: AsRef<[u8]>> CoseAadProvider for BTreeMap<&[u8], AAD> {
+    fn lookup_aad(
+        &self,
+        _context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        determine_header_param(protected, unprotected, |v| {
+            if v.key_id.is_empty() {
+                None
+            } else {
+                Some(v.key_id.clone())
+            }
+        })
+        .and_then(|kid| self.get(kid.as_slice()))
+        .map(AsRef::as_ref)
+    }
+}
+
+/// Look up additional authenticated data based on the key ID
+impl<KID: AsRef<[u8]>, AAD: AsRef<[u8]>> CoseAadProvider for alloc::vec::Vec<(KID, AAD)> {
+    fn lookup_aad(
+        &self,
+        _context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        let kid = determine_header_param(protected, unprotected, |v| {
+            if v.key_id.is_empty() {
+                None
+            } else {
+                Some(v.key_id.clone())
+            }
+        });
+        if let Some(kid) = kid {
+            self.iter().find_map(|(key_kid, aad)| {
+                if key_kid.as_ref().eq(kid.as_slice()) {
+                    Some(aad.as_ref())
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
         }
+    }
+}
+
+/// Use T's `lookup_aad` for the normal AAD lookup, use U's `lookup_nested_aad` and `lookup_aad` for
+/// nested AAD lookups (`lookup_nested_aad` takes precedence, though).
+impl<T: CoseAadProvider, U: CoseAadProvider> CoseAadProvider for (T, U) {
+    fn lookup_aad(
+        &self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        self.0.lookup_aad(context, protected, unprotected)
+    }
+
+    fn lookup_nested_aad(
+        &self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        self.1
+            .lookup_nested_aad(context, protected, unprotected)
+            .or_else(|| self.1.lookup_aad(context, protected, unprotected))
+    }
+}
+
+/// Swap lookup_aad and lookup_nested_aad of an existing [CoseAadProvider].
+pub struct InvertedAadProvider<T: CoseAadProvider>(pub T);
+
+impl<T: CoseAadProvider> CoseAadProvider for InvertedAadProvider<T> {
+    fn lookup_aad(
+        &self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        self.0.lookup_nested_aad(context, protected, unprotected)
+    }
+
+    fn lookup_nested_aad(
+        &self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        self.0.lookup_aad(context, protected, unprotected)
+    }
+}
+
+impl<T: CoseAadProvider> CoseAadProvider for &T {
+    fn lookup_aad(
+        &self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        (*self).lookup_aad(context, protected, unprotected)
+    }
+    fn lookup_nested_aad(
+        &self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        (*self).lookup_nested_aad(context, protected, unprotected)
+    }
+}
+
+/// Use [CoseAadProvider::lookup_aad] as a fallback for [CoseAadProvider::lookup_nested_aad] if the
+/// boolean is `true` and [CoseAadProvider::lookup_nested_aad] returns None.
+impl<T: CoseAadProvider> CoseAadProvider for (T, bool) {
+    fn lookup_aad(
+        &self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        self.0.lookup_aad(context, protected, unprotected)
+    }
+
+    fn lookup_nested_aad(
+        &self,
+        context: Option<EncryptionContext>,
+        protected: Option<&Header>,
+        unprotected: Option<&Header>,
+    ) -> Option<&[u8]> {
+        self.0
+            .lookup_nested_aad(context, protected, unprotected)
+            .or(self
+                .1
+                .then(|| self.0.lookup_aad(context, protected, unprotected))
+                .flatten())
     }
 }
 

@@ -48,38 +48,38 @@ pub trait CoseEncrypt0Ext {
     /// # Examples
     ///
     /// TODO
-    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         &self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
-        external_aad: &mut CAP,
+        key_provider: &CKP,
+
+        external_aad: CAP,
     ) -> Result<Vec<u8>, CoseCipherError<B::Error>>;
 }
 
 impl CoseEncrypt0Ext for CoseEncrypt0 {
-    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         &self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
-        external_aad: &mut CAP,
+        key_provider: &CKP,
+
+        external_aad: CAP,
     ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
         let backend = Rc::new(RefCell::new(backend));
-        let key_provider = Rc::new(RefCell::new(key_provider));
         self.decrypt(
-            external_aad.lookup_aad(
-                Some(EncryptionContext::CoseEncrypt0),
-                Some(&self.protected.header),
-                Some(&self.unprotected),
-            ),
+            external_aad
+                .lookup_aad(
+                    Some(EncryptionContext::CoseEncrypt0),
+                    Some(&self.protected.header),
+                    Some(&self.unprotected),
+                )
+                .unwrap_or(&[] as &[u8]),
             |ciphertext, aad| {
                 encrypted::try_decrypt(
-                    &backend,
-                    &key_provider,
+                    backend,
+                    key_provider,
                     &self.protected.header,
                     &self.unprotected,
-                    try_all_keys,
                     ciphertext,
                     aad,
                 )
@@ -125,28 +125,28 @@ pub trait CoseEncrypt0BuilderExt: Sized {
     /// # Examples
     ///
     /// TODO
-    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
+        key_provider: &CKP,
+
         protected: Option<Header>,
         unprotected: Option<Header>,
         payload: &[u8],
-        external_aad: &mut CAP,
+        external_aad: CAP,
     ) -> Result<Self, CoseCipherError<B::Error>>;
 }
 
 impl CoseEncrypt0BuilderExt for CoseEncrypt0Builder {
-    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider>(
+    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
         self,
         backend: &mut B,
-        key_provider: &mut CKP,
-        try_all_keys: bool,
+        key_provider: &CKP,
+
         protected: Option<Header>,
         unprotected: Option<Header>,
         payload: &[u8],
-        external_aad: &mut CAP,
+        external_aad: CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let mut builder = self;
         if let Some(protected) = &protected {
@@ -157,18 +157,19 @@ impl CoseEncrypt0BuilderExt for CoseEncrypt0Builder {
         }
         builder.try_create_ciphertext(
             payload,
-            external_aad.lookup_aad(
-                Some(EncryptionContext::CoseEncrypt0),
-                protected.as_ref(),
-                unprotected.as_ref(),
-            ),
+            external_aad
+                .lookup_aad(
+                    Some(EncryptionContext::CoseEncrypt0),
+                    protected.as_ref(),
+                    unprotected.as_ref(),
+                )
+                .unwrap_or(&[] as &[u8]),
             |plaintext, aad| {
                 encrypted::try_encrypt(
                     backend,
                     key_provider,
                     protected.as_ref(),
                     unprotected.as_ref(),
-                    try_all_keys,
                     plaintext,
                     aad,
                 )

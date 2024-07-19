@@ -17,11 +17,8 @@ pub use sign::{CoseSignBuilderExt, CoseSignExt};
 pub use sign1::{CoseSign1BuilderExt, CoseSign1Ext};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::header_util::{
-    check_for_duplicate_headers, determine_algorithm, determine_key_candidates,
-};
 use crate::token::cose::key::{CoseEc2Key, CoseKeyProvider, CoseParsedKey};
-use crate::token::cose::{key, CoseCipher};
+use crate::token::cose::{header_util, key, CoseCipher};
 
 mod sign;
 mod sign1;
@@ -169,108 +166,67 @@ pub trait CoseSignCipher: CoseCipher {
 
 fn try_sign<B: CoseSignCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
-    key_provider: &mut CKP,
+    key_provider: &CKP,
     protected: Option<&Header>,
     unprotected: Option<&Header>,
     tosign: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    if let (Some(protected), Some(unprotected)) = (protected, unprotected) {
-        check_for_duplicate_headers(protected, unprotected)?;
-    }
-    let key = determine_key_candidates::<CKP>(
+    header_util::try_cose_crypto_operation(
         key_provider,
         protected,
         unprotected,
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Sign)]),
-        false,
+        |key, alg, _protected, _unprotected| {
+            let parsed_key = CoseParsedKey::try_from(key)?;
+            match alg {
+                iana::Algorithm::ES256
+                | iana::Algorithm::ES384
+                | iana::Algorithm::ES512
+                | iana::Algorithm::ES256K => {
+                    // Check if this is a valid ECDSA key.
+                    let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(alg, parsed_key, true)?;
+
+                    // Perform signing operation using backend.
+                    backend.sign_ecdsa(alg, &ec2_key, tosign)
+                }
+                alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                    alg,
+                ))),
+            }
+        },
     )
-    .next()
-    .ok_or(CoseCipherError::NoMatchingKeyFound(Vec::new()))?;
-    let parsed_key = CoseParsedKey::try_from(&key)?;
-
-    let mut sign_fn = match determine_algorithm(Some(&parsed_key), protected, unprotected)? {
-        alg @ (iana::Algorithm::ES256
-        | iana::Algorithm::ES384
-        | iana::Algorithm::ES512
-        | iana::Algorithm::ES256K) => {
-            // Check if this is a valid ECDSA key.
-            let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(alg, parsed_key, true)?;
-
-            // Perform signing operation using backend.
-            move |tosign| backend.sign_ecdsa(alg, &ec2_key, tosign)
-        }
-        alg => {
-            return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-                alg,
-            )))
-        }
-    };
-
-    sign_fn(tosign)
-}
-
-fn try_verify_with_key<B: CoseSignCipher>(
-    backend: &mut B,
-    key: CoseParsedKey<B::Error>,
-    protected: &Header,
-    unprotected: &Header,
-    signature: &[u8],
-    toverify: &[u8],
-) -> Result<(), CoseCipherError<B::Error>> {
-    check_for_duplicate_headers(protected, unprotected)?;
-
-    match determine_algorithm(Some(&key), Some(protected), Some(unprotected))? {
-        alg @ (iana::Algorithm::ES256
-        | iana::Algorithm::ES384
-        | iana::Algorithm::ES512
-        | iana::Algorithm::ES256K) => {
-            // Check if this is a valid ECDSA key.
-            let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(alg, key, false)?;
-
-            backend.verify_ecdsa(alg, &ec2_key, signature, toverify)
-        }
-        alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-            alg,
-        ))),
-    }
 }
 
 fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider>(
     backend: &mut B,
-    key_provider: &mut CKP,
+    key_provider: &CKP,
     protected: &Header,
     unprotected: &Header,
-    try_all_keys: bool,
+
     signature: &[u8],
     toverify: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
-    check_for_duplicate_headers(protected, unprotected)?;
-    let mut multi_verification_errors = Vec::new();
-    for key in determine_key_candidates::<CKP>(
+    header_util::try_cose_crypto_operation(
         key_provider,
         Some(protected),
         Some(unprotected),
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Verify)]),
-        try_all_keys,
-    ) {
-        let parsed_key = CoseParsedKey::try_from(&key)?;
-        match try_verify_with_key(
-            backend,
-            parsed_key,
-            protected,
-            unprotected,
-            signature,
-            toverify,
-        ) {
-            Ok(()) => return Ok(()),
-            Err(e) => {
-                multi_verification_errors.push((key.clone(), e));
-                continue;
-            }
-        }
-    }
+        |key, alg, _protected, _unprotected| {
+            let parsed_key = CoseParsedKey::try_from(key)?;
+            match alg {
+                iana::Algorithm::ES256
+                | iana::Algorithm::ES384
+                | iana::Algorithm::ES512
+                | iana::Algorithm::ES256K => {
+                    // Check if this is a valid ECDSA key.
+                    let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(alg, parsed_key, false)?;
 
-    Err(CoseCipherError::NoMatchingKeyFound(
-        multi_verification_errors,
-    ))
+                    backend.verify_ecdsa(alg, &ec2_key, signature, toverify)
+                }
+                alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+                    alg,
+                ))),
+            }
+        },
+    )
 }
