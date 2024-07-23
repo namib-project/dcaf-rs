@@ -28,6 +28,7 @@ pub(crate) struct CoseNestedRecipientSearchContext<
     key_provider: &'a CKP,
     aad_provider: Rc<InvertedAadProvider<AAD>>,
     context: EncryptionContext,
+    errors: Rc<RefCell<Vec<(&'a CoseRecipient, CoseCipherError<B::Error>)>>>,
 }
 
 impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvider>
@@ -46,7 +47,15 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvide
             key_provider,
             aad_provider: Rc::new(InvertedAadProvider(aad_provider)),
             context,
+            errors: Rc::new(RefCell::new(Vec::new())),
         }
+    }
+
+    pub(crate) fn into_errors(self) -> Vec<(CoseRecipient, CoseCipherError<B::Error>)> {
+        RefCell::take(&self.errors)
+            .into_iter()
+            .map(|(r, e)| (r.clone(), e))
+            .collect()
     }
 }
 
@@ -62,7 +71,7 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvide
             aad_provider: Rc::clone(&self.aad_provider),
             current_key_candidates: VecDeque::default(),
             current_candidates_position: 0,
-            last_error: None,
+            errors: Rc::clone(&self.errors),
             context: self.context,
         });
         if let Some(kid) = key_id {
@@ -86,7 +95,7 @@ struct CoseNestedRecipientIterator<
     aad_provider: Rc<InvertedAadProvider<AAD>>,
     current_key_candidates: VecDeque<CoseKey>,
     current_candidates_position: usize,
-    last_error: Option<CoseCipherError<B::Error>>,
+    errors: Rc<RefCell<Vec<(&'a CoseRecipient, CoseCipherError<B::Error>)>>>,
     context: EncryptionContext,
 }
 
@@ -155,7 +164,7 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvide
                         // others are not.
                         // For non-recoverable errors, the called function will clear the iteration
                         // state, therefore we just continue with the next iteration here.
-                        self.last_error = Some(e);
+                        self.errors.borrow_mut().push((next_recipient, e));
                         continue;
                     }
                 }

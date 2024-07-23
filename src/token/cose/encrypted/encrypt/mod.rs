@@ -141,8 +141,8 @@ pub trait CoseEncryptExt {
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
-    /// If the COSE object is not malformed, but signature verification fails for all key candidates
-    /// provided by the key provider a [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    /// If the COSE object is not malformed, but decryption fails for all key candidates provided by
+    /// the key provider a [CoseCipherError::NoMatchingKeyFound] error will be returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
     /// the verification error for that key.
@@ -186,8 +186,12 @@ pub trait CoseEncryptExt {
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
-    /// If the COSE object is not malformed, but signature verification fails for all key candidates
-    /// provided by the key provider a *TODO* error will be returned.
+    /// If the COSE object itself is not malformed, but decryption of all [CoseRecipient]s fails
+    /// (due to non-available keys or malformation), [CoseCipherError::NoDecryptableRecipientFound]
+    /// is returned with a list of the attempted recipients and resulting errors.
+    ///
+    /// Note that not all recipients will necessarily be tried, as a malformed [CoseRecipient] will
+    /// terminate the recipient search early.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
     /// the verification error for that key.
@@ -258,7 +262,7 @@ impl CoseEncryptExt for CoseEncrypt {
             &external_aad,
             struct_to_recipient_context(EncryptionContext::CoseEncrypt),
         );
-        self.decrypt(
+        match self.decrypt(
             external_aad
                 .lookup_aad(
                     Some(EncryptionContext::CoseEncrypt),
@@ -276,6 +280,14 @@ impl CoseEncryptExt for CoseEncrypt {
                     aad,
                 )
             },
-        )
+        ) {
+            Err(CoseCipherError::NoMatchingKeyFound(cek_errors)) => {
+                Err(CoseCipherError::NoDecryptableRecipientFound(
+                    nested_recipient_key_provider.into_errors(),
+                    cek_errors,
+                ))
+            }
+            v => v,
+        }
     }
 }

@@ -298,7 +298,7 @@ where
     NoMatchingKeyFound(Vec<(CoseKey, CoseCipherError<T>)>),
     /// TODO docs
     NoDecryptableRecipientFound(
-        Vec<(CoseRecipient, Vec<(CoseKey, CoseCipherError<T>)>)>,
+        Vec<(CoseRecipient, CoseCipherError<T>)>,
         Vec<(CoseKey, CoseCipherError<T>)>,
     ),
     /// A different error has occurred. Details are provided in the contained error.
@@ -367,6 +367,12 @@ where
                 write!(
                     f,
                     "algorithm does not support additional authenticated data"
+                )
+            }
+            CoseCipherError::NoDecryptableRecipientFound(_, _) => {
+                write!(
+                    f,
+                    "could not decrypt any recipient with any of the provided keys"
                 )
             }
         }

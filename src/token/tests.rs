@@ -290,7 +290,7 @@ fn test_encrypt_decrypt_multiple(
         .err()
         .filter(|x| matches!(
             x,
-            AccessTokenError::CoseCipherError(CoseCipherError::NoMatchingKeyFound(_))
+            AccessTokenError::CoseCipherError(CoseCipherError::NoDecryptableRecipientFound(_, _))
         ))
         .is_some());
     let failed = decrypt_access_token_multiple(&mut backend, &invalid_key2, &encrypted, &aad);
@@ -298,7 +298,7 @@ fn test_encrypt_decrypt_multiple(
         .err()
         .filter(|x| matches!(
             x,
-            AccessTokenError::CoseCipherError(CoseCipherError::NoMatchingKeyFound(_))
+            AccessTokenError::CoseCipherError(CoseCipherError::NoDecryptableRecipientFound(_, _))
         ))
         .is_some());
     Ok(())

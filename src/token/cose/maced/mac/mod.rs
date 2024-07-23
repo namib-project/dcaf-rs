@@ -172,8 +172,12 @@ pub trait CoseMacExt {
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
-    /// If the COSE object is not malformed, but MAC verification fails for all key candidates
-    /// provided by the key provider a *TODO* error will be returned.
+    /// If the COSE object itself is not malformed, but decryption of all [CoseRecipient]s fails
+    /// (due to non-available keys or malformation), [CoseCipherError::NoDecryptableRecipientFound]
+    /// is returned with a list of the attempted recipients and resulting errors.
+    ///
+    /// Note that not all recipients will necessarily be tried, as a malformed [CoseRecipient] will
+    /// terminate the recipient search early.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
     /// the verification error for that key.
@@ -234,7 +238,6 @@ impl CoseMacExt for CoseMac {
         external_aad: CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
         let backend = Rc::new(RefCell::new(backend));
-        // TODO handle iterator errors.
         let nested_recipient_key_provider = CoseNestedRecipientSearchContext::new(
             &self.recipients,
             Rc::clone(&backend),
@@ -242,7 +245,7 @@ impl CoseMacExt for CoseMac {
             &external_aad,
             EncryptionContext::MacRecipient,
         );
-        self.verify_tag(
+        match self.verify_tag(
             external_aad
                 .lookup_aad(None, Some(&self.protected.header), Some(&self.unprotected))
                 .unwrap_or(&[] as &[u8]),
@@ -256,6 +259,14 @@ impl CoseMacExt for CoseMac {
                     input,
                 )
             },
-        )
+        ) {
+            Err(CoseCipherError::NoMatchingKeyFound(cek_errors)) => {
+                Err(CoseCipherError::NoDecryptableRecipientFound(
+                    nested_recipient_key_provider.into_errors(),
+                    cek_errors,
+                ))
+            }
+            v => v,
+        }
     }
 }
