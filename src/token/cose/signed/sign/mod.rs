@@ -250,6 +250,7 @@ impl CoseSignExt for CoseSign {
 
         aad: CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
+        let mut multi_verification_errors = Vec::new();
         for sigindex in 0..self.signatures.len() {
             match self.verify_signature(
                 sigindex,
@@ -271,13 +272,18 @@ impl CoseSignExt for CoseSign {
                 },
             ) {
                 Ok(()) => return Ok(()),
-                Err(_) => {
-                    // TODO debug logging? Allow debugging why each verification failed?
+                Err(e) => {
+                    multi_verification_errors.push((self.signatures.get(sigindex).unwrap(), e));
                 }
             }
         }
 
-        Err(CoseCipherError::VerificationFailure)
+        Err(CoseCipherError::NoValidSignatureFound(
+            multi_verification_errors
+                .into_iter()
+                .map(|(s, e)| (s.clone(), e))
+                .collect(),
+        ))
     }
     fn try_verify_detached<
         B: CoseSignCipher,
@@ -291,6 +297,7 @@ impl CoseSignExt for CoseSign {
         payload: &[u8],
         aad: CAP,
     ) -> Result<(), CoseCipherError<B::Error>> {
+        let mut multi_verification_errors = Vec::new();
         for sigindex in 0..self.signatures.len() {
             match self.verify_detached_signature(
                 sigindex,
@@ -313,12 +320,17 @@ impl CoseSignExt for CoseSign {
                 },
             ) {
                 Ok(()) => return Ok(()),
-                Err(_) => {
-                    // TODO debug logging? Allow debugging why each verification failed?
+                Err(e) => {
+                    multi_verification_errors.push((self.signatures.get(sigindex).unwrap(), e));
                 }
             }
         }
 
-        Err(CoseCipherError::VerificationFailure)
+        Err(CoseCipherError::NoValidSignatureFound(
+            multi_verification_errors
+                .into_iter()
+                .map(|(s, e)| (s.clone(), e))
+                .collect(),
+        ))
     }
 }

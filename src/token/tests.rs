@@ -450,7 +450,7 @@ fn test_sign_verify_multiple(
             .err()
             .filter(|x| matches!(
                 x,
-                AccessTokenError::CoseCipherError(CoseCipherError::VerificationFailure)
+                AccessTokenError::CoseCipherError(CoseCipherError::NoValidSignatureFound(_))
             ))
             .is_some()
     );
@@ -459,7 +459,7 @@ fn test_sign_verify_multiple(
             .err()
             .filter(|x| matches!(
                 x,
-                AccessTokenError::CoseCipherError(CoseCipherError::VerificationFailure)
+                AccessTokenError::CoseCipherError(CoseCipherError::NoValidSignatureFound(_))
             ))
             .is_some()
     );

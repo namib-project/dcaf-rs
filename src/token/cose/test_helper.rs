@@ -253,7 +253,7 @@ pub struct TestCaseRecipient {
     #[serde(deserialize_with = "deserialize_header", default)]
     pub protected: Option<Header>,
     #[serde(deserialize_with = "deserialize_algorithm", default)]
-    pub alg: Option<coset::Algorithm>,
+    pub alg: Option<Algorithm>,
     #[serde(deserialize_with = "hex::deserialize", default)]
     pub external: Vec<u8>,
     #[serde(default)]
@@ -482,7 +482,7 @@ pub(crate) fn apply_attribute_failures(
                 let cbor_value = ciborium::Value::Integer(ciborium::value::Integer::from(
                     v.as_i64().expect("unable to parse algorithm number"),
                 ));
-                match coset::Algorithm::from_cbor_value(cbor_value) {
+                match Algorithm::from_cbor_value(cbor_value) {
                     Ok(value) => {
                         header.alg = Some(value);
                         Ok(())
@@ -492,7 +492,7 @@ pub(crate) fn apply_attribute_failures(
             }
             Some(Value::String(v)) => {
                 let cbor_value = ciborium::Value::Text(v.to_string());
-                match coset::Algorithm::from_cbor_value(cbor_value) {
+                match Algorithm::from_cbor_value(cbor_value) {
                     Ok(value) => {
                         header.alg = Some(value);
                         Ok(())
@@ -500,7 +500,7 @@ pub(crate) fn apply_attribute_failures(
                     Err(e) => Err(e),
                 }
             }
-            v => panic!("unable to set algorithm to {v:?}"),
+            v => panic!("unable to set algorithm to {:?}", v),
         }
     } else {
         Ok(())

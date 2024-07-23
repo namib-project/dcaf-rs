@@ -96,7 +96,7 @@ fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
 }
 
 pub(crate) fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider>(
-    backend: Rc<RefCell<&mut B>>,
+    backend: &Rc<RefCell<&mut B>>,
     key_provider: &CKP,
     protected: &Header,
     unprotected: &Header,

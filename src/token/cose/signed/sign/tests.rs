@@ -93,7 +93,7 @@ impl<B: CoseCipher + CoseSignCipher + CoseKeyDistributionCipher> CoseStructTestH
             .map(|v| {
                 let mut key_with_alg = v.key.clone();
                 if key_with_alg.alg.is_none() {
-                    key_with_alg.alg = v.alg.clone();
+                    key_with_alg.alg.clone_from(&v.alg);
                 }
                 key_with_alg
             })
@@ -171,7 +171,5 @@ fn ecdsa_tests<B: CoseSignCipher + CoseKeyDistributionCipher>(
     #[files("tests/dcaf_cose_examples/ecdsa/*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
-    crate::token::cose::test_helper::perform_cose_self_signed_test::<CoseSign, B>(
-        test_path, backend,
-    );
+    perform_cose_self_signed_test::<CoseSign, B>(test_path, backend);
 }

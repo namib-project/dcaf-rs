@@ -600,7 +600,7 @@ impl<AAD: AsRef<[u8]>> CoseAadProvider for BTreeMap<&[u8], AAD> {
 }
 
 /// Look up additional authenticated data based on the key ID
-impl<KID: AsRef<[u8]>, AAD: AsRef<[u8]>> CoseAadProvider for alloc::vec::Vec<(KID, AAD)> {
+impl<KID: AsRef<[u8]>, AAD: AsRef<[u8]>> CoseAadProvider for Vec<(KID, AAD)> {
     fn lookup_aad(
         &self,
         _context: Option<EncryptionContext>,

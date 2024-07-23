@@ -233,7 +233,7 @@ impl CoseEncryptExt for CoseEncrypt {
                 .unwrap_or(&[] as &[u8]),
             |ciphertext, aad| {
                 try_decrypt(
-                    backend,
+                    &backend,
                     key_provider,
                     &self.protected.header,
                     &self.unprotected,
@@ -272,7 +272,7 @@ impl CoseEncryptExt for CoseEncrypt {
                 .unwrap_or(&[] as &[u8]),
             |ciphertext, aad| {
                 try_decrypt(
-                    backend,
+                    &backend,
                     &nested_recipient_key_provider,
                     &self.protected.header,
                     &self.unprotected,

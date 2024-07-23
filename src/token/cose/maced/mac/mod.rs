@@ -1,5 +1,4 @@
 use alloc::rc::Rc;
-use alloc::vec::Vec;
 use core::cell::RefCell;
 
 use coset::{CoseMac, CoseMacBuilder, EncryptionContext, Header};
@@ -56,10 +55,8 @@ pub trait CoseMacBuilderExt: Sized {
         self,
         backend: &mut B,
         key_provider: &CKP,
-
         protected: Option<Header>,
         unprotected: Option<Header>,
-        payload: Vec<u8>,
         external_aad: CAP,
     ) -> Result<Self, CoseCipherError<B::Error>>;
 }
@@ -69,10 +66,8 @@ impl CoseMacBuilderExt for CoseMacBuilder {
         self,
         backend: &mut B,
         key_provider: &CKP,
-
         protected: Option<Header>,
         unprotected: Option<Header>,
-        payload: Vec<u8>,
         external_aad: CAP,
     ) -> Result<Self, CoseCipherError<B::Error>> {
         let mut builder = self;
@@ -82,7 +77,6 @@ impl CoseMacBuilderExt for CoseMacBuilder {
         if let Some(unprotected) = &unprotected {
             builder = builder.unprotected(unprotected.clone());
         }
-        builder = builder.payload(payload);
         Ok(builder.create_tag(
             external_aad
                 .lookup_aad(None, protected.as_ref(), unprotected.as_ref())

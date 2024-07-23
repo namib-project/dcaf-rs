@@ -88,7 +88,7 @@ impl<B: CoseCipher + CoseEncryptCipher> CoseStructTestHelper<B> for CoseEncrypt0
             .map(|v| {
                 let mut key_with_alg = v.key.clone();
                 if key_with_alg.alg.is_none() {
-                    key_with_alg.alg = v.alg.clone();
+                    key_with_alg.alg.clone_from(&v.alg);
                 }
                 key_with_alg
             })

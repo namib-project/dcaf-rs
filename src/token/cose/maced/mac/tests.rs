@@ -75,12 +75,12 @@ impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHe
         }
 
         mac.add_recipient(recipient_struct_builder.build())
+            .payload(case.input.plaintext.clone().into_bytes())
             .try_compute(
                 backend,
                 &enc_key,
                 mac_cfg.protected.clone(),
                 Some(unprotected),
-                case.input.plaintext.clone().into_bytes(),
                 mac_cfg.external.as_slice(),
             )
             .expect("unable to encrypt Encrypt object")
@@ -108,7 +108,7 @@ impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHe
             .map(|v| {
                 let mut key_with_alg = v.key.clone();
                 if key_with_alg.alg.is_none() {
-                    key_with_alg.alg = v.alg.clone();
+                    key_with_alg.alg.clone_from(&v.alg);
                 }
                 key_with_alg
             })
@@ -160,7 +160,5 @@ fn hmac_tests<B: CoseMacCipher + CoseKeyDistributionCipher>(
     #[files("tests/dcaf_cose_examples/hmac/*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
-    crate::token::cose::test_helper::perform_cose_self_signed_test::<CoseMac, B>(
-        test_path, backend,
-    );
+    test_helper::perform_cose_self_signed_test::<CoseMac, B>(test_path, backend);
 }

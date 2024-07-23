@@ -9,11 +9,10 @@
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
 use base64::Engine;
-use ciborium::value::Value;
 use coset::cwt::{ClaimsSetBuilder, Timestamp};
 use coset::iana::CwtClaimName;
 use coset::iana::EllipticCurve::P_256;
-use coset::{iana, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, Label};
+use coset::{iana, CoseKeyBuilder, Header, HeaderBuilder};
 use dcaf::common::cbor_map::ToCborMap;
 use dcaf::token::cose::CoseCipher;
 use dcaf::token::cose::CoseSignCipher;
@@ -23,55 +22,10 @@ use dcaf::{
     AuthServerRequestCreationHint, ErrorCode, ErrorResponse, GrantType, TextEncodedScope,
     TokenType,
 };
-use rand::{CryptoRng, Error, RngCore};
 use rstest::rstest;
 
 #[cfg(feature = "openssl")]
 use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
-
-fn get_x_y_from_key(key: &CoseKey) -> (Vec<u8>, Vec<u8>) {
-    const X_PARAM: i64 = iana::Ec2KeyParameter::X as i64;
-    const Y_PARAM: i64 = iana::Ec2KeyParameter::Y as i64;
-    let mut x: Option<Vec<u8>> = None;
-    let mut y: Option<Vec<u8>> = None;
-    for (label, value) in key.params.iter() {
-        if let Label::Int(X_PARAM) = label {
-            if let Value::Bytes(x_val) = value {
-                x = Some(x_val.clone());
-            }
-        } else if let Label::Int(Y_PARAM) = label {
-            if let Value::Bytes(y_val) = value {
-                y = Some(y_val.clone());
-            }
-        }
-    }
-    let test = x.and_then(|a| y.map(|b| (a, b)));
-    test.expect("X and Y value must be present in key!")
-}
-
-#[derive(Clone, Copy)]
-pub(crate) struct FakeRng;
-
-impl RngCore for FakeRng {
-    fn next_u32(&mut self) -> u32 {
-        0
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        0
-    }
-
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        dest.fill(0)
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
-        dest.fill(0);
-        Ok(())
-    }
-}
-
-impl CryptoRng for FakeRng {}
 
 fn example_headers() -> (Header, Header) {
     let unprotected_header = HeaderBuilder::new()

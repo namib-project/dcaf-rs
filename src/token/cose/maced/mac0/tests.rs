@@ -52,12 +52,12 @@ impl<B: CoseCipher + CoseMacCipher> CoseStructTestHelper<B> for CoseMac0 {
         };
 
         let mac0 = mac0
+            .payload(case.input.plaintext.clone().into_bytes())
             .try_compute(
                 backend,
                 &enc_key,
                 mac0_cfg.protected.clone(),
                 Some(unprotected),
-                case.input.plaintext.clone().into_bytes(),
                 mac0_cfg.external.as_slice(),
             )
             .expect("unable to encrypt Mac0 object");
@@ -95,7 +95,7 @@ impl<B: CoseCipher + CoseMacCipher> CoseStructTestHelper<B> for CoseMac0 {
             .map(|v| {
                 let mut key_with_alg = v.key.clone();
                 if key_with_alg.alg.is_none() {
-                    key_with_alg.alg = v.alg.clone();
+                    key_with_alg.alg.clone_from(&v.alg);
                 }
                 key_with_alg
             })

@@ -1,10 +1,9 @@
 use core::convert::Infallible;
 use std::path::PathBuf;
 
-use coset::iana::Algorithm;
 use coset::{
-    CoseEncrypt, CoseEncryptBuilder, CoseError, CoseKey, CoseKeyBuilder, CoseRecipientBuilder,
-    EncryptionContext, HeaderBuilder,
+    iana, Algorithm, CoseEncrypt, CoseEncryptBuilder, CoseError, CoseKey, CoseKeyBuilder,
+    CoseRecipientBuilder, EncryptionContext, HeaderBuilder,
 };
 use rstest::rstest;
 
@@ -39,7 +38,7 @@ impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTe
 
         // Need to generate an IV. Have to do this quite uglily, because we have implemented our IV
         // generation on the header builder only.
-        let alg = if let coset::Algorithm::Assigned(alg) = encrypt_cfg
+        let alg = if let Algorithm::Assigned(alg) = encrypt_cfg
             .protected
             .as_ref()
             .or(encrypt_cfg.unprotected.as_ref())
@@ -61,12 +60,12 @@ impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTe
 
         let mut recipient_struct_builder = CoseRecipientBuilder::from(recipient.clone());
         let enc_key: CoseKey;
-        if recipient.alg == Some(coset::Algorithm::Assigned(Algorithm::Direct))
+        if recipient.alg == Some(Algorithm::Assigned(iana::Algorithm::Direct))
             || determine_algorithm::<Infallible>(
                 None,
                 recipient.protected.as_ref(),
                 recipient.unprotected.as_ref(),
-            ) == Ok(coset::iana::Algorithm::Direct)
+            ) == Ok(iana::Algorithm::Direct)
         {
             enc_key = recipient.key.clone();
         } else {
@@ -132,7 +131,7 @@ impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTe
             .map(|v| {
                 let mut key_with_alg = v.key.clone();
                 if key_with_alg.alg.is_none() {
-                    key_with_alg.alg = v.alg.clone();
+                    key_with_alg.alg.clone_from(&v.alg);
                 }
                 key_with_alg
             })
@@ -147,8 +146,8 @@ impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTe
             let plaintext = verify_result.expect("unable to verify token");
 
             assert_eq!(case.input.plaintext.as_bytes(), plaintext.as_slice());
-            // TODO IV is apprarently taken from rng_stream field, not header field, but still implicitly added to header.
-            //      ugh...
+            // IV is apprarently taken from rng_stream field, not header field, but still implicitly
+            // added to header. ugh...
             let mut unprotected = test_case.unprotected.clone().unwrap_or_default();
             let mut protected = test_case.protected.clone().unwrap_or_default();
             unprotected.iv.clone_from(&self.unprotected.iv);

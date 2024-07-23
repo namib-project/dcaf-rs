@@ -17,7 +17,9 @@ use core::any::type_name;
 use core::fmt::{Display, Formatter};
 
 use ciborium::value::Value;
-use coset::{Algorithm, CoseError, CoseKey, CoseRecipient, KeyOperation, KeyType, Label};
+use coset::{
+    Algorithm, CoseError, CoseKey, CoseRecipient, CoseSignature, KeyOperation, KeyType, Label,
+};
 use strum_macros::IntoStaticStr;
 
 use {alloc::format, alloc::string::String, alloc::string::ToString};
@@ -296,11 +298,21 @@ where
     /// In the latter case, the error field will contain a list of all attempted keys and the
     /// corresponding error.
     NoMatchingKeyFound(Vec<(CoseKey, CoseCipherError<T>)>),
-    /// TODO docs
+    /// For structures that are validated using a CEK encoded in [CoseRecipient] structures
+    /// ([CoseEncrypt], [CoseMac]): Unable to find a suitable recipient to decrypt.
+    ///
+    /// The first element provides the errors that occurred while decrypting each recipient, the
+    /// second element describes the errors that occurred while attempting to decrypt the structure
+    /// itself with any successfully decrypted CEKs.
     NoDecryptableRecipientFound(
         Vec<(CoseRecipient, CoseCipherError<T>)>,
         Vec<(CoseKey, CoseCipherError<T>)>,
     ),
+    /// For structures with multiple signatures ([CoseSignature]): None of the signatures could be
+    /// verified.
+    ///
+    /// The contained vector describes the error that occurred while validating each signature.
+    NoValidSignatureFound(Vec<(CoseSignature, CoseCipherError<T>)>),
     /// A different error has occurred. Details are provided in the contained error.
     Other(T),
 }
@@ -373,6 +385,12 @@ where
                 write!(
                     f,
                     "could not decrypt any recipient with any of the provided keys"
+                )
+            }
+            CoseCipherError::NoValidSignatureFound(_) => {
+                write!(
+                    f,
+                    "could not validate any of the signatures with any of the provided keys"
                 )
             }
         }
