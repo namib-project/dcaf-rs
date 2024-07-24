@@ -38,7 +38,7 @@ use crate::token::cose::CryptoBackend;
 #[derive(Debug, Display)]
 #[non_exhaustive]
 pub enum CoseOpensslCipherError {
-    /// Standard OpenSSL error (represented as an [ErrorStack] in the openssl library crate).
+    /// Standard OpenSSL error (represented as an [`ErrorStack`] in the openssl library crate).
     OpensslError(ErrorStack),
     /// AES key error.
     AesKeyError(openssl::aes::KeyError),
@@ -72,7 +72,7 @@ impl From<openssl::aes::KeyError> for CoseCipherError<CoseOpensslCipherError> {
 
 /// Context for the OpenSSL cryptographic backend.
 ///
-/// Can be used as a [CryptoBackend] for COSE operations.
+/// Can be used as a [`CryptoBackend`]  for COSE operations.
 ///
 /// Generic properties of this backend:
 /// - [ ] Can derive EC public key components if only the private component (d) is present.

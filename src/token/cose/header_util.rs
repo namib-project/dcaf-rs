@@ -173,7 +173,7 @@ pub(crate) fn determine_key_candidates<'a, CKP: KeyProvider, CE: Display>(
     })
 }
 
-/// Extensions to the [HeaderBuilder] type that enable usage of cryptographic backends.
+/// Extensions to the [`HeaderBuilder`]  type that enable usage of cryptographic backends.
 pub trait HeaderBuilderExt: Sized {
     /// Generate an initialization vector for the given `alg` (algorithm) using the given
     /// cryptographic `backend`.

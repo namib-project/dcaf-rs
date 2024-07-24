@@ -31,30 +31,30 @@ pub trait SignCryptoBackend: CryptoBackend {
     /// # Arguments
     ///
     /// * `alg` - The variant of ECDSA to use (determines the hash function).
-    ///           If unsupported by the backend, a [CoseCipherError::UnsupportedAlgorithm] error
+    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
-    ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
     ///           additional variants of ECDSA are ever added).
     ///           If the algorithm is not an ECDSA algorithm, the implementation may return
-    ///           [CoseCipherError::UnsupportedAlgorithm] or panic.
+    ///           [`CoseCipherError::UnsupportedAlgorithm`] or panic.
     /// * `key` - Elliptic curve key that should be used.
-    ///           Implementations may assume that if the [CoseEc2Key::crv] field is an IANA-assigned
+    ///           Implementations may assume that if the [`CoseEc2Key::crv`] field is an IANA-assigned
     ///           value, it will always be a curve feasible for ECDSA.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
-    ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
     ///           additional variants of ECDSA are ever added). If the algorithm is not an ECDSA
-    ///           algorithm, the implementation may return [CoseCipherError::UnsupportedAlgorithm]
+    ///           algorithm, the implementation may return [`CoseCipherError::UnsupportedAlgorithm`]
     ///           or panic.
     ///           Note that curve and hash bit sizes do not necessarily match.
     ///           Implementations may assume the struct field `d` (the private key) to always be set
     ///           and panic if this is not the case.
     ///           The fields `x` and (`y` or `sign`) (the public key) may be used by implementations
     ///           if they are set. If they are not, implementations may either derive the public key
-    ///           from `d` or return a [CoseCipherError::UnsupportedKeyDerivation] if this
+    ///           from `d` or return a [`CoseCipherError::UnsupportedKeyDerivation`] if this
     ///           derivation is unsupported.
     ///           If calculation of the public key from the `x` coordinate and `sign` is not
-    ///           supported, a [CoseCipherError::UnsupportedKeyDerivation] may be returned as well.
+    ///           supported, a [`CoseCipherError::UnsupportedKeyDerivation`] may be returned as well.
     /// * `payload` - Data to be signed.
     ///
     /// # Returns
@@ -66,8 +66,8 @@ pub trait SignCryptoBackend: CryptoBackend {
     ///
     /// # Errors
     ///
-    /// In case of errors, the implementation may return any valid [CoseCipherError].
-    /// For backend-specific errors, [CoseCipherError::Other] may be used to convey a
+    /// In case of errors, the implementation may return any valid [`CoseCipherError`].
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
     /// backend-specific error.
     ///
     /// # Panics
@@ -79,7 +79,7 @@ pub trait SignCryptoBackend: CryptoBackend {
     /// In the last of the above cases, additional panics should be documented on the backend level.
     ///
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
-    /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new ECDSA variants are defined).
+    /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new ECDSA variants are defined).
     fn sign_ecdsa(
         &mut self,
         alg: iana::Algorithm,
@@ -92,20 +92,20 @@ pub trait SignCryptoBackend: CryptoBackend {
     /// # Arguments
     ///
     /// * `alg` - The variant of ECDSA to use (determines the hash function).
-    ///           If unsupported by the backend, a [CoseCipherError::UnsupportedAlgorithm] error
+    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
-    ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
     ///           additional variants of ECDSA are ever added).
     ///           If the algorithm is not an ECDSA algorithm, the implementation may return
-    ///           [CoseCipherError::UnsupportedAlgorithm] or panic.
+    ///           [`CoseCipherError::UnsupportedAlgorithm`] or panic.
     /// * `key` - Elliptic curve key that should be used.
-    ///           Implementations may assume that if the [CoseEc2Key::crv] field is an IANA-assigned
+    ///           Implementations may assume that if the [`CoseEc2Key::crv`] field is an IANA-assigned
     ///           value, it will always be a curve feasible for ECDSA.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
-    ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
     ///           additional variants of ECDSA are ever added). If the algorithm is not an ECDSA
-    ///           algorithm, the implementation may return [CoseCipherError::UnsupportedAlgorithm]
+    ///           algorithm, the implementation may return [`CoseCipherError::UnsupportedAlgorithm`]
     ///           or panic.
     ///           Note that curve and hash bit sizes do not necessarily match.
     ///           Implementations may assume that either `d` or (`x` and (`y` xor `sign`)) are set.
@@ -113,9 +113,9 @@ pub trait SignCryptoBackend: CryptoBackend {
     ///           they are set.
     ///           If they are not, but the private key `d` is present, implementations may either
     ///           derive the public key from `d` (if present) or return a
-    ///           [CoseCipherError::UnsupportedKeyDerivation] if this derivation is unsupported.
+    ///           [`CoseCipherError::UnsupportedKeyDerivation`] if this derivation is unsupported.
     ///           If calculation of the public key from the `x` coordinate and `sign` is not
-    ///           supported, a [CoseCipherError::UnsupportedKeyDerivation] may be returned as well.
+    ///           supported, a [`CoseCipherError::UnsupportedKeyDerivation`] may be returned as well.
     /// * `sig` - the signature to verify. This signature should be a valid signature
     ///           conforming to RFC 9053, Section 2.1 (i.e. the `r` and `s` values of the signature
     ///           are each padded with zeros at the beginning to the key size rounded up to the next
@@ -131,11 +131,11 @@ pub trait SignCryptoBackend: CryptoBackend {
     /// # Errors
     ///
     /// If the signature is not malformed, but not valid for the given `alg`, `key`,
-    /// and `payload`, a [CoseCipherError::VerificationFailure] must be returned.
+    /// and `payload`, a [`CoseCipherError::VerificationFailure`] must be returned.
     ///
-    /// In case of other errors, the implementation may return any valid [CoseCipherError]
-    /// (including [CoseCipherError::VerificationFailure]).
-    /// For backend-specific errors, [CoseCipherError::Other] may be used to convey a
+    /// In case of other errors, the implementation may return any valid [`CoseCipherError`]
+    /// (including [`CoseCipherError::VerificationFailure`]).
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
     /// backend-specific error.
     ///
     /// # Panics
@@ -147,7 +147,7 @@ pub trait SignCryptoBackend: CryptoBackend {
     /// In the last of the above cases, additional panics should be documented on the backend level.
     ///
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
-    /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new ECDSA variants are defined).
+    /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new ECDSA variants are defined).
     fn verify_ecdsa(
         &mut self,
         alg: iana::Algorithm,

@@ -35,13 +35,13 @@ pub trait KeyDistributionCryptoBackend: CryptoBackend {
     /// # Arguments
     ///
     /// * `alg` - The AES key wrap variant to use.
-    ///           If unsupported by the backend, a [CoseCipherError::UnsupportedAlgorithm] error
+    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
-    ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
     ///           additional variants of AES key wrap are ever added).
     ///           If the algorithm is not an AES key wrap algorithm, the implementation may return
-    ///           [CoseCipherError::UnsupportedAlgorithm] or panic.
+    ///           [`CoseCipherError::UnsupportedAlgorithm`] or panic.
     /// * `key` - Symmetric key that should be used.
     ///           Implementations may assume that the provided key has the right length for the
     ///           provided algorithm, and panic if this is not the case.
@@ -57,8 +57,8 @@ pub trait KeyDistributionCryptoBackend: CryptoBackend {
     ///
     /// # Errors
     ///
-    /// In case of errors, the implementation may return any valid [CoseCipherError].
-    /// For backend-specific errors, [CoseCipherError::Other] may be used to convey a
+    /// In case of errors, the implementation may return any valid [`CoseCipherError`].
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
     /// backend-specific error.
     ///
     /// # Panics
@@ -69,7 +69,7 @@ pub trait KeyDistributionCryptoBackend: CryptoBackend {
     /// In the last of the above cases, additional panics should be documented on the backend level.
     ///
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
-    /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new AES-GCM variants are ever
+    /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new AES-GCM variants are ever
     /// defined).
     fn aes_key_wrap(
         &mut self,
@@ -85,13 +85,13 @@ pub trait KeyDistributionCryptoBackend: CryptoBackend {
     /// # Arguments
     ///
     /// * `alg` - The AES key wrap variant to use.
-    ///           If unsupported by the backend, a [CoseCipherError::UnsupportedAlgorithm] error
+    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
-    ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
     ///           additional variants of AES key wrap are ever added).
     ///           If the algorithm is not an AES key wrap algorithm, the implementation may return
-    ///           [CoseCipherError::UnsupportedAlgorithm] or panic.
+    ///           [`CoseCipherError::UnsupportedAlgorithm`] or panic.
     /// * `key` - Symmetric key that should be used.
     ///           Implementations may assume that the provided key has the right length for the
     ///           provided algorithm, and panic if this is not the case.
@@ -107,8 +107,8 @@ pub trait KeyDistributionCryptoBackend: CryptoBackend {
     ///
     /// # Errors
     ///
-    /// In case of errors, the implementation may return any valid [CoseCipherError].
-    /// For backend-specific errors, [CoseCipherError::Other] may be used to convey a
+    /// In case of errors, the implementation may return any valid [`CoseCipherError`].
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
     /// backend-specific error.
     ///
     /// # Panics
@@ -119,7 +119,7 @@ pub trait KeyDistributionCryptoBackend: CryptoBackend {
     /// In the last of the above cases, additional panics should be documented on the backend level.
     ///
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
-    /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new AES-GCM variants are ever
+    /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new AES-GCM variants are ever
     /// defined).
     fn aes_key_unwrap(
         &mut self,
@@ -131,7 +131,7 @@ pub trait KeyDistributionCryptoBackend: CryptoBackend {
 }
 
 /// Internal structure that implements the key provider trait by creating depth-first search
-/// iterators ([CoseNestedRecipientIterator]) through a nested recipient structure.
+/// iterators ([`CoseNestedRecipientIterator`]) through a nested recipient structure.
 pub(crate) struct CoseNestedRecipientSearchContext<
     'a,
     B: KeyDistributionCryptoBackend,
@@ -192,7 +192,7 @@ impl<'a, B: KeyDistributionCryptoBackend, CKP: KeyProvider, AAD: AadProvider> Ke
     }
 }
 
-/// An iterator that performs a depth-first search through a nested [CoseRecipient] structure,
+/// An iterator that performs a depth-first search through a nested [`CoseRecipient`]  structure,
 /// attempts to decrypt those recipients and yields potential CEKs resulting from this search.
 struct CoseNestedRecipientIterator<
     'a,
@@ -459,12 +459,12 @@ fn determine_decrypt_key_ops_for_alg<CE: Display>(
     }))
 }
 
-/// Extensions to the [CoseRecipientBuilder] type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseRecipientBuilder`]  type that enable usage of cryptographic backends.
 pub trait CoseRecipientBuilderExt: Sized {
     /// Attempts to encrypt the provided payload/key using a cryptographic backend.
     ///
     /// Note that you still have to ensure that the key is available to the recipient somehow, i.e.
-    /// by adding nested [CoseRecipient] structures where suitable.
+    /// by adding nested [`CoseRecipient`] structures where suitable.
     ///
     /// # Parameters
     ///
@@ -472,32 +472,35 @@ pub trait CoseRecipientBuilderExt: Sized {
     /// - `key_provider` - provider for cryptographic keys to use (if you already know the
     ///                    corresponding key, simply provide an immutable borrow of it).
     /// - `context`      - Context under which this recipient was encrypted.
-    /// - `protected`    - protected headers for the resulting [CoseEncrypt] instance. Will override
-    ///                    headers previously set using [CoseEncryptBuilder::protected].
-    /// - `unprotected`  - unprotected headers for the resulting [CoseEncrypt] instance. Will
-    ///                    override headers previously set using [CoseEncryptBuilder::unprotected].
-    /// - `payload`      - payload which should be added to the resulting [CoseMac0] instance and
-    ///                    for which the MAC should be calculated. Will override a payload
-    ///                    previously set using [CoseEncryptBuilder::payload].
+    /// - `protected`    - protected headers for the resulting [`CoseRecipient`] instance. Will
+    ///                    override headers previously set using
+    ///                    [`CoseRecipientBuilder::protected`](CoseRecipientBuilder).
+    /// - `unprotected`  - unprotected headers for the resulting [`CoseRecipient`] instance. Will
+    ///                    override headers previously set using
+    ///                     [`CoseRecipientBuilder::unprotected`](CoseRecipientBuilder).
+    /// - `payload`      - payload which should be added to the resulting [`CoseRecipient`] instance
+    ///                    and for which the MAC should be calculated. Will override a payload
+    ///                    previously set using
+    ///                    [`CoseRecipientBuilder::payload`](CoseRecipientBuilder).
     /// - `external_aad` - provider of additional authenticated data that should be included in the
     ///                    MAC calculation.
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
-    /// or otherwise unsuitable for MAC calculation, this function will return the most fitting
-    /// [CoseCipherError] for the specific type of error.
+    /// If the COSE structure, selected [`CoseKey`](CoseKey) or AAD (or any combination of those)
+    /// are malformed or otherwise unsuitable for MAC calculation, this function will return the
+    /// most fitting [`CoseCipherError`] for the specific type of error.
     ///
     /// If Additional Authenticated Data is provided even though the chosen algorithm is not an AEAD
-    /// algorithm, a [CoseCipherError::AadUnsupported] will be returned.
+    /// algorithm, a [`CoseCipherError::AadUnsupported`] will be returned.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
     ///
     /// # Examples
     ///
@@ -611,11 +614,11 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
     }
 }
 
-/// Extensions to the [CoseRecipient] type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseRecipient`]  type that enable usage of cryptographic backends.
 ///
 /// # Examples
 ///
-/// Create a simple [CoseRecipient] instance that encrypts a content encryption key using AES key
+/// Create a simple [`CoseRecipient`]  instance that encrypts a content encryption key using AES key
 /// wrap and then decrypts it again:
 ///
 /// ```
@@ -669,15 +672,15 @@ pub trait CoseRecipientExt {
     ///
     /// Returns a `Vec` of potential decryption results for this key.
     /// The reason why a `Vec` is returned here is that if the algorithm is
-    /// [iana::Algorithm::Direct], the key provider's result will be returned directly, which might
+    /// [`iana::Algorithm::Direct`], the key provider's result will be returned directly, which might
     /// include multiple potential keys for the `key_id` provided in the recipient.
     ///
-    /// Note that nested [CoseRecipient]s are not considered for key lookup here, the key provider
+    /// Note that nested [`CoseRecipient`](coset::CoseRecipient)s are not considered for key lookup here, the key provider
     /// must provide the key used directly for MAC calculation.
     ///
     /// Usually, you wouldn't decrypt a recipient directly, but instead use
-    /// [super::CoseEncryptExt::try_decrypt_with_recipients] or
-    /// [super::CoseMacExt::try_verify_with_recipients] instead, which automatically search through the
+    /// [`super::CoseEncryptExt::try_decrypt_with_recipients`] or
+    /// [`super::CoseMacExt::try_verify_with_recipients`] instead, which automatically search through the
     /// respective COSE structures for recipient candidates.
     ///
     /// # Parameters
@@ -691,25 +694,25 @@ pub trait CoseRecipientExt {
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of those) are malformed
     /// or otherwise unsuitable for decryption, this function will return the most fitting
-    /// [CoseCipherError] for the specific type of error.
+    /// [`CoseCipherError`] for the specific type of error.
     ///
     /// If Additional Authenticated Data is provided even though the chosen algorithm is not an AEAD
-    /// algorithm, a [CoseCipherError::AadUnsupported] will be returned.
+    /// algorithm, a [`CoseCipherError::AadUnsupported`] will be returned.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but signature verification fails for all key candidates
-    /// provided by the key provider a [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    /// provided by the key provider a [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
     /// the verification error for that key.
     /// For an invalid MAC for an otherwise valid and suitable object+key pairing, this would
-    /// usually be a [CoseCipherError::VerificationFailure].
+    /// usually be a [`CoseCipherError::VerificationFailure`].
     ///
     /// # Examples
     ///

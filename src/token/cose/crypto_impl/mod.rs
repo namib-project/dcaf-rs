@@ -10,8 +10,10 @@
  */
 
 //! Implementations of the traits required for token handling (
-//! [`CoseEncryptCipher`](crate::CoseEncryptCipher), [`CoseSignCipher`](crate::CoseSignCipher),
-//! [`CoseMacCipher`](crate::CoseMacCipher)) for different cryptographic libraries.
+//! [`EncryptCryptoBackend`](super::EncryptCryptoBackend), [`SignCryptoBackend`](super::SignCryptoBackend),
+//! [`MacCryptoBackend`](super::MacCryptoBackend),
+//! [`KeyDistributionCryptoBackend`](super::KeyDistributionCryptoBackend)) for different
+//! cryptographic libraries.
 
 /// Cryptographic backend based on the OpenSSL library (accessed using the `openssl` crate).
 #[cfg(feature = "openssl")]

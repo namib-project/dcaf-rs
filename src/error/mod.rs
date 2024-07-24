@@ -239,9 +239,9 @@ impl Display for InvalidAifEncodedScopeError {
     }
 }
 
-/// Error type used when a [`CoseEncryptCipher`](crate::CoseEncryptCipher),
-/// [`CoseSignCipher`](crate::CoseSignCipher), or [`CoseMacCipher`](crate::CoseMacCipher).
-/// fails to perform an operation.
+/// Error type used when a [`EncryptCryptoBackend`](crate::token::cose::EncryptCryptoBackend),
+/// [`SignCryptoBackend`](crate::token::cose::SignCryptoBackend), or
+/// [`MacCryptoBackend`](crate::token::cose::MacCryptoBackend) fails to perform an operation.
 ///
 /// `T` is the type of the nested error represented by the [`Other`](CoseCipherError::Other) variant.
 #[derive(Debug, PartialEq, Clone)]
@@ -299,7 +299,8 @@ where
     /// corresponding error.
     NoMatchingKeyFound(Vec<(CoseKey, CoseCipherError<T>)>),
     /// For structures that are validated using a CEK encoded in [CoseRecipient] structures
-    /// ([CoseEncrypt], [CoseMac]): Unable to find a suitable recipient to decrypt.
+    /// ([CoseEncrypt](coset::CoseEncrypt), [CoseMac](coset::CoseMac): Unable to find a suitable
+    /// recipient to decrypt.
     ///
     /// The first element provides the errors that occurred while decrypting each recipient, the
     /// second element describes the errors that occurred while attempting to decrypt the structure

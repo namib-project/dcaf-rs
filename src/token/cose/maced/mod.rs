@@ -38,13 +38,13 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// # Arguments
     ///
     /// * `alg` - The HMAC variant to use (determines the hash function).
-    ///           If unsupported by the backend, a [CoseCipherError::UnsupportedAlgorithm] error
+    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
-    ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
     ///           additional variants of HMAC are ever added).
     ///           If the algorithm is not an HMAC algorithm, the implementation may return
-    ///           [CoseCipherError::UnsupportedAlgorithm] or panic.
+    ///           [`CoseCipherError::UnsupportedAlgorithm`] or panic.
     /// * `key` - Symmetric key that should be used.
     ///           Implementations may assume that the provided key has the right length for the
     ///           provided algorithm, and panic if this is not the case.
@@ -57,8 +57,8 @@ pub trait MacCryptoBackend: CryptoBackend {
     ///
     /// # Errors
     ///
-    /// In case of errors, the implementation may return any valid [CoseCipherError].
-    /// For backend-specific errors, [CoseCipherError::Other] may be used to convey a
+    /// In case of errors, the implementation may return any valid [`CoseCipherError`].
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
     /// backend-specific error.
     ///
     /// # Panics
@@ -69,7 +69,7 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// In the last of the above cases, additional panics should be documented on the backend level.
     ///
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
-    /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new HMAC variants are ever
+    /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new HMAC variants are ever
     /// defined).
     fn compute_hmac(
         &mut self,
@@ -90,13 +90,13 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// # Arguments
     ///
     /// * `alg` - The HMAC variant to use (determines the hash function).
-    ///           If unsupported by the backend, a [CoseCipherError::UnsupportedAlgorithm] error
+    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
-    ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
     ///           additional variants of HMAC are ever added).
     ///           If the algorithm is not an HMAC algorithm, the implementation may return
-    ///           [CoseCipherError::UnsupportedAlgorithm] or panic.
+    ///           [`CoseCipherError::UnsupportedAlgorithm`] or panic.
     /// * `key` - Symmetric key that should be used.
     ///           Implementations may assume that the provided key has the right length for the
     ///           provided algorithm, and panic if this is not the case.
@@ -105,13 +105,13 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// # Returns
     ///
     /// It is expected that the return value is `Ok(())` if the computed MAC matches the one
-    /// provided, or a [CoseCipherError::VerificationFailure] if it doesn't even though MAC
+    /// provided, or a [`CoseCipherError::VerificationFailure`] if it doesn't even though MAC
     /// computation was successful.
     ///
     /// # Errors
     ///
-    /// In case of errors, the implementation may return any valid [CoseCipherError].
-    /// For backend-specific errors, [CoseCipherError::Other] may be used to convey a
+    /// In case of errors, the implementation may return any valid [`CoseCipherError`].
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
     /// backend-specific error.
     ///
     /// # Panics
@@ -122,7 +122,7 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// In the last of the above cases, additional panics should be documented on the backend level.
     ///
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
-    /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new HMAC variants are ever
+    /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new HMAC variants are ever
     /// defined).
     fn verify_hmac(
         &mut self,

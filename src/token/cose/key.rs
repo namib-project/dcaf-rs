@@ -26,7 +26,7 @@ fn find_param_by_label<'a>(label: &Label, param_vec: &'a [(Label, Value)]) -> Op
         .find_map(|(l, v)| if l == label { Some(v) } else { None })
 }
 
-/// An IANA-defined key parameter for a [CoseKey].
+/// An IANA-defined key parameter for a [`CoseKey`](coset::CoseKey).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum KeyParam {
     /// Key parameters that are not specific for a certain key type.
@@ -65,7 +65,7 @@ impl From<iana::SymmetricKeyParameter> for KeyParam {
 
 #[derive(Clone, Debug, PartialEq)]
 
-/// A parsed view into a [CoseKey] instance.
+/// A parsed view into a [`CoseKey`](coset::CoseKey) instance.
 ///
 /// Allows for easier access to the key's parameters.
 pub enum CoseParsedKey<'a, OE: Display> {
@@ -123,7 +123,7 @@ impl<'a, OE: Display> From<CoseSymmetricKey<'a, OE>> for CoseParsedKey<'a, OE> {
 /// Types of elliptic curves.
 pub type EllipticCurve = RegisteredLabelWithPrivate<iana::EllipticCurve>;
 
-/// A parsed view into a parsed EC2 elliptic curve [CoseKey].
+/// A parsed view into a parsed EC2 elliptic curve [`CoseKey`](coset::CoseKey).
 ///
 /// If this key contains public key information, the public key component will be either defined
 /// using the X and Y coordinates or using the X coordinate and the sign of the public key point.
@@ -260,7 +260,7 @@ impl<'a, OE: Display> AsRef<CoseKey> for CoseEc2Key<'a, OE> {
     }
 }
 
-/// A parsed view into an OKP elliptic curve [CoseKey].
+/// A parsed view into an OKP elliptic curve [`CoseKey`](coset::CoseKey).
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoseOkpKey<'a, OE: Display> {
     /// Key that is referenced by this view.
@@ -350,7 +350,7 @@ impl<'a, OE: Display> AsRef<CoseKey> for CoseOkpKey<'a, OE> {
     }
 }
 
-/// A parsed view into a symmetric [CoseKey].
+/// A parsed view into a symmetric [`CoseKey`](coset::CoseKey).
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoseSymmetricKey<'a, OE: Display> {
     /// Key that is referenced by this view.
@@ -395,15 +395,15 @@ impl<'a, OE: Display> AsRef<CoseKey> for CoseSymmetricKey<'a, OE> {
     }
 }
 
-/// A trait for types that can provide [CoseKey]s for COSE structure operations.
+/// A trait for types that can provide [`CoseKey`](coset::CoseKey)s for COSE structure operations.
 pub trait KeyProvider: Sized {
     /// Look up a key for the signature based on the provided `key_id` hint.
     ///
-    /// The iterator returned should contain all [CoseKey]s of the provider that have a key ID
-    /// matching the one provided, or all [CoseKey]s available if key_id is None.
+    /// The iterator returned should contain all [`CoseKey`](coset::CoseKey)s of the provider that have a key ID
+    /// matching the one provided, or all [`CoseKey`](coset::CoseKey)s available if key_id is None.
     fn lookup_key(&self, key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>>;
 
-    /// Create a [KeyProvider] filtering this key providers output for keys with key IDs
+    /// Create a [`KeyProvider`] filtering this key providers output for keys with key IDs
     /// matching the COSE structure's header.
     fn match_key_ids(self) -> KeyProviderFilterMatchingKeyId<Self> {
         KeyProviderFilterMatchingKeyId(self)
@@ -457,7 +457,7 @@ impl KeyProvider for CoseKey {
     }
 }
 
-/// [KeyProvider] that filters another [KeyProvider]s output to only output keys with
+/// [`KeyProvider`] that filters another [`KeyProvider`] s output to only output keys with
 /// key IDs matching the ones provided in the COSE structure's headers.
 pub struct KeyProviderFilterMatchingKeyId<T: KeyProvider>(T);
 

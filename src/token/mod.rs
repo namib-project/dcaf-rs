@@ -13,7 +13,7 @@
 //! [signing](sign_access_token) and [verifying](verify_access_token) access tokens.
 //!
 //! **NOTE: The APIs in this module are experimental and likely to change in the future!**
-//! This is because we plan to move much of the code here to the [coset](https://docs.rs/coset/)
+//! This is because we plan to move much of the code here to the [`coset`]
 //! library, since much of this just builds on COSE functionality and isn't ACE-OAuth specific.
 //!
 //! In order to use any of these methods, you will need to provide a cryptographic backend which
@@ -21,7 +21,7 @@
 //! [`MacCryptoBackend`](cose::MacCryptoBackend) or [`SignCryptoBackend`], depending on the intended
 //! operation.
 //!
-//! Implementations for these traits may be found in the [cose::crypto_impl] module.
+//! Implementations for these traits may be found in the [`cose::crypto_impl`]  module.
 //!
 //! If you plan to support `CoseEncrypt` or `CoseSign` rather than just `CoseEncrypt0` or
 //! `CoseSign1` (i.e., if you have multiple recipients with separate keys), your backend might also
@@ -30,49 +30,41 @@
 //! See the respective traits for details.
 //!
 //! # Creating Access Tokens
-//! In order to create access tokens, you can use either [`encrypt_access_token`](encrypt_access_token)
-//! or [`sign_access_token`](sign_access_token),
+//! In order to create access tokens, you can use either [`encrypt_access_token`] or
+//! [`sign_access_token`],
 //! depending on whether you want the access token to be wrapped in a
 //! `COSE_Encrypt0` or `COSE_Sign1` structure. In case you want to create a token intended for
 //! multiple recipients (each with their own key), you can use
-//! [`encrypt_access_token_multiple`](encrypt_access_token_multiple) or
-//! [`sign_access_token_multiple`](sign_access_token_multiple).
+//! [`encrypt_access_token_multiple`] or [`sign_access_token_multiple`].
 //!
-//! Both functions take a [`ClaimsSet`](ClaimsSet) containing the claims that
-//! shall be part of the access token, a key used to encrypt or sign the token,
-//! optional `aad` (additional authenticated data), un-/protected headers and a cryptographic
-//! `backend` (as described in the [cose] module).
+//! Both functions take a [`ClaimsSet`] containing the claims that shall be part of the access
+//! token, a key used to encrypt or sign the token, optional `aad` (additional authenticated data),
+//! un-/protected headers and a cryptographic `backend` (as described in the [`cose`]  module).
 //!
 //! Note that if the headers you pass in set fields to invalid values, an error will be returned.
-//! For more information on how to set headers, see the [cose] module.
+//! For more information on how to set headers, see the [`cose`]  module.
 //!
-//! The function will return a [`Result`](Result) of the opaque
-//! [`ByteString`](ByteString) containing the access token.
+//! The function will return a [`Result`] of the opaque [`ByteString`] containing the access token.
 //!
 //! # Verifying and Decrypting Access Tokens
-//! In order to verify or decrypt existing access tokens represented as [`ByteString`](ByteString)s,
-//! use [`verify_access_token`](verify_access_token) or
-//! [`decrypt_access_token`](decrypt_access_token) respectively.
+//! In order to verify or decrypt existing access tokens represented as [`ByteString`]s, use
+//! [`verify_access_token`] or [`decrypt_access_token`] respectively.
 //! In case the token was created for multiple recipients (each with their own key),
-//! use [`verify_access_token_multiple`](verify_access_token_multiple)
-//! or [`decrypt_access_token_multiple`](decrypt_access_token_multiple).
+//! use [`verify_access_token_multiple`] or [`decrypt_access_token_multiple`].
 //!
 //! Both functions take the access token, a `key_provider` that allows looking up keys that might be
 //! used to decrypt or verify, optional `aad` (additional authenticated data) and a cryptographic
-//! `backend` (as described in the [cose] module).
+//! `backend` (as described in the [`cose`]  module).
 //!
-//! [`decrypt_access_token`](decrypt_access_token) will return a result containing
-//! the decrypted [`ClaimsSet`](ClaimsSet).
-//! [`verify_access_token`](verify_access_token) will return an empty result which
-//! indicates that the token was successfully verified---an [`Err`](Result)
+//! [`decrypt_access_token`] will return a result containing the decrypted [`ClaimsSet`].
+//! [`verify_access_token`] will return an empty result which indicates that the token was
+//! successfully verified---an [`Err`](Result)
 //! would indicate failure.
 //!
 //! # Extracting Headers from an Access Token
 //! Regardless of whether a token was signed, encrypted, or MAC-tagged, you can extract its
-//! headers using [`get_token_headers`](get_token_headers),
-//! which will return an option containing both
-//! unprotected and protected headers (or which will be [`None`](None) in case
-//! the token is invalid).
+//! headers using [`get_token_headers`], which will return an option containing both unprotected and
+//! protected headers (or which will be [`None`] in case he token is invalid).
 //!
 //! # Example
 //! The following shows how to create and encrypt an access token:
@@ -140,8 +132,8 @@ mod tests;
 /// [`encrypt_access_token_multiple`].
 ///
 /// # Errors
-/// Returns an error if the [ClaimsSet] could not be encoded or an error during signing
-/// occurs (see [CoseEncryptBuilderExt::try_encrypt]  for possible errors).
+/// Returns an error if the [`ClaimsSet`]  could not be encoded or an error during signing
+/// occurs (see [`CoseEncryptBuilderExt::try_encrypt`]   for possible errors).
 ///
 /// # Example
 ///
@@ -180,8 +172,8 @@ where
 /// they encrypt the Content Encryption Key for each recipient.
 ///
 /// # Errors
-/// Returns an error if the [ClaimsSet] could not be encoded or an error during signing
-/// occurs (see [CoseEncryptBuilderExt::try_encrypt] and [CoseRecipientBuilderExt::try_encrypt] for
+/// Returns an error if the [`ClaimsSet`]  could not be encoded or an error during signing
+/// occurs (see [`CoseEncryptBuilderExt::try_encrypt] and [`CoseRecipientBuilderExt::try_encrypt``]  for
 /// possible errors).
 ///
 /// # Example
@@ -302,8 +294,8 @@ where
 /// If you wish to create a token with multiple signatures, use [`sign_access_token_multiple`].
 ///
 /// # Errors
-/// Returns an error if the [ClaimsSet] could not be encoded or an error during signing
-/// occurs (see [CoseSign1BuilderExt::try_add_sign] for possible errors).
+/// Returns an error if the [`ClaimsSet`] could not be encoded or an error during signing
+/// occurs (see [`CoseSign1BuilderExt::try_add_sign`](CoseSign1BuilderExt) for possible errors).
 ///
 /// # Example
 /// ```
@@ -376,8 +368,8 @@ where
 /// individual signature.
 ///
 /// # Errors
-/// Returns an error if the [ClaimsSet] could not be encoded or an error during signing
-/// occurs (see [CoseSignBuilderExt::try_add_sign] for possible errors).
+/// Returns an error if the [`ClaimsSet`]  could not be encoded or an error during signing
+/// occurs (see [`CoseSignBuilderExt::try_add_sign`]  for possible errors).
 ///
 /// # Example
 /// ```
@@ -520,9 +512,9 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
 /// instance of the latter, use [`verify_access_token_multiple`] instead.
 ///
 /// # Errors
-/// Returns an error if the [CoseSign1] structure could not be parsed, an error during decryption
-/// occurs (see [CoseSign1Ext::try_verify] for possible errors) or the contained payload is not a
-/// valid [ClaimsSet].
+/// Returns an error if the [`CoseSign1`]  structure could not be parsed, an error during decryption
+/// occurs (see [`CoseSign1Ext::try_verify`]  for possible errors) or the contained payload is not a
+/// valid [`ClaimsSet`] .
 ///
 /// # Example
 ///
@@ -550,9 +542,9 @@ where
 /// instance of the latter, use [`verify_access_token`] instead.
 ///
 /// # Errors
-/// Returns an error if the [CoseSign] structure could not be parsed, an error during decryption
-/// occurs (see [CoseSignExt::try_verify] for possible errors) or the contained payload is not a
-/// valid [ClaimsSet].
+/// Returns an error if the [`CoseSign`]  structure could not be parsed, an error during decryption
+/// occurs (see [`CoseSignExt::try_verify`]  for possible errors) or the contained payload is not a
+/// valid [`ClaimsSet`] .
 pub fn verify_access_token_multiple<T, CKP, AAD: AadProvider + ?Sized>(
     backend: &mut T,
     key_provider: &CKP,
@@ -576,9 +568,9 @@ where
 /// instance of the latter, use [`decrypt_access_token_multiple`] instead.
 ///
 /// # Errors
-/// Returns an error if the [CoseEncrypt0] structure could not be parsed, an error during decryption
-/// occurs (see [CoseEncrypt0Ext::try_decrypt_with_recipients] for possible errors) or the decrypted
-/// payload is not a valid [ClaimsSet].
+/// Returns an error if the [`CoseEncrypt0`] structure could not be parsed, an error during
+/// decryption occurs (see [`CoseEncrypt0Ext::try_decrypt_with_recipients`](CoseEncrypt0Ext) for
+/// possible errors) or the decrypted payload is not a valid [`ClaimsSet`].
 ///
 /// # Example
 ///
@@ -609,9 +601,9 @@ where
 /// instance of the latter, use [`decrypt_access_token`] instead.
 ///
 /// # Errors
-/// Returns an error if the [CoseEncrypt] structure could not be parsed, an error during decryption
-/// occurs (see [CoseEncryptExt::try_decrypt_with_recipients] for possible errors) or the decrypted
-/// payload is not a valid [ClaimsSet].
+/// Returns an error if the [`CoseEncrypt`]  structure could not be parsed, an error during decryption
+/// occurs (see [`CoseEncryptExt::try_decrypt_with_recipients`]  for possible errors) or the decrypted
+/// payload is not a valid [`ClaimsSet`] .
 pub fn decrypt_access_token_multiple<T, CKP, AAD: AadProvider + ?Sized>(
     backend: &mut T,
     key_provider: &CKP,

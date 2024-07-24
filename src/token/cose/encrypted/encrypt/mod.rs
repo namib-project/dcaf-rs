@@ -27,44 +27,47 @@ use crate::token::cose::recipient::{
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
-/// Extensions to the [CoseEncryptBuilder] type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseEncryptBuilder`]  type that enable usage of cryptographic backends.
 pub trait CoseEncryptBuilderExt: Sized {
     /// Attempts to encrypt the provided payload using a cryptographic backend.
     ///
     /// Note that you still have to ensure that the key is available to the recipient somehow, i.e.
-    /// by adding [CoseRecipient] structures where suitable.
+    /// by adding [`CoseRecipient`](coset::CoseRecipient) structures where suitable.
     ///
     /// # Parameters
     ///
     /// - `backend`      - cryptographic backend to use.
     /// - `key_provider` - provider for cryptographic keys to use (if you already know the
     ///                    corresponding key, simply provide an immutable borrow of it).
-    /// - `protected`    - protected headers for the resulting [CoseEncrypt] instance. Will override
-    ///                    headers previously set using [CoseEncryptBuilder::protected].
-    /// - `unprotected`  - unprotected headers for the resulting [CoseEncrypt] instance. Will
-    ///                    override headers previously set using [CoseEncryptBuilder::unprotected].
-    /// - `payload`      - payload which should be added to the resulting [CoseMac0] instance and
-    ///                    for which the MAC should be calculated. Will override a payload
-    ///                    previously set using [CoseEncryptBuilder::payload].
+    /// - `protected`    - protected headers for the resulting [`CoseEncrypt`] instance.
+    ///                    Will override headers previously set using
+    ///                    [`CoseEncryptBuilder::protected`](CoseEncryptBuilder).
+    /// - `unprotected`  - unprotected headers for the resulting [`CoseEncrypt`] instance. Will
+    ///                    override headers previously set using
+    ///                    [`CoseEncryptBuilder::unprotected`](CoseEncryptBuilder).
+    /// - `payload`      - payload which should be added to the resulting
+    ///                    [`CoseMac0`](coset::CoseMac0) instance and for which the MAC should be
+    ///                    calculated. Will override a payload previously set using
+    ///                    [`CoseEncryptBuilder::payload`](CoseEncryptBuilder).
     /// - `external_aad` - provider of additional authenticated data that should be included in the
     ///                    MAC calculation.
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
-    /// or otherwise unsuitable for MAC calculation, this function will return the most fitting
-    /// [CoseCipherError] for the specific type of error.
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of
+    /// those) are malformed or otherwise unsuitable for MAC calculation, this function will return
+    /// the most fitting [`CoseCipherError`] for the specific type of error.
     ///
     /// If Additional Authenticated Data is provided even though the chosen algorithm is not an AEAD
-    /// algorithm, a [CoseCipherError::AadUnsupported] will be returned.
+    /// algorithm, a [`CoseCipherError::AadUnsupported`] will be returned.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
     ///
     /// # Examples
     ///
@@ -122,11 +125,11 @@ impl CoseEncryptBuilderExt for CoseEncryptBuilder {
     }
 }
 
-/// Extensions to the [CoseEncrypt] type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseEncrypt`]  type that enable usage of cryptographic backends.
 ///
 /// # Examples
 ///
-/// Create a simple [CoseEncrypt] instance that uses the provided key directly and encrypts a
+/// Create a simple [`CoseEncrypt`]  instance that uses the provided key directly and encrypts a
 /// payload, then decrypt it:
 ///
 /// ```
@@ -175,7 +178,7 @@ impl CoseEncryptBuilderExt for CoseEncryptBuilder {
 /// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
 /// ```
 ///
-/// Create a simple [CoseEncrypt] instance with recipients that protect a content encryption key
+/// Create a simple [`CoseEncrypt`]  instance with recipients that protect a content encryption key
 /// using AES key wrap. Encrypt a plaintext for it, then verify it:
 /// ```
 ///
@@ -237,10 +240,11 @@ impl CoseEncryptBuilderExt for CoseEncryptBuilder {
 pub trait CoseEncryptExt {
     /// Attempts to decrypt the payload contained in this object using a cryptographic backend.
     ///
-    /// Note that [CoseRecipient]s are not considered for key lookup here, the key provider must
-    /// provide the key used directly for MAC calculation.
-    /// If your key provider can/should be able to provide the key for a contained [CoseRecipient],
-    /// not for the [CoseEncrypt] instance itself, use [CoseEncrypt::try_verify_with_recipients]
+    /// Note that [`CoseRecipient`](coset::CoseRecipient)s are not considered for key lookup here,
+    /// the key provider must provide the key used directly for MAC calculation.
+    /// If your key provider can/should be able to provide the key for a contained
+    /// [`CoseRecipient`](coset::CoseRecipient), not for the [`CoseEncrypt`] instance itself, use
+    /// [`CoseEncrypt::try_decrypt_with_recipients`]
     /// instead.
     ///
     /// # Parameters
@@ -253,31 +257,31 @@ pub trait CoseEncryptExt {
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
-    /// or otherwise unsuitable for decryption, this function will return the most fitting
-    /// [CoseCipherError] for the specific type of error.
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of
+    /// those) are malformed or otherwise unsuitable for MAC calculation, this function will return
+    /// the most fitting [`CoseCipherError`] for the specific type of error.
     ///
     /// If Additional Authenticated Data is provided even though the chosen algorithm is not an AEAD
-    /// algorithm, a [CoseCipherError::AadUnsupported] will be returned.
+    /// algorithm, a [`CoseCipherError::AadUnsupported`] will be returned.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but decryption fails for all key candidates provided by
-    /// the key provider a [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    /// the key provider a [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
     /// the verification error for that key.
     /// For an invalid MAC for an otherwise valid and suitable object+key pairing, this would
-    /// usually be a [CoseCipherError::VerificationFailure].
+    /// usually be a [`CoseCipherError::VerificationFailure`].
     ///
     /// # Examples
     ///
     /// Verify the example `enveloped-tests/env-pass-01.json` from the `cose-wg/Examples` repository
-    /// referenced in RFC 9052 using the [crate::token::cose::crypto_impl::openssl::OpensslContext]
-    /// backend:
+    /// referenced in RFC 9052 using the
+    /// [`OpensslContext`](super::super::crypto_impl::openssl::OpensslContext) backend:
     /// ```
     /// use base64::Engine;
     /// use coset::{CoseEncrypt, CoseKeyBuilder, TaggedCborSerializable};
@@ -304,8 +308,8 @@ pub trait CoseEncryptExt {
     ///
     /// Attempt to verify the example `enveloped-tests/env-fail-02` from the `cose-wg/Examples`
     /// repository referenced in RFC 9052 using the
-    /// [crate::token::cose::crypto_impl::openssl::OpensslContext] backend (should fail, as the
-    /// ciphertext is invalid):
+    /// [`OpensslContext`](super::super::crypto_impl::openssl::OpensslContext) backend (should fail,
+    /// as the ciphertext is invalid):
     /// ```
     /// use base64::Engine;
     /// use coset::{CoseEncrypt, CoseKeyBuilder, TaggedCborSerializable};
@@ -349,7 +353,7 @@ pub trait CoseEncryptExt {
     ) -> Result<Vec<u8>, CoseCipherError<B::Error>>;
 
     /// Attempts to decrypt the payload contained in this object using a cryptographic backend,
-    /// performing a search through the contained [CoseRecipient]s in order to decrypt the content
+    /// performing a search through the contained [`CoseRecipient`](coset::CoseRecipient)s in order to decrypt the content
     /// encryption key (CEK).
     ///
     /// # Parameters
@@ -362,35 +366,35 @@ pub trait CoseEncryptExt {
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of those) are malformed
     /// or otherwise unsuitable for decryption, this function will return the most fitting
-    /// [CoseCipherError] for the specific type of error.
+    /// [`CoseCipherError`] for the specific type of error.
     ///
     /// If Additional Authenticated Data is provided even though the chosen algorithm is not an AEAD
-    /// algorithm, a [CoseCipherError::AadUnsupported] will be returned.
+    /// algorithm, a [`CoseCipherError::AadUnsupported`] will be returned.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
-    /// If the COSE object itself is not malformed, but decryption of all [CoseRecipient]s fails
-    /// (due to non-available keys or malformation), [CoseCipherError::NoDecryptableRecipientFound]
+    /// If the COSE object itself is not malformed, but decryption of all [`CoseRecipient`](coset::CoseRecipient)s fails
+    /// (due to non-available keys or malformation), [`CoseCipherError::NoDecryptableRecipientFound`]
     /// is returned with a list of the attempted recipients and resulting errors.
     ///
-    /// Note that not all recipients will necessarily be tried, as a malformed [CoseRecipient] will
+    /// Note that not all recipients will necessarily be tried, as a malformed [`CoseRecipient`](coset::CoseRecipient) will
     /// terminate the recipient search early.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
     /// the verification error for that key.
     /// For an invalid MAC for an otherwise valid and suitable object+key pairing, this would
-    /// usually be a [CoseCipherError::VerificationFailure].
+    /// usually be a [`CoseCipherError::VerificationFailure`].
     ///
     /// # Examples
     ///
     /// Verify the example `aes-wrap-examples/aes-wrap-128-04.json` from the `cose-wg/Examples`
     /// repository referenced in RFC 9052 using the
-    /// [crate::token::cose::crypto_impl::openssl::OpensslContext] backend:
+    /// [`OpensslContext`](super::super::crypto_impl::openssl::OpensslContext) backend:
     /// ```
     /// use base64::Engine;
     /// use coset::{CoseEncrypt, CoseKeyBuilder, CoseMac, TaggedCborSerializable};

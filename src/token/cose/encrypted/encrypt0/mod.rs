@@ -23,7 +23,7 @@ use crate::token::cose::key::KeyProvider;
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
-/// Extensions to the [CoseEncrypt0Builder] type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseEncrypt0Builder`]  type that enable usage of cryptographic backends.
 pub trait CoseEncrypt0BuilderExt: Sized {
     /// Attempts to encrypt the given `payload` using a cryptographic backend.
     ///
@@ -32,31 +32,31 @@ pub trait CoseEncrypt0BuilderExt: Sized {
     /// - `backend`      - cryptographic backend to use.
     /// - `key_provider` - provider for cryptographic keys to use (if you already know the
     ///                    corresponding key, simply provide an immutable borrow of it).
-    /// - `protected`    - protected headers for the resulting [CoseEncrypt0] instance. Will override
-    ///                    headers previously set using [CoseEncrypt0Builder::protected].
-    /// - `unprotected`  - unprotected headers for the resulting [CoseEncrypt0] instance. Will override
-    ///                    headers previously set using [CoseEncrypt0Builder::unprotected].
-    /// - `payload`      - Data that should be encrypted and included in the [CoseEncrypt0]
+    /// - `protected`    - protected headers for the resulting [`CoseEncrypt0`] instance. Will override
+    ///                    headers previously set using [`CoseEncrypt0Builder::protected`].
+    /// - `unprotected`  - unprotected headers for the resulting [`CoseEncrypt0`] instance. Will override
+    ///                    headers previously set using [`CoseEncrypt0Builder::unprotected`].
+    /// - `payload`      - Data that should be encrypted and included in the [`CoseEncrypt0`]
     ///                    instance.
     /// - `external_aad` - provider of additional authenticated data that should be provided to the
     ///                    encryption algorithm (only suitable for AEAD algorithms).
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of those) are malformed
     /// or otherwise unsuitable for encryption, this function will return the most fitting
-    /// [CoseCipherError] for the specific type of error.
+    /// [`CoseCipherError`] for the specific type of error.
     ///
     /// If Additional Authenticated Data is provided even though the chosen algorithm is not an AEAD
-    /// algorithm, a [CoseCipherError::AadUnsupported] will be returned.
+    /// algorithm, a [`CoseCipherError::AadUnsupported`] will be returned.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
     ///
     /// # Examples
     ///
@@ -114,11 +114,11 @@ impl CoseEncrypt0BuilderExt for CoseEncrypt0Builder {
     }
 }
 
-/// Extensions to the [CoseEncrypt0] type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseEncrypt0`]  type that enable usage of cryptographic backends.
 ///
 /// # Examples
 ///
-/// Create a simple [CoseEncrypt0] instance that uses the provided key directly and encrypts a
+/// Create a simple [`CoseEncrypt0`]  instance that uses the provided key directly and encrypts a
 /// payload, then decrypt it:
 ///
 /// ```
@@ -169,30 +169,30 @@ pub trait CoseEncrypt0Ext {
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of those) are malformed
     /// or otherwise unsuitable for decryption, this function will return the most fitting
-    /// [CoseCipherError] for the specific type of error.
+    /// [`CoseCipherError`] for the specific type of error.
     ///
     /// If Additional Authenticated Data is provided even though the chosen algorithm is not an AEAD
-    /// algorithm, a [CoseCipherError::AadUnsupported] will be returned.
+    /// algorithm, a [`CoseCipherError::AadUnsupported`] will be returned.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but decryption fails for all key candidates provided
-    /// by the key provider a [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    /// by the key provider a [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
     /// the verification error for that key.
     /// For an invalid ciphertext for an otherwise valid and suitable object+key pairing, this would
-    /// usually be a [CoseCipherError::VerificationFailure].
+    /// usually be a [`CoseCipherError::VerificationFailure`].
     ///
     /// # Examples
     ///
     /// Verify the example `encrypted-tests/enc-pass-01.json` from the `cose-wg/Examples` repository
-    /// referenced in RFC 9052 using the [crate::token::cose::crypto_impl::openssl::OpensslContext]
+    /// referenced in RFC 9052 using the [`OpensslContext`](super::super::crypto_impl::openssl::OpensslContext)
     /// backend:
     /// ```
     /// use base64::Engine;
@@ -220,7 +220,7 @@ pub trait CoseEncrypt0Ext {
     ///
     /// Attempt to verify the example `encrypted-tests/enc-fail-02` from the `cose-wg/Examples`
     /// repository referenced in RFC 9052 using the
-    /// [crate::token::cose::crypto_impl::openssl::OpensslContext] backend (should fail, as the
+    /// [`OpensslContext`](super::super::crypto_impl::openssl::OpensslContext) backend (should fail, as the
     /// ciphertext is invalid):
     /// ```
     /// use base64::Engine;

@@ -14,7 +14,7 @@
 //! This crate implements the ACE-OAuth
 //! (Authentication and Authorization for Constrained Environments using the OAuth 2.0 Framework)
 //! framework as defined in [RFC 9200](https://www.rfc-editor.org/rfc/rfc9200).
-//! Key features include CBOR-(de-)serializable data models such as [`AccessTokenRequest`](AccessTokenRequest),
+//! Key features include CBOR-(de-)serializable data models such as [`AccessTokenRequest`],
 //! as well as the possibility to create COSE encrypted/signed access tokens
 //! (as described in the standard) along with decryption/verification functions.
 //! Implementations of the cryptographic functions must be provided by the user by implementing
@@ -58,10 +58,10 @@
 //! ## Data models
 //! [For example](https://www.rfc-editor.org/rfc/rfc9200#figure-6),
 //! let's assume you (the client) want to request an access token from an Authorization Server.
-//! For this, you'd need to create an [`AccessTokenRequest`](AccessTokenRequest), which has to include at least a
-//! `client_id`. We'll also specify an audience, a scope (using [`TextEncodedScope`](TextEncodedScope)---note that
+//! For this, you'd need to create an [`AccessTokenRequest`], which has to include at least a
+//! `client_id`. We'll also specify an audience, a scope (using [`TextEncodedScope`]---note that
 //! [binary-encoded scopes](BinaryEncodedScope) or [AIF-encoded scopes](AifEncodedScope) would also work), as well as a
-//! [`ProofOfPossessionKey`](ProofOfPossessionKey) (the key the access token should be bound to) in the `req_cnf` field.
+//! [`ProofOfPossessionKey`] (the key the access token should be bound to) in the `req_cnf` field.
 //!
 //! Creating, serializing and then de-serializing such a structure would look like this:
 //! ```
@@ -86,29 +86,25 @@
 //!
 //! ## Token Endpoint
 //! The most commonly used models will probably be the token endpoint's
-//! [`AccessTokenRequest`](AccessTokenRequest) and
-//! [`AccessTokenResponse`](AccessTokenResponse)
-//! described in [section 5.8 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8).
-//! In case of an error, an [`ErrorResponse`](ErrorResponse)
-//! should be used.
+//! [`AccessTokenRequest`] and [`AccessTokenResponse`] described in
+//! [section 5.8 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8).
+//! In case of an error, an [`ErrorResponse`] should be used.
 //!
 //! After an initial Unauthorized Resource Request Message, an
-//! [`AuthServerRequestCreationHint`](AuthServerRequestCreationHint)
+//! [`AuthServerRequestCreationHint`]
 //! can be used to provide additional information to the client, as described in
 //! [section 5.3 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.3).
 //!
 //! ## Common Data Types
 //! Some types used across multiple scenarios include:
-//! - [`Scope`](Scope) (as described in
+//! - [`Scope`] (as described in
 //!   [section 5.8.1 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.1)),
-//!   either as a [`TextEncodedScope`](TextEncodedScope),
-//!   a [`BinaryEncodedScope`](BinaryEncodedScope) or
-//!   an [`AifEncodedScope`](AifEncodedScope).
-//! - [`ProofOfPossessionKey`](ProofOfPossessionKey) as specified in
+//!   either as a [`TextEncodedScope`], a [`BinaryEncodedScope`] or an [`AifEncodedScope`].
+//! - [`ProofOfPossessionKey`] as specified in
 //!   [section 3.1 of RFC 8747](https://www.rfc-editor.org/rfc/rfc8747#section-3.1).
 //!   For example, this will be used in the access token's `cnf` claim.
 //! - While not really a data type, various constants representing values used in ACE-OAuth
-//!   are provided in the [`constants`](constants) module.
+//!   are provided in the [`constants`] module.
 //!
 //! # Token handling
 //!

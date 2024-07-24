@@ -8,9 +8,9 @@
  *
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
-//! Extensions for COSE_Mac0 objects and builders ([CoseMac0], [CoseMac0Builder]).
+//! Extensions for COSE_Mac0 objects and builders ([`CoseMac0], [`CoseMac0Builder``] ).
 //!
-//! Refer to the module-level documentation of [crate::token::cose] for some general information
+//! Refer to the module-level documentation of [`crate::token::cose`]  for some general information
 //! regarding the way that headers and keys need to be set up.
 use alloc::rc::Rc;
 use core::cell::RefCell;
@@ -25,7 +25,7 @@ use crate::token::cose::maced::{try_compute, try_verify, MacCryptoBackend};
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
-/// Extensions to the [CoseMac0Builder] type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseMac0Builder`]  type that enable usage of cryptographic backends.
 pub trait CoseMac0BuilderExt: Sized {
     /// Attempts to compute the MAC using a cryptographic backend.
     ///
@@ -34,26 +34,26 @@ pub trait CoseMac0BuilderExt: Sized {
     /// - `backend`      - cryptographic backend to use.
     /// - `key_provider` - provider for cryptographic keys to use (if you already know the
     ///                    corresponding key, simply provide an immutable borrow of it).
-    /// - `protected`    - protected headers for the resulting [CoseMac0] instance. Will override
-    ///                    headers previously set using [CoseMac0Builder::protected].
-    /// - `unprotected`  - unprotected headers for the resulting [CoseMac0] instance. Will override
-    ///                    headers previously set using [CoseMac0Builder::unprotected].
+    /// - `protected`    - protected headers for the resulting [`CoseMac0`] instance. Will override
+    ///                    headers previously set using [`CoseMac0Builder::protected`].
+    /// - `unprotected`  - unprotected headers for the resulting [`CoseMac0`] instance. Will override
+    ///                    headers previously set using [`CoseMac0Builder::unprotected`].
     /// - `external_aad` - provider of additional authenticated data that should be included in the
     ///                    MAC calculation.
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of those) are malformed
     /// or otherwise unsuitable for MAC calculation, this function will return the most fitting
-    /// [CoseCipherError] for the specific type of error.
+    /// [`CoseCipherError`] for the specific type of error.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
     ///
     /// # Examples
     ///
@@ -101,11 +101,11 @@ impl CoseMac0BuilderExt for CoseMac0Builder {
     }
 }
 
-/// Extensions to the [CoseMac0] type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseMac0`]  type that enable usage of cryptographic backends.
 ///
 /// # Examples
 ///
-/// Create a [CoseMac0] instance and compute a MAC for it, then verify it:
+/// Create a [`CoseMac0`]  instance and compute a MAC for it, then verify it:
 /// ```
 ///
 /// use coset::{CoseKeyBuilder, CoseMac0Builder, HeaderBuilder, iana};
@@ -143,28 +143,28 @@ pub trait CoseMac0Ext {
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of those) are malformed
     /// or otherwise unsuitable for MAC calculation, this function will return the most fitting
-    /// [CoseCipherError] for the specific type of error.
+    /// [`CoseCipherError`] for the specific type of error.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but MAC verification fails for all key candidates
-    /// provided by the key provider a [CoseCipherError::NoMatchingKeyFound] error will be
+    /// provided by the key provider a [`CoseCipherError::NoMatchingKeyFound`] error will be
     /// returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
     /// the verification error for that key.
     /// For an invalid MAC for an otherwise valid and suitable object+key pairing, this would
-    /// usually be a [CoseCipherError::VerificationFailure].
+    /// usually be a [`CoseCipherError::VerificationFailure`].
     ///
     /// # Examples
     ///
     /// Verify the example `mac0-tests/mac-pass-01.json` from the `cose-wg/Examples` repository
-    /// referenced in RFC 9052 using the [crate::token::cose::crypto_impl::openssl::OpensslContext]
+    /// referenced in RFC 9052 using the [`OpensslContext`](super::super::crypto_impl::openssl::OpensslContext)
     /// backend:
     /// ```
     /// use base64::Engine;
@@ -192,7 +192,7 @@ pub trait CoseMac0Ext {
     ///
     /// Attempt to verify the example `mac0-tests/mac-fail-02` from the `cose-wg/Examples`
     /// repository referenced in RFC 9052 using the
-    /// [crate::token::cose::crypto_impl::openssl::OpensslContext] backend (should fail, as the MAC
+    /// [`OpensslContext`](super::super::crypto_impl::openssl::OpensslContext) backend (should fail, as the MAC
     /// is invalid):
     /// ```
     /// use base64::Engine;

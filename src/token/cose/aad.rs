@@ -32,12 +32,12 @@ pub trait AadProvider: Sized {
     /// If you want to provide AAD for nested structures, either use a tuple
     /// `(CoseAadProvider, CoseAadProvider)` or provide a tuple `(CoseAadProvider, bool)`.
     ///
-    /// In the first case, the second arguments' [AadProvider::lookup_aad]
-    /// will be used as [AadProvider::lookup_nested_aad] if its
-    /// [AadProvider::lookup_nested_aad] returns `None`.
+    /// In the first case, the second arguments' [`AadProvider::lookup_aad`]
+    /// will be used as [`AadProvider::lookup_nested_aad`] if its
+    /// [`AadProvider::lookup_nested_aad`] returns `None`.
     ///
-    /// In the latter case, the boolean argument specifies whether [AadProvider::lookup_aad]
-    /// should be used as a fallback if [AadProvider::lookup_nested_aad] returns `None`.
+    /// In the latter case, the boolean argument specifies whether [`AadProvider::lookup_aad`]
+    /// should be used as a fallback if [`AadProvider::lookup_nested_aad`] returns `None`.
     ///
     /// # Parameters
     ///
@@ -187,7 +187,7 @@ impl<T: AadProvider, U: AadProvider> AadProvider for (T, U) {
     }
 }
 
-/// Swap lookup_aad and lookup_nested_aad of an existing [AadProvider].
+/// Swap lookup_aad and lookup_nested_aad of an existing [`AadProvider`] .
 pub struct InvertedAadProvider<T: AadProvider>(pub T);
 
 impl<T: AadProvider> AadProvider for InvertedAadProvider<T> {
@@ -229,8 +229,8 @@ impl<T: AadProvider> AadProvider for &T {
     }
 }
 
-/// Use [AadProvider::lookup_aad] as a fallback for [AadProvider::lookup_nested_aad] if the
-/// boolean is `true` and [AadProvider::lookup_nested_aad] returns None.
+/// Use [`AadProvider::lookup_aad`] as a fallback for [`AadProvider::lookup_nested_aad`]  if the
+/// boolean is `true` and [`AadProvider::lookup_nested_aad`]  returns None.
 impl<T: AadProvider> AadProvider for (T, bool) {
     fn lookup_aad(
         &self,

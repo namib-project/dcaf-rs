@@ -29,25 +29,25 @@ pub trait CoseSign1BuilderExt: Sized {
     /// - `backend`      - cryptographic backend to use.
     /// - `key_provider` - provider for cryptographic keys to use (if you already know the
     ///                    corresponding key, simply provide an immutable borrow of it).
-    /// - `protected`    - protected headers for the resulting [CoseSign1] instance. Will override
-    ///                    headers previously set using [CoseSign1Builder::protected].
-    /// - `unprotected`  - unprotected headers for the resulting [CoseSign1] instance. Will override
-    ///                    headers previously set using [CoseSign1Builder::unprotected].
+    /// - `protected`    - protected headers for the resulting [`CoseSign1`] instance. Will override
+    ///                    headers previously set using [`CoseSign1Builder::protected`].
+    /// - `unprotected`  - unprotected headers for the resulting [`CoseSign1`] instance. Will override
+    ///                    headers previously set using [`CoseSign1Builder::unprotected`].
     /// - `external_aad` - provider of additional authenticated data that should be included in the
     ///                    signature calculation.
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of those) are malformed
     /// or otherwise unsuitable for signature calculation, this function will return the most
-    /// fitting [CoseCipherError] for the specific type of error.
+    /// fitting [`CoseCipherError`] for the specific type of error.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
     ///
     /// # Examples
     ///
@@ -73,26 +73,26 @@ pub trait CoseSign1BuilderExt: Sized {
     /// - `backend`      - cryptographic backend to use.
     /// - `key_provider` - provider for cryptographic keys to use (if you already know the
     ///                    corresponding key, simply provide an immutable borrow of it).
-    /// - `protected`    - protected headers for the resulting [CoseSign1] instance. Will override
-    ///                    headers previously set using [CoseSign1Builder::protected].
-    /// - `unprotected`  - unprotected headers for the resulting [CoseSign1] instance. Will override
-    ///                    headers previously set using [CoseSign1Builder::unprotected].
+    /// - `protected`    - protected headers for the resulting [`CoseSign1`] instance. Will override
+    ///                    headers previously set using [`CoseSign1Builder::protected`].
+    /// - `unprotected`  - unprotected headers for the resulting [`CoseSign1`] instance. Will override
+    ///                    headers previously set using [`CoseSign1Builder::unprotected`].
     /// - `payload`      - detached payload that should be signed.
     /// - `external_aad` - provider of additional authenticated data that should be included in the
     ///                    signature calculation.
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of those) are malformed
     /// or otherwise unsuitable for signature calculation, this function will return the most
-    /// fitting [CoseCipherError] for the specific type of error.
+    /// fitting [`CoseCipherError`] for the specific type of error.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [CoseCipherError::NoMatchingKeyFound] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
     ///
     /// # Examples
     ///
@@ -176,11 +176,11 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
     }
 }
 
-/// Extensions to the [CoseSign1] type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseSign1`]  type that enable usage of cryptographic backends.
 ///
 /// # Examples
 ///
-/// Create a simple [CoseSign] instance that uses the provided key directly and compute a signature
+/// Create a simple [`CoseSign1`] instance that uses the provided key directly and compute a signature
 /// for it, then verify it:
 ///
 /// ```
@@ -220,7 +220,7 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
 /// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
 /// ```
 ///
-/// Create a simple [CoseSign] instance with a detached payload that uses the provided key directly
+/// Create a simple [`CoseSign1`]  instance with a detached payload that uses the provided key directly
 /// and compute a signature for it, then verify it:
 ///
 /// ```
@@ -271,28 +271,28 @@ pub trait CoseSign1Ext {
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of those) are malformed
     /// or otherwise unsuitable for signature verification, this function will return the most
-    /// fitting [CoseCipherError] for the specific type of error.
+    /// fitting [`CoseCipherError`] for the specific type of error.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but signature verification fails for all key candidates
-    /// provided by the key provider a [CoseCipherError::NoMatchingKeyFound] error will be
+    /// provided by the key provider a [`CoseCipherError::NoMatchingKeyFound`] error will be
     /// returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
     /// the verification error for that key.
     /// For an invalid signature for an otherwise valid and suitable object+key pairing, this would
-    /// usually be a [CoseCipherError::VerificationFailure].
+    /// usually be a [`CoseCipherError::VerificationFailure`].
     ///
     /// # Examples
     ///
     /// Verify the example `sign1-tests/sign-pass-01.json` from the `cose-wg/Examples` repository
-    /// referenced in RFC 9052 using the [crate::token::cose::crypto_impl::openssl::OpensslContext]
+    /// referenced in RFC 9052 using the [`OpensslContext`](super::super::crypto_impl::openssl::OpensslContext)
     /// backend:
     /// ```
     /// use base64::Engine;
@@ -322,7 +322,7 @@ pub trait CoseSign1Ext {
     ///
     /// Attempt to verify the example `sign1-tests/sign-fail-02` from the `cose-wg/Examples`
     /// repository referenced in RFC 9052 using the
-    /// [crate::token::cose::crypto_impl::openssl::OpensslContext] backend (should fail, as the
+    /// [`OpensslContext`](super::super::crypto_impl::openssl::OpensslContext) backend (should fail, as the
     /// signature is invalid):
     /// ```
     /// use base64::Engine;
@@ -379,23 +379,23 @@ pub trait CoseSign1Ext {
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [CoseKey] or AAD (or any combination of those) are malformed
+    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of those) are malformed
     /// or otherwise unsuitable for signature verification, this function will return the most
-    /// fitting [CoseCipherError] for the specific type of error.
+    /// fitting [`CoseCipherError`] for the specific type of error.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
-    /// [CoseCipherError::Other] containing the backend error will be returned.
+    /// [`CoseCipherError::Other`] containing the backend error will be returned.
     /// Refer to the backend module's documentation for information on the possible errors that may
     /// occur.
     ///
     /// If the COSE object is not malformed, but signature verification fails for all key candidates
-    /// provided by the key provider a [CoseCipherError::NoMatchingKeyFound] error will be
+    /// provided by the key provider a [`CoseCipherError::NoMatchingKeyFound`] error will be
     /// returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
     /// the verification error for that key.
     /// For an invalid signature for an otherwise valid and suitable object+key pairing, this would
-    /// usually be a [CoseCipherError::VerificationFailure].
+    /// usually be a [`CoseCipherError::VerificationFailure`].
     ///
     /// # Examples
     ///
