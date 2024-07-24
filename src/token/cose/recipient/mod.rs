@@ -1,4 +1,13 @@
-use alloc::boxed::Box;
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use alloc::collections::{BTreeSet, VecDeque};
 use alloc::rc::Rc;
 use alloc::vec::Vec;
@@ -11,17 +20,123 @@ use coset::{
 };
 
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypted::CoseKeyDistributionCipher;
+use crate::token::cose::aad::{AadProvider, InvertedAadProvider};
 use crate::token::cose::header_util::{determine_algorithm, determine_key_candidates};
 use crate::token::cose::key::ensure_valid_aes_key;
-use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider, CoseParsedKey};
-use crate::token::cose::{try_cose_crypto_operation, InvertedAadProvider};
+use crate::token::cose::key::{CoseParsedKey, KeyProvider};
+use crate::token::cose::{try_cose_crypto_operation, CoseSymmetricKey, CryptoBackend};
 
+/// Trait for cryptographic backends that can perform key distribution operations for algorithms
+/// used in COSE structures.
+pub trait KeyDistributionCryptoBackend: CryptoBackend {
+    /// Encrypts the given `plaintext` using the AES key wrap (RFC 3394) variant provided as `alg`
+    /// and the given `key`.
+    ///
+    /// # Arguments
+    ///
+    /// * `alg` - The AES key wrap variant to use.
+    ///           If unsupported by the backend, a [CoseCipherError::UnsupportedAlgorithm] error
+    ///           should be returned.
+    ///           If the given algorithm is an IANA-assigned value that is unknown, the
+    ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
+    ///           additional variants of AES key wrap are ever added).
+    ///           If the algorithm is not an AES key wrap algorithm, the implementation may return
+    ///           [CoseCipherError::UnsupportedAlgorithm] or panic.
+    /// * `key` - Symmetric key that should be used.
+    ///           Implementations may assume that the provided key has the right length for the
+    ///           provided algorithm, and panic if this is not the case.
+    /// * `plaintext` - Data (key) that should be wrapped.
+    ///           Implementations may assume that the provided plaintext's length is a multiple of
+    ///           64 bits, and panic otherwise.
+    /// * `iv`  - Initialization vector that should be used for the key wrap process.
+    ///
+    /// # Returns
+    ///
+    /// It is expected that the return value is the computed ciphertext/wrapped key as a `Vec` of
+    /// bytes.
+    ///
+    /// # Errors
+    ///
+    /// In case of errors, the implementation may return any valid [CoseCipherError].
+    /// For backend-specific errors, [CoseCipherError::Other] may be used to convey a
+    /// backend-specific error.
+    ///
+    /// # Panics
+    ///
+    /// Implementations may panic if the provided algorithm is not an AES key wrap algorithm, the
+    /// provided key, plaintext or IV are not of the right length for the provided algorithm or if
+    /// an unrecoverable backend error occurs that necessitates a panic (at their own discretion).
+    /// In the last of the above cases, additional panics should be documented on the backend level.
+    ///
+    /// For unknown algorithms or key curves, however, the implementation must not panic and return
+    /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new AES-GCM variants are ever
+    /// defined).
+    fn aes_key_wrap(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
+
+    /// Decrypts the given `ciphertext` using the AES key unwrap (RFC 3394) variant provided as
+    /// `alg` and the given `key`.
+    ///
+    /// # Arguments
+    ///
+    /// * `alg` - The AES key wrap variant to use.
+    ///           If unsupported by the backend, a [CoseCipherError::UnsupportedAlgorithm] error
+    ///           should be returned.
+    ///           If the given algorithm is an IANA-assigned value that is unknown, the
+    ///           implementation should return [CoseCipherError::UnsupportedAlgorithm] (in case
+    ///           additional variants of AES key wrap are ever added).
+    ///           If the algorithm is not an AES key wrap algorithm, the implementation may return
+    ///           [CoseCipherError::UnsupportedAlgorithm] or panic.
+    /// * `key` - Symmetric key that should be used.
+    ///           Implementations may assume that the provided key has the right length for the
+    ///           provided algorithm, and panic if this is not the case.
+    /// * `ciphertext` - Data (key) that should be unwrapped.
+    ///           Implementations may assume that the resulting plaintext's length is a multiple of
+    ///           64 bits, and panic otherwise.
+    /// * `iv`  - Initialization vector that should be used for the key wrap process.
+    ///
+    /// # Returns
+    ///
+    /// It is expected that the return value is the computed plaintext/unwrapped key as a `Vec` of
+    /// bytes.
+    ///
+    /// # Errors
+    ///
+    /// In case of errors, the implementation may return any valid [CoseCipherError].
+    /// For backend-specific errors, [CoseCipherError::Other] may be used to convey a
+    /// backend-specific error.
+    ///
+    /// # Panics
+    ///
+    /// Implementations may panic if the provided algorithm is not an AES key wrap algorithm, the
+    /// provided key, plaintext or IV are not of the right length for the provided algorithm or if
+    /// an unrecoverable backend error occurs that necessitates a panic (at their own discretion).
+    /// In the last of the above cases, additional panics should be documented on the backend level.
+    ///
+    /// For unknown algorithms or key curves, however, the implementation must not panic and return
+    /// [CoseCipherError::UnsupportedAlgorithm] instead (in case new AES-GCM variants are ever
+    /// defined).
+    fn aes_key_unwrap(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
+}
+
+/// Internal structure that implements the key provider trait by creating depth-first search
+/// iterators ([CoseNestedRecipientIterator]) through a nested recipient structure.
 pub(crate) struct CoseNestedRecipientSearchContext<
     'a,
-    B: CoseKeyDistributionCipher,
-    CKP: CoseKeyProvider,
-    AAD: CoseAadProvider,
+    B: KeyDistributionCryptoBackend,
+    CKP: KeyProvider,
+    AAD: AadProvider,
 > {
     recipient_iter: &'a Vec<CoseRecipient>,
     backend: Rc<RefCell<&'a mut B>>,
@@ -31,7 +146,7 @@ pub(crate) struct CoseNestedRecipientSearchContext<
     errors: Rc<RefCell<Vec<(&'a CoseRecipient, CoseCipherError<B::Error>)>>>,
 }
 
-impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvider>
+impl<'a, B: KeyDistributionCryptoBackend, CKP: KeyProvider, AAD: AadProvider>
     CoseNestedRecipientSearchContext<'a, B, CKP, AAD>
 {
     pub(crate) fn new(
@@ -59,11 +174,11 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvide
     }
 }
 
-impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvider> CoseKeyProvider
+impl<'a, B: KeyDistributionCryptoBackend, CKP: KeyProvider, AAD: AadProvider> KeyProvider
     for CoseNestedRecipientSearchContext<'a, B, CKP, AAD>
 {
-    fn lookup_key(&self, key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>> {
-        let mut iter: Box<dyn Iterator<Item = CoseKey>> = Box::new(CoseNestedRecipientIterator {
+    fn lookup_key(&self, _key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>> {
+        CoseNestedRecipientIterator {
             iteration_state: vec![self.recipient_iter.iter()],
             recipient_stack: vec![],
             backend: Rc::clone(&self.backend),
@@ -73,20 +188,17 @@ impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvide
             current_candidates_position: 0,
             errors: Rc::clone(&self.errors),
             context: self.context,
-        });
-        if let Some(kid) = key_id {
-            let kid = Vec::from(kid);
-            iter = Box::new(iter.filter(move |k| k.key_id == kid));
         }
-        iter
     }
 }
 
+/// An iterator that performs a depth-first search through a nested [CoseRecipient] structure,
+/// attempts to decrypt those recipients and yields potential CEKs resulting from this search.
 struct CoseNestedRecipientIterator<
     'a,
-    B: CoseKeyDistributionCipher,
-    CKP: CoseKeyProvider,
-    AAD: CoseAadProvider,
+    B: KeyDistributionCryptoBackend,
+    CKP: KeyProvider,
+    AAD: AadProvider,
 > {
     iteration_state: Vec<alloc::slice::Iter<'a, CoseRecipient>>,
     recipient_stack: Vec<&'a CoseRecipient>,
@@ -99,7 +211,7 @@ struct CoseNestedRecipientIterator<
     context: EncryptionContext,
 }
 
-impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvider> Iterator
+impl<'a, B: KeyDistributionCryptoBackend, CKP: KeyProvider, AAD: AadProvider> Iterator
     for CoseNestedRecipientIterator<'a, B, CKP, AAD>
 {
     type Item = CoseKey;
@@ -190,7 +302,7 @@ pub(crate) fn struct_to_recipient_context(ctx: EncryptionContext) -> EncryptionC
     }
 }
 
-impl<'a, B: CoseKeyDistributionCipher, CKP: CoseKeyProvider, AAD: CoseAadProvider>
+impl<'a, B: KeyDistributionCryptoBackend, CKP: KeyProvider, AAD: AadProvider>
     CoseNestedRecipientIterator<'a, B, CKP, AAD>
 {
     fn attempt_to_decrypt_nested(
@@ -247,8 +359,18 @@ fn determine_encrypt_key_ops_for_alg<CE: Display>(
 ) -> Result<BTreeSet<KeyOperation>, CoseCipherError<CE>> {
     Ok(BTreeSet::from_iter(match alg {
         iana::Algorithm::Direct => {
-            // TODO maybe needs to be all operations instead
-            vec![]
+            vec![
+                KeyOperation::Assigned(iana::KeyOperation::WrapKey),
+                KeyOperation::Assigned(iana::KeyOperation::UnwrapKey),
+                KeyOperation::Assigned(iana::KeyOperation::MacCreate),
+                KeyOperation::Assigned(iana::KeyOperation::MacVerify),
+                KeyOperation::Assigned(iana::KeyOperation::Encrypt),
+                KeyOperation::Assigned(iana::KeyOperation::Decrypt),
+                KeyOperation::Assigned(iana::KeyOperation::DeriveBits),
+                KeyOperation::Assigned(iana::KeyOperation::DeriveKey),
+                KeyOperation::Assigned(iana::KeyOperation::Sign),
+                KeyOperation::Assigned(iana::KeyOperation::Verify),
+            ]
         }
 
         iana::Algorithm::Direct_HKDF_AES_128
@@ -337,6 +459,7 @@ fn determine_decrypt_key_ops_for_alg<CE: Display>(
     }))
 }
 
+/// Extensions to the [CoseRecipientBuilder] type that enable usage of cryptographic backends.
 pub trait CoseRecipientBuilderExt: Sized {
     /// Attempts to encrypt the provided payload/key using a cryptographic backend.
     ///
@@ -378,12 +501,8 @@ pub trait CoseRecipientBuilderExt: Sized {
     ///
     /// # Examples
     ///
-    /// TODO
-    fn try_encrypt<
-        B: CoseKeyDistributionCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider + ?Sized,
-    >(
+    /// Refer to [the documentation for the CoseRecipient extensions](CoseRecipientExt) for examples.
+    fn try_encrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -396,11 +515,7 @@ pub trait CoseRecipientBuilderExt: Sized {
 }
 
 impl CoseRecipientBuilderExt for CoseRecipientBuilder {
-    fn try_encrypt<
-        B: CoseKeyDistributionCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider + ?Sized,
-    >(
+    fn try_encrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -459,6 +574,12 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
                                     return Err(CoseCipherError::AadUnsupported);
                                 }
 
+                                if plaintext.len() % 8 != 0 {
+                                    return Err(CoseCipherError::InvalidPayload(
+                                        plaintext.to_vec(),
+                                    ));
+                                }
+
                                 backend.aes_key_wrap(
                                     alg,
                                     symm_key,
@@ -490,11 +611,74 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
     }
 }
 
+/// Extensions to the [CoseRecipient] type that enable usage of cryptographic backends.
+///
+/// # Examples
+///
+/// Create a simple [CoseRecipient] instance that encrypts a content encryption key using AES key
+/// wrap and then decrypts it again:
+///
+/// ```
+///
+/// use coset::{CoseEncrypt0Builder, CoseKeyBuilder, CoseRecipientBuilder, EncryptionContext, HeaderBuilder, iana};
+/// use dcaf::error::CoseCipherError;
+/// use dcaf::token::cose::{CryptoBackend, CoseEncrypt0BuilderExt, CoseEncrypt0Ext, CoseRecipientBuilderExt, CoseRecipientExt, CoseSymmetricKey, HeaderBuilderExt};
+/// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+///
+/// let mut backend = OpensslContext::new();
+///
+/// let mut kek_data = vec![0; 32];
+/// backend.generate_rand(kek_data.as_mut_slice())?;
+/// let kek = CoseKeyBuilder::new_symmetric_key(kek_data).build();
+///
+/// let mut cek_data = vec![0; 32];
+/// backend.generate_rand(cek_data.as_mut_slice())?;
+/// let cek = CoseKeyBuilder::new_symmetric_key(cek_data.clone()).build();
+///
+/// let unprotected = HeaderBuilder::new()
+///                             .algorithm(iana::Algorithm::A256KW)
+///                             .key_id("example_key".as_bytes().to_vec())
+///                             .build();
+/// let cose_object = CoseRecipientBuilder::new()
+///                     .try_encrypt(
+///                         &mut backend,
+///                         &kek,
+///                         EncryptionContext::EncRecipient,
+///                         None,
+///                         Some(unprotected),
+///                         cek_data.as_slice(),
+///                         &[] as &[u8]
+///                     )?
+///                     .build();
+///
+/// let decrypted_key = cose_object.try_decrypt(
+///                         &mut backend,
+///                         &kek,
+///                         EncryptionContext::EncRecipient,
+///                         &[] as &[u8]
+///                     )?;
+///
+/// assert_eq!(decrypted_key.len(), 1);
+/// let parsed_key = CoseSymmetricKey::try_from(decrypted_key.get(0).unwrap())?;
+/// assert_eq!(parsed_key.k, cek_data.as_slice());
+///
+/// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
+/// ```
 pub trait CoseRecipientExt {
     /// Attempts to decrypt the key contained in this object using a cryptographic backend.
     ///
+    /// Returns a `Vec` of potential decryption results for this key.
+    /// The reason why a `Vec` is returned here is that if the algorithm is
+    /// [iana::Algorithm::Direct], the key provider's result will be returned directly, which might
+    /// include multiple potential keys for the `key_id` provided in the recipient.
+    ///
     /// Note that nested [CoseRecipient]s are not considered for key lookup here, the key provider
     /// must provide the key used directly for MAC calculation.
+    ///
+    /// Usually, you wouldn't decrypt a recipient directly, but instead use
+    /// [super::CoseEncryptExt::try_decrypt_with_recipients] or
+    /// [super::CoseMacExt::try_verify_with_recipients] instead, which automatically search through the
+    /// respective COSE structures for recipient candidates.
     ///
     /// # Parameters
     ///
@@ -529,12 +713,8 @@ pub trait CoseRecipientExt {
     ///
     /// # Examples
     ///
-    /// TODO
-    fn try_decrypt<
-        B: CoseKeyDistributionCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider + ?Sized,
-    >(
+    /// Refer to the trait-level documentation for an example.
+    fn try_decrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -545,11 +725,7 @@ pub trait CoseRecipientExt {
 }
 
 impl CoseRecipientExt for CoseRecipient {
-    fn try_decrypt<
-        B: CoseKeyDistributionCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider + ?Sized,
-    >(
+    fn try_decrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         &self,
         backend: &mut B,
         key_provider: &CKP,

@@ -1,8 +1,18 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use core::fmt::Debug;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::token::cose::CoseCipher;
+use crate::token::cose::CryptoBackend;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use coset::iana::EnumI64;
@@ -201,8 +211,8 @@ pub struct TestCaseFailures {
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCaseInput {
     pub plaintext: String,
-    #[serde(default)]
-    pub detached: bool,
+    //#[serde(default)]
+    //pub detached: bool,
     pub sign0: Option<TestCaseRecipient>,
     pub sign: Option<TestCaseSign>,
     pub encrypted: Option<TestCaseEncrypted>,
@@ -295,7 +305,7 @@ fn print_test_information(case: &TestCase) {
     println!("Verification should fail: {}", case.fail);
 }
 
-pub fn perform_cose_reference_output_test<T: CoseStructTestHelper<B>, B: CoseCipher>(
+pub fn perform_cose_reference_output_test<T: CoseStructTestHelper<B>, B: CryptoBackend>(
     test_path: PathBuf,
     mut backend: B,
 ) {
@@ -321,7 +331,7 @@ pub fn perform_cose_reference_output_test<T: CoseStructTestHelper<B>, B: CoseCip
     example_output.check_against_test_case(&test_case_description, &mut backend);
 }
 
-pub fn perform_cose_self_signed_test<T: CoseStructTestHelper<B>, B: CoseCipher>(
+pub fn perform_cose_self_signed_test<T: CoseStructTestHelper<B>, B: CryptoBackend>(
     test_path: PathBuf,
     mut backend: B,
 ) {
@@ -360,7 +370,7 @@ pub fn perform_cose_self_signed_test<T: CoseStructTestHelper<B>, B: CoseCipher>(
     redeserialized.check_against_test_case(&test_case_description, &mut backend);
 }
 
-pub trait CoseStructTestHelper<B: CoseCipher>:
+pub trait CoseStructTestHelper<B: CryptoBackend>:
     Sized + CborSerializable + TaggedCborSerializable
 {
     fn from_test_case_output(output: &[u8]) -> Result<Self, CoseError> {
@@ -471,6 +481,9 @@ pub(crate) fn serialize_cose_with_failures<T: AsCborValue + TaggedCborSerializab
     }
 }
 
+// CLion does not understand that `v` is actually used in the format string.
+// Clippy should still detect any such issues, though.
+//noinspection RsLiveness
 pub(crate) fn apply_attribute_failures(
     header: &mut Header,
     failures: &TestCaseFailures,
@@ -500,7 +513,7 @@ pub(crate) fn apply_attribute_failures(
                     Err(e) => Err(e),
                 }
             }
-            v => panic!("unable to set algorithm to {:?}", v),
+            v => panic!("unable to set algorithm to {v:?}"),
         }
     } else {
         Ok(())

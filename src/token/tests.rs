@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 The NAMIB Project Developers.
+ * Copyright (c) 2022, 2024 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -112,7 +112,7 @@ fn example_aad() -> Vec<u8> {
 
 fn example_claims(
     key: &CoseKey,
-) -> Result<ClaimsSet, AccessTokenError<<MockCipher<ThreadRng> as CoseCipher>::Error>> {
+) -> Result<ClaimsSet, AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     Ok(ClaimsSetBuilder::new()
         .claim(CwtClaimName::Cnf, key.clone().to_cbor_value()?)
         .build())
@@ -156,7 +156,7 @@ fn assert_header_is_part_of(subset: &Header, superset: &Header) {
 
 #[test]
 fn test_get_headers_enc(
-) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CoseCipher>::Error>> {
+) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     let (unprotected_header, protected_header) = example_headers(A128GCM);
     let enc_test = CoseEncrypt0Builder::new()
         .unprotected(unprotected_header.clone())
@@ -174,7 +174,7 @@ fn test_get_headers_enc(
 
 #[test]
 fn test_get_headers_sign(
-) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CoseCipher>::Error>> {
+) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     let (unprotected_header, protected_header) = example_headers(ES256);
     let sign_test = CoseSign1Builder::new()
         .unprotected(unprotected_header.clone())
@@ -192,7 +192,7 @@ fn test_get_headers_sign(
 
 #[test]
 fn test_get_headers_mac(
-) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CoseCipher>::Error>> {
+) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     let (unprotected_header, protected_header) = example_headers(HMAC_256_256);
     let mac_test = CoseMac0Builder::new()
         .unprotected(unprotected_header.clone())
@@ -224,7 +224,7 @@ fn test_get_headers_invalid() {
 
 #[test]
 fn test_encrypt_decrypt(
-) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CoseCipher>::Error>> {
+) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
     let key = example_key_one(A128GCM);
     let (unprotected_header, protected_header) = example_headers(A128GCM);
@@ -250,7 +250,7 @@ fn test_encrypt_decrypt(
 
 #[test]
 fn test_encrypt_decrypt_multiple(
-) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CoseCipher>::Error>> {
+) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     const AUDIENCE: &str = "example_aud";
     let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
     let (unprotected_header, protected_header) = example_headers(A128GCM);
@@ -306,7 +306,7 @@ fn test_encrypt_decrypt_multiple(
 
 #[test]
 fn test_encrypt_decrypt_match_multiple(
-) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CoseCipher>::Error>> {
+) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
     let (unprotected_header, protected_header) = example_headers(A128GCM);
     let key1 = example_key_one(A128KW);
@@ -331,7 +331,7 @@ fn test_encrypt_decrypt_match_multiple(
 
 #[test]
 fn test_encrypt_decrypt_invalid_header(
-) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CoseCipher>::Error>> {
+) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
     let key = example_key_one(A128GCM);
     let (unprotected_header, protected_header) = example_headers(A128GCM);
@@ -383,8 +383,8 @@ fn test_encrypt_decrypt_invalid_header(
 }
 
 #[test]
-fn test_sign_verify() -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CoseCipher>::Error>>
-{
+fn test_sign_verify(
+) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
     let key = example_ec_key_one(ES256);
     let (unprotected_header, protected_header) = example_headers(ES256);
@@ -411,7 +411,7 @@ fn test_sign_verify() -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as C
 
 #[test]
 fn test_sign_verify_multiple(
-) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CoseCipher>::Error>> {
+) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     const AUDIENCE: &str = "example_aud";
     let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
     let key1 = example_ec_key_one(ES256);

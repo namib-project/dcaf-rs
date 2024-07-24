@@ -1,3 +1,13 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use std::path::PathBuf;
 
 use coset::{CoseError, CoseKey, CoseSign1, CoseSign1Builder, Header};
@@ -10,10 +20,10 @@ use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, perform_cose_reference_output_test,
     perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,
 };
-use crate::token::cose::CoseCipher;
-use crate::token::cose::CoseSignCipher;
+use crate::token::cose::CryptoBackend;
+use crate::token::cose::SignCryptoBackend;
 
-impl<B: CoseCipher + CoseSignCipher> CoseStructTestHelper<B> for CoseSign1 {
+impl<B: CryptoBackend + SignCryptoBackend> CoseStructTestHelper<B> for CoseSign1 {
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self {
         let sign1_cfg = case
             .input
@@ -73,7 +83,7 @@ impl<B: CoseCipher + CoseSignCipher> CoseStructTestHelper<B> for CoseSign1 {
 }
 
 #[rstest]
-fn cose_examples_ecdsa_sign1_reference_output<B: CoseSignCipher>(
+fn cose_examples_ecdsa_sign1_reference_output<B: SignCryptoBackend>(
     #[files("tests/cose_examples/ecdsa-examples/ecdsa-sig-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -81,7 +91,7 @@ fn cose_examples_ecdsa_sign1_reference_output<B: CoseSignCipher>(
 }
 
 #[rstest]
-fn cose_examples_ecdsa_sign1_self_signed<B: CoseSignCipher>(
+fn cose_examples_ecdsa_sign1_self_signed<B: SignCryptoBackend>(
     #[files("tests/cose_examples/ecdsa-examples/ecdsa-sig-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -89,7 +99,7 @@ fn cose_examples_ecdsa_sign1_self_signed<B: CoseSignCipher>(
 }
 
 #[rstest]
-fn cose_examples_sign1_reference_output<B: CoseSignCipher>(
+fn cose_examples_sign1_reference_output<B: SignCryptoBackend>(
     #[files("tests/cose_examples/sign1-tests/sign-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -97,7 +107,7 @@ fn cose_examples_sign1_reference_output<B: CoseSignCipher>(
 }
 
 #[rstest]
-fn cose_examples_sign1_self_signed<B: CoseSignCipher>(
+fn cose_examples_sign1_self_signed<B: SignCryptoBackend>(
     #[files("tests/cose_examples/sign1-tests/sign-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {

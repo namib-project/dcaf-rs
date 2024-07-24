@@ -1,19 +1,29 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use std::path::PathBuf;
 
 use coset::{CoseError, CoseKey, CoseSign, CoseSignBuilder, CoseSignatureBuilder, Header};
 use rstest::rstest;
 
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
-use crate::token::cose::encrypted::CoseKeyDistributionCipher;
+use crate::token::cose::recipient::KeyDistributionCryptoBackend;
 use crate::token::cose::signed::{CoseSignBuilderExt, CoseSignExt};
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, perform_cose_reference_output_test,
     perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,
 };
-use crate::token::cose::CoseCipher;
-use crate::token::cose::CoseSignCipher;
+use crate::token::cose::CryptoBackend;
+use crate::token::cose::SignCryptoBackend;
 
-impl<B: CoseCipher + CoseSignCipher + CoseKeyDistributionCipher> CoseStructTestHelper<B>
+impl<B: CryptoBackend + SignCryptoBackend + KeyDistributionCryptoBackend> CoseStructTestHelper<B>
     for CoseSign
 {
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self {
@@ -135,7 +145,9 @@ impl<B: CoseCipher + CoseSignCipher + CoseKeyDistributionCipher> CoseStructTestH
 }
 
 #[rstest]
-fn cose_examples_ecdsa_sign_reference_output<B: CoseSignCipher + CoseKeyDistributionCipher>(
+fn cose_examples_ecdsa_sign_reference_output<
+    B: SignCryptoBackend + KeyDistributionCryptoBackend,
+>(
     #[files("tests/cose_examples/ecdsa-examples/ecdsa-0*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -143,7 +155,7 @@ fn cose_examples_ecdsa_sign_reference_output<B: CoseSignCipher + CoseKeyDistribu
 }
 
 #[rstest]
-fn cose_examples_ecdsa_sign_self_signed<B: CoseSignCipher + CoseKeyDistributionCipher>(
+fn cose_examples_ecdsa_sign_self_signed<B: SignCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/ecdsa-examples/ecdsa-0*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -151,7 +163,7 @@ fn cose_examples_ecdsa_sign_self_signed<B: CoseSignCipher + CoseKeyDistributionC
 }
 
 #[rstest]
-fn cose_examples_sign_reference_output<B: CoseSignCipher + CoseKeyDistributionCipher>(
+fn cose_examples_sign_reference_output<B: SignCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/sign-tests/sign-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -159,7 +171,7 @@ fn cose_examples_sign_reference_output<B: CoseSignCipher + CoseKeyDistributionCi
 }
 
 #[rstest]
-fn cose_examples_sign_self_signed<B: CoseSignCipher + CoseKeyDistributionCipher>(
+fn cose_examples_sign_self_signed<B: SignCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/sign-tests/sign-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -167,7 +179,7 @@ fn cose_examples_sign_self_signed<B: CoseSignCipher + CoseKeyDistributionCipher>
 }
 
 #[rstest]
-fn ecdsa_tests<B: CoseSignCipher + CoseKeyDistributionCipher>(
+fn ecdsa_tests<B: SignCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/dcaf_cose_examples/ecdsa/*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {

@@ -1,3 +1,13 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use std::path::PathBuf;
 
 use coset::{CoseEncrypt0, CoseEncrypt0Builder, CoseError, CoseKey, HeaderBuilder};
@@ -5,15 +15,15 @@ use rstest::rstest;
 
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
 use crate::token::cose::encrypted::encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
-use crate::token::cose::encrypted::CoseEncryptCipher;
+use crate::token::cose::encrypted::EncryptCryptoBackend;
 use crate::token::cose::header_util::HeaderBuilderExt;
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, perform_cose_reference_output_test,
     perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,
 };
-use crate::token::cose::CoseCipher;
+use crate::token::cose::CryptoBackend;
 
-impl<B: CoseCipher + CoseEncryptCipher> CoseStructTestHelper<B> for CoseEncrypt0 {
+impl<B: CryptoBackend + EncryptCryptoBackend> CoseStructTestHelper<B> for CoseEncrypt0 {
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self {
         let encrypt0_cfg = case
             .input
@@ -103,8 +113,8 @@ impl<B: CoseCipher + CoseEncryptCipher> CoseStructTestHelper<B> for CoseEncrypt0
             let plaintext = verify_result.expect("unable to verify token");
 
             assert_eq!(case.input.plaintext.as_bytes(), plaintext.as_slice());
-            // TODO IV is apprarently taken from rng_stream field, not header field, but still implicitly added to header.
-            //      ugh...
+            // IV is apprarently taken from rng_stream field, not header field, but still implicitly added to header.
+            // ugh...
             let mut unprotected = test_case.unprotected.clone().unwrap_or_default();
             let mut protected = test_case.protected.clone().unwrap_or_default();
             unprotected.iv.clone_from(&self.unprotected.iv);
@@ -116,7 +126,7 @@ impl<B: CoseCipher + CoseEncryptCipher> CoseStructTestHelper<B> for CoseEncrypt0
 }
 
 #[rstest]
-fn cose_examples_encrypted_encrypt0_reference_output<B: CoseEncryptCipher>(
+fn cose_examples_encrypted_encrypt0_reference_output<B: EncryptCryptoBackend>(
     #[files("tests/cose_examples/encrypted-tests/enc-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -124,7 +134,7 @@ fn cose_examples_encrypted_encrypt0_reference_output<B: CoseEncryptCipher>(
 }
 
 #[rstest]
-fn cose_examples_encrypted_encrypt0_self_signed<B: CoseEncryptCipher>(
+fn cose_examples_encrypted_encrypt0_self_signed<B: EncryptCryptoBackend>(
     #[files("tests/cose_examples/encrypted-tests/enc-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -132,7 +142,7 @@ fn cose_examples_encrypted_encrypt0_self_signed<B: CoseEncryptCipher>(
 }
 
 #[rstest]
-fn cose_examples_aes_gcm_encrypt0_reference_output<B: CoseEncryptCipher>(
+fn cose_examples_aes_gcm_encrypt0_reference_output<B: EncryptCryptoBackend>(
     #[files("tests/cose_examples/aes-gcm-examples/aes-gcm-enc-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -140,7 +150,7 @@ fn cose_examples_aes_gcm_encrypt0_reference_output<B: CoseEncryptCipher>(
 }
 
 #[rstest]
-fn cose_examples_aes_gcm_encrypt0_self_signed<B: CoseEncryptCipher>(
+fn cose_examples_aes_gcm_encrypt0_self_signed<B: EncryptCryptoBackend>(
     #[files("tests/cose_examples/aes-gcm-examples/aes-gcm-enc-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {

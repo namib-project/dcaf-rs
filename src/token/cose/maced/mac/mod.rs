@@ -1,13 +1,24 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use alloc::rc::Rc;
 use core::cell::RefCell;
 
 use coset::{CoseMac, CoseMacBuilder, EncryptionContext, Header};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypted::CoseKeyDistributionCipher;
-use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
-use crate::token::cose::maced::{try_compute, try_verify, CoseMacCipher};
+use crate::token::cose::aad::AadProvider;
+use crate::token::cose::key::KeyProvider;
+use crate::token::cose::maced::{try_compute, try_verify, MacCryptoBackend};
 use crate::token::cose::recipient::CoseNestedRecipientSearchContext;
+use crate::token::cose::recipient::KeyDistributionCryptoBackend;
 
 #[cfg(all(test, feature = "std"))]
 mod tests;
@@ -50,8 +61,8 @@ pub trait CoseMacBuilderExt: Sized {
     ///
     /// # Examples
     ///
-    /// TODO
-    fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    /// Refer to [the documentation for the CoseMac extensions](CoseMacExt) for examples.
+    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -62,7 +73,7 @@ pub trait CoseMacBuilderExt: Sized {
 }
 
 impl CoseMacBuilderExt for CoseMacBuilder {
-    fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -77,12 +88,11 @@ impl CoseMacBuilderExt for CoseMacBuilder {
         if let Some(unprotected) = &unprotected {
             builder = builder.unprotected(unprotected.clone());
         }
-        Ok(builder.create_tag(
+        builder.try_create_tag(
             external_aad
                 .lookup_aad(None, protected.as_ref(), unprotected.as_ref())
                 .unwrap_or(&[] as &[u8]),
             |input| {
-                // TODO proper error handling here
                 try_compute(
                     backend,
                     key_provider,
@@ -90,13 +100,105 @@ impl CoseMacBuilderExt for CoseMacBuilder {
                     unprotected.as_ref(),
                     input,
                 )
-                .expect("computing MAC failed")
             },
-        ))
+        )
     }
 }
 
 /// Extensions to the [CoseMac] type that enable usage of cryptographic backends.
+///
+/// # Examples
+///
+/// Create a simple [CoseMac] instance that uses the provided key directly and compute a MAC for it,
+/// then verify it:
+///
+/// ```
+///
+/// use coset::{CoseKeyBuilder, CoseMac0Builder, CoseMacBuilder, CoseRecipientBuilder, HeaderBuilder, iana};
+/// use dcaf::error::CoseCipherError;
+/// use dcaf::token::cose::{CryptoBackend, CoseMac0BuilderExt, CoseMac0Ext, CoseMacBuilderExt, CoseMacExt};
+/// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+///
+/// let mut backend = OpensslContext::new();
+///
+/// let mut key_data = vec![0; 32];
+/// backend.generate_rand(key_data.as_mut_slice())?;
+/// let key = CoseKeyBuilder::new_symmetric_key(key_data).build();
+///
+/// let unprotected = HeaderBuilder::new()
+///                     .algorithm(iana::Algorithm::HMAC_256_256)
+///                     .key_id("example_key".as_bytes().to_vec())
+///                     .build();
+///
+/// let recipient = CoseRecipientBuilder::new()
+///                     .unprotected(
+///                         HeaderBuilder::new()
+///                             .algorithm(iana::Algorithm::Direct)
+///                             .key_id("example_key".as_bytes().to_vec())
+///                             .build()
+///                     )
+///                     .build();
+///
+/// let cose_object = CoseMacBuilder::new()
+///                     .payload("This is the payload!".as_bytes().to_vec())
+///                     .add_recipient(recipient)
+///                     .try_compute(&mut backend, &key, None, Some(unprotected), &[] as &[u8])?
+///                     .build();
+///
+/// assert!(cose_object.try_verify(&mut backend, &key, &[] as &[u8]).is_ok());
+///
+/// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
+/// ```
+///
+/// Create a simple [CoseMac] instance with recipients that protect a content encryption key using
+/// AES key wrap. Compute a MAC for it, then verify it:
+/// ```
+///
+/// use coset::{CoseKeyBuilder, CoseMac0Builder, CoseMacBuilder, CoseRecipientBuilder, EncryptionContext, HeaderBuilder, iana};
+/// use dcaf::error::CoseCipherError;
+/// use dcaf::token::cose::{CryptoBackend, CoseMac0BuilderExt, CoseMac0Ext, CoseMacBuilderExt, CoseMacExt, CoseRecipientBuilderExt};
+/// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+///
+/// let mut backend = OpensslContext::new();
+///
+/// let mut kek_data = vec![0; 32];
+/// backend.generate_rand(kek_data.as_mut_slice())?;
+/// let kek = CoseKeyBuilder::new_symmetric_key(kek_data).build();
+///
+/// let mut cek_data = vec![0; 32];
+/// backend.generate_rand(cek_data.as_mut_slice())?;
+/// let cek = CoseKeyBuilder::new_symmetric_key(cek_data.clone()).build();
+///
+/// let unprotected = HeaderBuilder::new()
+///                     .algorithm(iana::Algorithm::HMAC_256_256)
+///                     .build();
+///
+/// let recipient_unprotected = HeaderBuilder::new()
+///                             .algorithm(iana::Algorithm::A256KW)
+///                             .key_id("example_key".as_bytes().to_vec())
+///                             .build();
+/// let recipient = CoseRecipientBuilder::new()
+///                     .try_encrypt(
+///                         &mut backend,
+///                         &kek,
+///                         EncryptionContext::MacRecipient,
+///                         None,
+///                         Some(recipient_unprotected),
+///                         cek_data.as_slice(),
+///                         &[] as &[u8]
+///                     )?
+///                     .build();
+///
+/// let cose_object = CoseMacBuilder::new()
+///                     .payload("This is the payload!".as_bytes().to_vec())
+///                     .try_compute(&mut backend, &cek, None, Some(unprotected), &[] as &[u8])?
+///                     .add_recipient(recipient)
+///                     .build();
+///
+/// cose_object.try_verify_with_recipients(&mut backend, &kek, &[] as &[u8])?;
+///
+/// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
+/// ```
 pub trait CoseMacExt {
     /// Attempts to verify the MAC using a cryptographic backend.
     ///
@@ -135,8 +237,72 @@ pub trait CoseMacExt {
     ///
     /// # Examples
     ///
-    /// TODO
-    fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    /// Verify the example `mac-tests/mac-pass-01.json` from the `cose-wg/Examples` repository
+    /// referenced in RFC 9052 using the [crate::token::cose::crypto_impl::openssl::OpensslContext]
+    /// backend:
+    /// ```
+    /// use base64::Engine;
+    /// use coset::{CoseKeyBuilder, CoseMac, TaggedCborSerializable};
+    /// use dcaf::token::cose::{CoseMacExt};
+    /// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+    ///
+    /// let cose_object_cbor_data = hex::decode("D8618541A0A1010554546869732069732074686520636F6E74656E742E5820C2EBE664C1D996AA3026824BBBB7CAA454E2CC4212181AD9F34C7879CBA1972E818340A20125044A6F75722D73656372657440").unwrap();
+    /// let cose_symmetric_key_k = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG-Onbc6mxCcYg").unwrap();
+    ///
+    /// // Parse the object using `coset`.
+    /// let cose_object = CoseMac::from_tagged_slice(cose_object_cbor_data.as_slice()).expect("unable to parse COSE object");
+    /// // Create key and AAD as specified in the example.
+    /// let key = CoseKeyBuilder::new_symmetric_key(cose_symmetric_key_k).build();
+    /// let aad: Vec<u8> = Vec::new();
+    ///
+    /// assert!(
+    ///     cose_object.try_verify(
+    ///         &mut OpensslContext::new(),
+    ///         &mut &key,
+    ///         &aad
+    ///     ).is_ok()
+    /// );
+    /// ```
+    ///
+    /// Attempt to verify the example `mac-tests/mac-fail-02` from the `cose-wg/Examples`
+    /// repository referenced in RFC 9052 using the
+    /// [crate::token::cose::crypto_impl::openssl::OpensslContext] backend (should fail, as the MAC
+    /// is invalid):
+    /// ```
+    /// use base64::Engine;
+    /// use coset::{CoseKeyBuilder, CoseMac, TaggedCborSerializable};
+    /// use dcaf::token::cose::CoseMacExt;
+    /// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+    /// use dcaf::error::CoseCipherError;
+    ///
+    /// let cose_object_cbor_data =
+    ///     hex::decode("D8618543A10105A054546869732069732074686520636F6E74656E742E58202BDCC89F058216B8A208DDC6D8B54AA91F48BD63484986565105C9AD5A6682F7818340A20125044A6F75722D73656372657440")
+    ///         .unwrap();
+    /// let cose_symmetric_key_k =
+    ///     base64::engine::general_purpose::URL_SAFE_NO_PAD
+    ///         .decode("hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG-Onbc6mxCcYg")
+    ///         .unwrap();
+    ///
+    /// // Parse the object using `coset`.
+    /// let cose_object = CoseMac::from_tagged_slice(
+    ///                     cose_object_cbor_data.as_slice()
+    ///                   ).expect("unable to parse COSE object");
+    /// // Create key and AAD as specified in the example.
+    /// let key = CoseKeyBuilder::new_symmetric_key(cose_symmetric_key_k).build();
+    /// let aad: Vec<u8> = Vec::new();
+    ///
+    /// assert!(
+    ///     matches!(
+    ///         cose_object.try_verify(
+    ///             &mut OpensslContext::new(),
+    ///             &mut &key,
+    ///             &aad
+    ///         ),
+    ///         Err(CoseCipherError::NoMatchingKeyFound(_))
+    ///     )
+    /// );
+    /// ```
+    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -180,11 +346,38 @@ pub trait CoseMacExt {
     ///
     /// # Examples
     ///
-    /// TODO
+    /// Verify the example `aes-wrap-examples/aes-wrap-128-01.json` from the `cose-wg/Examples`
+    /// repository referenced in RFC 9052 using the
+    /// [crate::token::cose::crypto_impl::openssl::OpensslContext] backend:
+    /// TODO this example is currently ignored, as the required algorithm is not implemented yet
+    ///      (AES-MAC-128/64)
+    /// ```ignore
+    /// use base64::Engine;
+    /// use coset::{CoseKeyBuilder, CoseMac, TaggedCborSerializable};
+    /// use dcaf::token::cose::{CoseMacExt};
+    /// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+    ///
+    /// let cose_object_cbor_data = hex::decode("D8618543A1010EA054546869732069732074686520636F6E74656E742E4836F5AFAF0BAB5D43818340A20122044A6F75722D73656372657458182F8A3D2AA397D3D5C40AAF9F6656BAFA5DB714EF925B72BC").unwrap();
+    /// let cose_symmetric_key_k = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("hJtXIZ2uSN5kbQfbtTNWbg").unwrap();
+    ///
+    /// // Parse the object using `coset`.
+    /// let cose_object = CoseMac::from_tagged_slice(cose_object_cbor_data.as_slice()).expect("unable to parse COSE object");
+    /// // Create key and AAD as specified in the example.
+    /// let key = CoseKeyBuilder::new_symmetric_key(cose_symmetric_key_k).build();
+    /// let aad: Vec<u8> = Vec::new();
+    ///
+    /// assert!(
+    ///     cose_object.try_verify_with_recipients(
+    ///             &mut OpensslContext::new(),
+    ///             &mut &key,
+    ///             &aad
+    ///         ).is_ok()
+    /// );
+    /// ```
     fn try_verify_with_recipients<
-        B: CoseKeyDistributionCipher + CoseMacCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider + ?Sized,
+        B: KeyDistributionCryptoBackend + MacCryptoBackend,
+        CKP: KeyProvider,
+        CAP: AadProvider + ?Sized,
     >(
         &self,
         backend: &mut B,
@@ -195,7 +388,7 @@ pub trait CoseMacExt {
 }
 
 impl CoseMacExt for CoseMac {
-    fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -221,9 +414,9 @@ impl CoseMacExt for CoseMac {
     }
 
     fn try_verify_with_recipients<
-        B: CoseKeyDistributionCipher + CoseMacCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider + ?Sized,
+        B: KeyDistributionCryptoBackend + MacCryptoBackend,
+        CKP: KeyProvider,
+        CAP: AadProvider + ?Sized,
     >(
         &self,
         backend: &mut B,

@@ -26,12 +26,13 @@ use openssl::symm::{decrypt_aead, encrypt_aead, Cipher};
 use strum_macros::Display;
 
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypted::{CoseEncryptCipher, CoseKeyDistributionCipher};
+use crate::token::cose::encrypted::EncryptCryptoBackend;
 use crate::token::cose::header_util::HeaderParam;
 use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
-use crate::token::cose::maced::CoseMacCipher;
-use crate::token::cose::signed::CoseSignCipher;
-use crate::token::cose::CoseCipher;
+use crate::token::cose::maced::MacCryptoBackend;
+use crate::token::cose::recipient::KeyDistributionCryptoBackend;
+use crate::token::cose::signed::SignCryptoBackend;
+use crate::token::cose::CryptoBackend;
 
 /// Represents an error caused by the OpenSSL cryptographic backend.
 #[derive(Debug, Display)]
@@ -71,7 +72,7 @@ impl From<openssl::aes::KeyError> for CoseCipherError<CoseOpensslCipherError> {
 
 /// Context for the OpenSSL cryptographic backend.
 ///
-/// Can be used as a [CoseCipher] for COSE operations.
+/// Can be used as a [CryptoBackend] for COSE operations.
 ///
 /// Generic properties of this backend:
 /// - [ ] Can derive EC public key components if only the private component (d) is present.
@@ -110,12 +111,6 @@ impl From<openssl::aes::KeyError> for CoseCipherError<CoseOpensslCipherError> {
 ///         - [ ] AES-CCM-64-128-128
 ///         - [ ] AES-CCM-64-128-256
 ///     - [ ] ChaCha20/Poly1305
-/// - Key Derivation Functions (for COSE_Recipients with Key Agreement) // TODO this section might be redundant, see the CEK distribution methods
-///     - [ ] HKDF
-///         - [ ] HKDF SHA-256
-///         - [ ] HKDF SHA-512
-///         - [ ] HKDF AES-MAC-128
-///         - [ ] HKDF AES-MAC-256
 /// - Content Key Distribution Methods (for COSE_Recipients)
 ///     - Direct Encryption
 ///         - [ ] Direct Key with KDF
@@ -170,7 +165,7 @@ impl OpensslContext {
     }
 }
 
-impl CoseCipher for OpensslContext {
+impl CryptoBackend for OpensslContext {
     type Error = CoseOpensslCipherError;
 
     fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
@@ -178,7 +173,7 @@ impl CoseCipher for OpensslContext {
     }
 }
 
-impl CoseSignCipher for OpensslContext {
+impl SignCryptoBackend for OpensslContext {
     fn sign_ecdsa(
         &mut self,
         alg: iana::Algorithm,
@@ -357,7 +352,7 @@ fn cose_ec2_to_ec_public_key(
 
 const AES_GCM_TAG_LEN: usize = 16;
 
-impl CoseEncryptCipher for OpensslContext {
+impl EncryptCryptoBackend for OpensslContext {
     fn encrypt_aes_gcm(
         &mut self,
         algorithm: iana::Algorithm,
@@ -409,7 +404,7 @@ fn algorithm_to_cipher(
     }
 }
 
-impl CoseKeyDistributionCipher for OpensslContext {
+impl KeyDistributionCryptoBackend for OpensslContext {
     fn aes_key_wrap(
         &mut self,
         _algorithm: iana::Algorithm,
@@ -464,7 +459,7 @@ fn compute_hmac(
         .map_err(CoseCipherError::from)
 }
 
-impl CoseMacCipher for OpensslContext {
+impl MacCryptoBackend for OpensslContext {
     fn compute_hmac(
         &mut self,
         algorithm: iana::Algorithm,

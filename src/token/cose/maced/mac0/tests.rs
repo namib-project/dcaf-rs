@@ -1,3 +1,13 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use core::convert::Infallible;
 use std::path::PathBuf;
 
@@ -8,14 +18,14 @@ use rstest::rstest;
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
 use crate::token::cose::header_util::determine_algorithm;
 use crate::token::cose::maced::mac0::{CoseMac0BuilderExt, CoseMac0Ext};
-use crate::token::cose::maced::CoseMacCipher;
+use crate::token::cose::maced::MacCryptoBackend;
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, serialize_cose_with_failures,
     CoseStructTestHelper, TestCase,
 };
-use crate::token::cose::{test_helper, CoseCipher};
+use crate::token::cose::{test_helper, CryptoBackend};
 
-impl<B: CoseCipher + CoseMacCipher> CoseStructTestHelper<B> for CoseMac0 {
+impl<B: CryptoBackend + MacCryptoBackend> CoseStructTestHelper<B> for CoseMac0 {
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self {
         let mac0_cfg = case
             .input
@@ -127,7 +137,7 @@ impl<B: CoseCipher + CoseMacCipher> CoseStructTestHelper<B> for CoseMac0 {
 }
 
 #[rstest]
-fn cose_examples_mac0_reference_output<B: CoseMacCipher>(
+fn cose_examples_mac0_reference_output<B: MacCryptoBackend>(
     #[files("tests/cose_examples/mac0-tests/mac-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -135,7 +145,7 @@ fn cose_examples_mac0_reference_output<B: CoseMacCipher>(
 }
 
 #[rstest]
-fn cose_examples_mac0_self_signed<B: CoseMacCipher>(
+fn cose_examples_mac0_self_signed<B: MacCryptoBackend>(
     #[files("tests/cose_examples/mac0-tests/mac-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {

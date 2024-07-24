@@ -14,8 +14,8 @@ use coset::iana::CwtClaimName;
 use coset::iana::EllipticCurve::P_256;
 use coset::{iana, CoseKeyBuilder, Header, HeaderBuilder};
 use dcaf::common::cbor_map::ToCborMap;
-use dcaf::token::cose::CoseCipher;
-use dcaf::token::cose::CoseSignCipher;
+use dcaf::token::cose::CryptoBackend;
+use dcaf::token::cose::SignCryptoBackend;
 use dcaf::ProofOfPossessionKey::PlainCoseKey;
 use dcaf::{
     sign_access_token, verify_access_token, AccessTokenRequest, AccessTokenResponse, AceProfile,
@@ -53,7 +53,7 @@ fn example_aad() -> Vec<u8> {
 /// 4. Finally, the client tries to send an invalid request, which is met by an ErrorResponse.
 #[cfg(feature = "openssl")]
 #[rstest]
-fn test_scenario<B: CoseCipher + CoseSignCipher>(
+fn test_scenario<B: CryptoBackend + SignCryptoBackend>(
     #[values(OpensslContext::new())] mut backend: B,
 ) -> Result<(), String> {
     let nonce = vec![0xDC, 0xAF];

@@ -1,3 +1,13 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use core::convert::Infallible;
 use std::path::PathBuf;
 
@@ -9,19 +19,19 @@ use coset::{
 use rstest::rstest;
 
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
-use crate::token::cose::encrypted::CoseKeyDistributionCipher;
 use crate::token::cose::header_util::determine_algorithm;
 use crate::token::cose::key::CoseSymmetricKey;
 use crate::token::cose::maced::mac::{CoseMacBuilderExt, CoseMacExt};
-use crate::token::cose::maced::CoseMacCipher;
+use crate::token::cose::maced::MacCryptoBackend;
 use crate::token::cose::recipient::CoseRecipientBuilderExt;
+use crate::token::cose::recipient::KeyDistributionCryptoBackend;
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, serialize_cose_with_failures,
     CoseStructTestHelper, TestCase,
 };
-use crate::token::cose::{test_helper, CoseCipher};
+use crate::token::cose::{test_helper, CryptoBackend};
 
-impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHelper<B>
+impl<B: CryptoBackend + MacCryptoBackend + KeyDistributionCryptoBackend> CoseStructTestHelper<B>
     for CoseMac
 {
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self {
@@ -140,7 +150,7 @@ impl<B: CoseCipher + CoseMacCipher + CoseKeyDistributionCipher> CoseStructTestHe
 }
 
 #[rstest]
-fn cose_examples_mac_reference_output<B: CoseMacCipher + CoseKeyDistributionCipher>(
+fn cose_examples_mac_reference_output<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/mac-tests/mac-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -148,7 +158,7 @@ fn cose_examples_mac_reference_output<B: CoseMacCipher + CoseKeyDistributionCiph
 }
 
 #[rstest]
-fn cose_examples_mac_self_signed<B: CoseMacCipher + CoseKeyDistributionCipher>(
+fn cose_examples_mac_self_signed<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/mac-tests/mac-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -156,7 +166,7 @@ fn cose_examples_mac_self_signed<B: CoseMacCipher + CoseKeyDistributionCipher>(
 }
 
 #[rstest]
-fn hmac_tests<B: CoseMacCipher + CoseKeyDistributionCipher>(
+fn hmac_tests<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/dcaf_cose_examples/hmac/*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {

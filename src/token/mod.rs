@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 The NAMIB Project Developers.
+ * Copyright (c) 2022-2024 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -16,154 +16,106 @@
 //! This is because we plan to move much of the code here to the [coset](https://docs.rs/coset/)
 //! library, since much of this just builds on COSE functionality and isn't ACE-OAuth specific.
 //!
-//! In order to use any of these methods, you will need to provide a cipher which handles
-//! the cryptographic operations by implementing either [`CoseEncryptCipher`],
-//! [`CoseMacCipher`] or [`CoseSignCipher`], depending on the intended operation.
+//! In order to use any of these methods, you will need to provide a cryptographic backend which
+//! handles the cryptographic operations by implementing either [`EncryptCryptoBackend`],
+//! [`MacCryptoBackend`](cose::MacCryptoBackend) or [`SignCryptoBackend`], depending on the intended
+//! operation.
+//!
+//! Implementations for these traits may be found in the [cose::crypto_impl] module.
+//!
 //! If you plan to support `CoseEncrypt` or `CoseSign` rather than just `CoseEncrypt0` or
-//! `CoseSign1` (i.e., if you have multiple recipients with separate keys), you will also need to
-//! implement [`MultipleEncryptCipher`] or [`MultipleSignCipher`].
+//! `CoseSign1` (i.e., if you have multiple recipients with separate keys), your backend might also
+//! need to implement [`KeyDistributionCryptoBackend`].
+//!
 //! See the respective traits for details.
 //!
+//! # Creating Access Tokens
+//! In order to create access tokens, you can use either [`encrypt_access_token`](encrypt_access_token)
+//! or [`sign_access_token`](sign_access_token),
+//! depending on whether you want the access token to be wrapped in a
+//! `COSE_Encrypt0` or `COSE_Sign1` structure. In case you want to create a token intended for
+//! multiple recipients (each with their own key), you can use
+//! [`encrypt_access_token_multiple`](encrypt_access_token_multiple) or
+//! [`sign_access_token_multiple`](sign_access_token_multiple).
+//!
+//! Both functions take a [`ClaimsSet`](ClaimsSet) containing the claims that
+//! shall be part of the access token, a key used to encrypt or sign the token,
+//! optional `aad` (additional authenticated data), un-/protected headers and a cryptographic
+//! `backend` (as described in the [cose] module).
+//!
+//! Note that if the headers you pass in set fields to invalid values, an error will be returned.
+//! For more information on how to set headers, see the [cose] module.
+//!
+//! The function will return a [`Result`](Result) of the opaque
+//! [`ByteString`](ByteString) containing the access token.
+//!
+//! # Verifying and Decrypting Access Tokens
+//! In order to verify or decrypt existing access tokens represented as [`ByteString`](ByteString)s,
+//! use [`verify_access_token`](verify_access_token) or
+//! [`decrypt_access_token`](decrypt_access_token) respectively.
+//! In case the token was created for multiple recipients (each with their own key),
+//! use [`verify_access_token_multiple`](verify_access_token_multiple)
+//! or [`decrypt_access_token_multiple`](decrypt_access_token_multiple).
+//!
+//! Both functions take the access token, a `key_provider` that allows looking up keys that might be
+//! used to decrypt or verify, optional `aad` (additional authenticated data) and a cryptographic
+//! `backend` (as described in the [cose] module).
+//!
+//! [`decrypt_access_token`](decrypt_access_token) will return a result containing
+//! the decrypted [`ClaimsSet`](ClaimsSet).
+//! [`verify_access_token`](verify_access_token) will return an empty result which
+//! indicates that the token was successfully verified---an [`Err`](Result)
+//! would indicate failure.
+//!
+//! # Extracting Headers from an Access Token
+//! Regardless of whether a token was signed, encrypted, or MAC-tagged, you can extract its
+//! headers using [`get_token_headers`](get_token_headers),
+//! which will return an option containing both
+//! unprotected and protected headers (or which will be [`None`](None) in case
+//! the token is invalid).
+//!
 //! # Example
-//! The following shows how to create and sign an access token (assuming a cipher named
-//! `FakeCrypto` which implements [`CoseSignCipher`] exists.):
-//! ```ignore
-//! # // TODO: There's really too much hidden code here. Should be heavily refactored once we have
-//! # //       crypto implementations available. Same goes for crate-level docs.
-//! # use ciborium::value::Value;
-//! # use coset::{AsCborValue, CoseKey, CoseKeyBuilder, Header, iana, Label, ProtectedHeader};
-//! # use coset::cwt::{ClaimsSetBuilder, Timestamp};
-//! # use coset::iana::{Algorithm, CwtClaimName};
-//! # use rand::{CryptoRng, RngCore};
-//! # use dcaf::{ToCborMap, sign_access_token, verify_access_token, CoseSignCipher};
-//! # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
-//! # use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
-//! # use dcaf::error::{AccessTokenError, CoseCipherError};
-//! use dcaf::token::CoseCipher;
+//! The following shows how to create and encrypt an access token:
+//! ```
+//! use coset::{AsCborValue, CoseKeyBuilder, HeaderBuilder, iana};
+//! use coset::cwt::ClaimsSetBuilder;
+//! use coset::iana::CwtClaimName;
+//! use dcaf::{decrypt_access_token, encrypt_access_token};
+//! use dcaf::error::{AccessTokenError, CoseCipherError};
+//! use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+//! use dcaf::token::cose::{CryptoBackend, HeaderBuilderExt};
 //!
-//! # struct FakeCrypto {}
-//! #
-//! # fn get_k_from_key(key: &CoseKey) -> Option<Vec<u8>> {
-//! #     const K_PARAM: i64 = iana::SymmetricKeyParameter::K as i64;
-//! #     for (label, value) in key.params.iter() {
-//! #         if let Label::Int(K_PARAM) = label {
-//! #             if let Value::Bytes(k_val) = value {
-//! #                 return Some(k_val.clone());
-//! #             }
-//! #         }
-//! #     }
-//! #     None
-//! # }
-//! #
-//! # #[derive(Clone, Copy)]
-//! # pub(crate) struct FakeRng;
-//! #
-//! # impl RngCore for FakeRng {
-//! #     fn next_u32(&mut self) -> u32 {
-//! #         0
-//! #     }
-//! #
-//! #     fn next_u64(&mut self) -> u64 {
-//! #         0
-//! #     }
-//! #
-//! #     fn fill_bytes(&mut self, dest: &mut [u8]) {
-//! #         dest.fill(0);
-//! #     }
-//! #
-//! #     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-//! #         dest.fill(0);
-//! #         Ok(())
-//! #     }
-//! # }
-//! #
-//! # impl CryptoRng for FakeRng {}
-//! #
-//! # impl CoseCipher for FakeCrypto {
-//! #     type Error = String;
-//! #
-//! #     fn set_headers<RNG: RngCore + CryptoRng>(key: &CoseKey, unprotected_header: &mut Header, protected_header: &mut Header, rng: RNG) -> Result<(), CoseCipherError<Self::Error>> {
-//! #         // We have to later verify these headers really are used.
-//! #         if let Some(label) = unprotected_header
-//! #             .rest
-//! #             .iter()
-//! #             .find(|x| x.0 == Label::Int(47))
-//! #         {
-//! #             return Err(CoseCipherError::existing_header_label(&label.0));
-//! #         }
-//! #         if protected_header.alg != None {
-//! #             return Err(CoseCipherError::existing_header("alg"));
-//! #         }
-//! #         unprotected_header.rest.push((Label::Int(47), Value::Null));
-//! #         protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));
-//! #         Ok(())
-//! #     }
-//! # }
-//! #
-//! # /// Implements basic operations from the [`CoseSignCipher`](crate::token::CoseSignCipher) trait
-//! # /// without actually using any "real" cryptography.
-//! # /// This is purely to be used for testing and obviously offers no security at all.
-//! # impl CoseSignCipher for FakeCrypto {
-//! #     fn sign(
-//! #         key: &CoseKey,
-//! #         target: &[u8],
-//! #         unprotected_header: &Header,
-//! #         protected_header: &Header,
-//! #     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-//! #         // We simply append the key behind the data.
-//! #         let mut signature = target.to_vec();
-//! #         let k = get_k_from_key(key);
-//! #         signature.append(&mut k.expect("k must be present in key!"));
-//! #         Ok(signature)
-//! #     }
-//! #
-//! #     fn verify(
-//! #         key: &CoseKey,
-//! #         signature: &[u8],
-//! #         signed_data: &[u8],
-//! #         unprotected_header: &Header,
-//! #         protected_header: &ProtectedHeader,
-//! #         unprotected_signature_header: Option<&Header>,
-//! #         protected_signature_header: Option<&ProtectedHeader>,
-//! #     ) -> Result<(), CoseCipherError<Self::Error>> {
-//! #         if signature
-//! #             == Self::sign(
-//! #             key,
-//! #             signed_data,
-//! #             unprotected_header,
-//! #             &protected_header.header,
-//! #         )?
-//! #         {
-//! #             Ok(())
-//! #         } else {
-//! #             Err(CoseCipherError::VerificationFailure)
-//! #         }
-//! #     }
-//! # }
+//! let mut backend = OpensslContext::new();
 //!
-//! let rng = FakeRng;
-//! let key = CoseKeyBuilder::new_symmetric_key(vec![1,2,3,4,5]).key_id(vec![0xDC, 0xAF]).build();
+//! let mut key_data = vec![0; 32];
+//! backend.generate_rand(key_data.as_mut_slice()).map_err(CoseCipherError::from)?;
+//! let key = CoseKeyBuilder::new_symmetric_key(key_data).algorithm(iana::Algorithm::A256GCM).build();
+//!
+//! let unprotected_header = HeaderBuilder::new().gen_iv(&mut backend, iana::Algorithm::A256GCM)?.build();
+//!
 //! let claims = ClaimsSetBuilder::new()
 //!      .audience(String::from("coaps://rs.example.com"))
 //!      .issuer(String::from("coaps://as.example.com"))
 //!      .claim(CwtClaimName::Cnf, key.clone().to_cbor_value()?)
 //!      .build();
-//! let token = sign_access_token::<FakeCrypto, FakeRng>(&key, claims, None, None, None, rng)?;
-//! assert!(verify_access_token::<FakeCrypto>(&key, &token, None).is_ok());
-//! # Ok::<(), AccessTokenError<String>>(())
+//!
+//! let token = encrypt_access_token(&mut backend, &key, claims, &None, Some(unprotected_header), None)?;
+//! assert!(decrypt_access_token(&mut backend, &key, &token, &None).is_ok());
+//! # Ok::<(), AccessTokenError<<OpensslContext as CryptoBackend>::Error>>(())
 //! ```
 
 use crate::common::cbor_values::ByteString;
 use crate::error::AccessTokenError;
-pub use crate::token::cose::CoseSignCipher;
-use crate::token::cose::{CoseAadProvider, CoseCipher};
+use crate::token::cose::CryptoBackend;
+pub use crate::token::cose::SignCryptoBackend;
 use ciborium::value::Value;
-use cose::determine_algorithm;
+use cose::AadProvider;
 use cose::CoseRecipientBuilderExt;
-use cose::{generate_cek_for_alg, CoseKeyProvider};
+use cose::{determine_algorithm, KeyDistributionCryptoBackend};
+use cose::{generate_cek_for_alg, KeyProvider};
 use cose::{
-    CoseEncrypt0BuilderExt, CoseEncrypt0Ext, CoseEncryptBuilderExt, CoseEncryptCipher,
-    CoseEncryptExt, CoseKeyDistributionCipher,
+    CoseEncrypt0BuilderExt, CoseEncrypt0Ext, CoseEncryptBuilderExt, CoseEncryptExt,
+    EncryptCryptoBackend,
 };
 use cose::{CoseSign1BuilderExt, CoseSign1Ext};
 use cose::{CoseSignBuilderExt, CoseSignExt};
@@ -175,38 +127,26 @@ use coset::{
     ProtectedHeader,
 };
 
-/// `coset` extensions that enable COSE operations using predefined cryptographic backends.
 pub mod cose;
 #[cfg(test)]
 mod tests;
 
 /// Encrypts the given `claims` with the given headers and `external_aad` using the
-/// `key` and the cipher given by type parameter `T`, returning the token as a serialized
-/// bytestring of the [`CoseEncrypt0`] structure.
+/// `key` and the cryptographic `backend`, returning the token as a serialized bytestring of the
+/// [`CoseEncrypt0`] structure.
 ///
 /// Note that this method will create a token intended for a single recipient.
 /// If you wish to create a token for more than one recipient, use
 /// [`encrypt_access_token_multiple`].
 ///
 /// # Errors
-/// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
-/// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseEncrypt0`] structure.
-/// - When the given headers conflict with the headers set by the cipher `T`.
+/// Returns an error if the [ClaimsSet] could not be encoded or an error during signing
+/// occurs (see [CoseEncryptBuilderExt::try_encrypt]  for possible errors).
 ///
 /// # Example
-/// For example, assuming we have a [`CoseEncryptCipher`] in `FakeCrypto`, a random number generator
-/// in `rng`, a [`ProofOfPossessionKey`](crate::common::cbor_values::ProofOfPossessionKey)
-/// in `key` and want to associate this key with the access token we are about to create and encrypt:
-/// ```ignore
-/// let claims = ClaimsSetBuilder::new()
-///    .audience(String::from("coaps://rs.example.com"))
-///    .issuer(String::from("coaps://as.example.com"))
-///    .claim(CwtClaimName::Cnf, key.to_cose_key().to_cbor_value()?)
-///    .build();
-/// let token: ByteString = encrypt_access_token::<FakeCrypto, FakeRng>(&key, claims.clone(), None, None, None, rng)?;
-/// assert_eq!(decrypt_access_token::<FakeCrypto>(&key, &token, None)?, claims);
-/// ```
-pub fn encrypt_access_token<T, AAD: CoseAadProvider + ?Sized>(
+///
+/// see the [module-level documentation](self) for an example
+pub fn encrypt_access_token<T, AAD: AadProvider + ?Sized>(
     backend: &mut T,
     key: &CoseKey,
     claims: ClaimsSet,
@@ -215,7 +155,7 @@ pub fn encrypt_access_token<T, AAD: CoseAadProvider + ?Sized>(
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
 where
-    T: CoseEncryptCipher + CoseCipher,
+    T: EncryptCryptoBackend + CryptoBackend,
 {
     CoseEncrypt0Builder::new()
         .try_encrypt(
@@ -232,31 +172,57 @@ where
 }
 
 /// Encrypts the given `claims` with the given headers and `external_aad` for each recipient
-/// by using the `keys` with the cipher given by type parameter `T`,
-/// returning the token as a serialized bytestring of the [`CoseEncrypt`] structure.
-///
-/// Note that the given `keys` must each have an associated `kid` (key ID) field when converted
-/// to COSE keys, as the recipients inside the [`CoseEncrypt`] are identified in this way.
+/// by using the `keys` with the cryptographic `backend`, returning the token as a serialized
+/// bytestring of the [`CoseEncrypt`] structure.
 ///
 /// The Content Encryption Key (used to encrypt the actual claims) is randomly generated by the
-/// given cipher in `T`, whereas the given `keys` are used as Key Encryption Keys, that is,
+/// given `backend`, whereas the given `keys` are used as Key Encryption Keys, that is,
 /// they encrypt the Content Encryption Key for each recipient.
 ///
 /// # Errors
-/// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
-/// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseEncrypt`] structure.
-/// - When the given headers conflict with the headers set by the cipher `T`.
+/// Returns an error if the [ClaimsSet] could not be encoded or an error during signing
+/// occurs (see [CoseEncryptBuilderExt::try_encrypt] and [CoseRecipientBuilderExt::try_encrypt] for
+/// possible errors).
 ///
 /// # Example
-/// For example, assuming we have a [`MultipleEncryptCipher`] in `FakeCrypto`, a random number
-/// generator in `rng`, and some `claims`, we can then create a token encrypted for two recipients
-/// (with keys `key1` and `key2`, respectively) as follows:
-/// ```ignore
-/// let encrypted = encrypt_access_token_multiple::<FakeCrypto, FakeRng>(
-///    vec![&key1, &key2], claims.clone(), None, None, None rng
-/// )?;
+///
 /// ```
-pub fn encrypt_access_token_multiple<'a, T, I, AAD: CoseAadProvider + ?Sized>(
+/// use coset::{AsCborValue, CoseKeyBuilder, HeaderBuilder, iana};
+/// use coset::cwt::ClaimsSetBuilder;
+/// use coset::iana::CwtClaimName;
+/// use dcaf::{decrypt_access_token, decrypt_access_token_multiple, encrypt_access_token, encrypt_access_token_multiple};
+/// use dcaf::error::{AccessTokenError, CoseCipherError};
+/// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+/// use dcaf::token::cose::{CryptoBackend, HeaderBuilderExt};
+///
+/// let mut backend = OpensslContext::new();
+///
+/// let mut key1_data = vec![0; 32];
+/// backend.generate_rand(key1_data.as_mut_slice()).map_err(CoseCipherError::from)?;
+/// let key1 = CoseKeyBuilder::new_symmetric_key(key1_data).algorithm(iana::Algorithm::A256KW).build();
+///
+/// let mut key2_data = vec![0; 32];
+/// backend.generate_rand(key2_data.as_mut_slice()).map_err(CoseCipherError::from)?;
+/// let key2 = CoseKeyBuilder::new_symmetric_key(key2_data).algorithm(iana::Algorithm::A256KW).build();
+///
+/// let unprotected_header = HeaderBuilder::new().gen_iv(&mut backend, iana::Algorithm::A256GCM)?.algorithm(iana::Algorithm::A256GCM).build();
+///
+/// let claims = ClaimsSetBuilder::new()
+///      .audience(String::from("coaps://rs.example.com"))
+///      .issuer(String::from("coaps://as.example.com"))
+///      .claim(CwtClaimName::Cnf, key1.clone().to_cbor_value()?)
+///      .build();
+///
+/// let keys = vec![key1.clone(), key2.clone()];
+///
+/// let token = encrypt_access_token_multiple(&mut backend, &keys, claims, &None, Some(unprotected_header), None)?;
+/// assert!(decrypt_access_token_multiple(&mut backend, &key1, &token, &None).is_ok());
+/// assert!(decrypt_access_token_multiple(&mut backend, &key2, &token, &None).is_ok());
+/// # Ok::<(), AccessTokenError<<OpensslContext as CryptoBackend>::Error>>(())
+/// ```
+// TODO I'm pretty sure this can't panic
+#[allow(clippy::missing_panics_doc)]
+pub fn encrypt_access_token_multiple<'a, T, I, AAD: AadProvider + ?Sized>(
     backend: &mut T,
     keys: I,
     claims: ClaimsSet,
@@ -265,7 +231,7 @@ pub fn encrypt_access_token_multiple<'a, T, I, AAD: CoseAadProvider + ?Sized>(
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
 where
-    T: CoseEncryptCipher + CoseKeyDistributionCipher,
+    T: EncryptCryptoBackend + KeyDistributionCryptoBackend,
     I: IntoIterator<Item = &'a CoseKey>,
     I::IntoIter: ExactSizeIterator,
 {
@@ -329,32 +295,54 @@ where
 }
 
 /// Signs the given `claims` with the given headers and `external_aad` using the `key` and the
-/// cryptographic backend given by type parameter `T`, returning the token as a serialized
-/// byte string of the resulting [`CoseSign1`] structure.
+/// cryptographic `backend`, returning the token as a serialized byte string of the resulting
+/// [`CoseSign1`] structure.
 ///
-/// Note that this method will create a token intended for a single recipient.
-/// If you wish to create a token for more than one recipient, use
-/// [`sign_access_token_multiple`].
+/// Note that this method will create a token with a single signature.
+/// If you wish to create a token with multiple signatures, use [`sign_access_token_multiple`].
 ///
 /// # Errors
-/// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
-/// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseSign1`] structure.
-/// - When the given headers conflict with the headers set by the cipher `T`.
+/// Returns an error if the [ClaimsSet] could not be encoded or an error during signing
+/// occurs (see [CoseSign1BuilderExt::try_add_sign] for possible errors).
 ///
 /// # Example
-/// For example, assuming we have a [`CoseSignCipher`] in `FakeCrypto`, a random number generator
-/// in `rng`, a [`ProofOfPossessionKey`](crate::common::cbor_values::ProofOfPossessionKey)
-/// in `key` and want to associate this key with the access token we are about to create and sign:
-/// ```ignore
-/// let claims = ClaimsSetBuilder::new()
-///    .audience(String::from("coaps://rs.example.com"))
-///    .issuer(String::from("coaps://as.example.com"))
-///    .claim(CwtClaimName::Cnf, key.to_cose_key().to_cbor_value()?)
-///    .build();
-/// let token: ByteString = sign_access_token::<FakeCrypto, FakeRng>(&key, claims, None, None, None, rng)?;
-/// assert!(verify_access_token::<FakeCrypto>(&key, &token, None).is_ok());
 /// ```
-pub fn sign_access_token<T, AAD: CoseAadProvider + ?Sized>(
+/// use base64::Engine;
+/// use coset::{AsCborValue, CoseKeyBuilder, HeaderBuilder, iana};
+/// use coset::cwt::ClaimsSetBuilder;
+/// use coset::iana::CwtClaimName;
+/// use dcaf::{sign_access_token, verify_access_token};
+/// use dcaf::error::{AccessTokenError, CoseCipherError};
+/// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+/// use dcaf::token::cose::{CryptoBackend, HeaderBuilderExt};
+///
+/// let mut backend = OpensslContext::new();
+///
+/// let cose_ec2_key_x = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("usWxHK2PmfnHKwXPS54m0kTcGJ90UiglWiGahtagnv8").unwrap();
+/// let cose_ec2_key_y = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("IBOL-C3BttVivg-lSreASjpkttcsz-1rb7btKLv8EX4").unwrap();
+/// let cose_ec2_key_d = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("V8kgd2ZBRuh2dgyVINBUqpPDr7BOMGcF22CQMIUHtNM").unwrap();
+/// let key = CoseKeyBuilder::new_ec2_priv_key(
+///                             iana::EllipticCurve::P_256,
+///                             cose_ec2_key_x,
+///                             cose_ec2_key_y,
+///                             cose_ec2_key_d
+///                 )
+///                 .key_id("example_key".as_bytes().to_vec())
+///                 .build();
+///
+/// let unprotected_header = HeaderBuilder::new().algorithm(iana::Algorithm::ES256).build();
+///
+/// let claims = ClaimsSetBuilder::new()
+///      .audience(String::from("coaps://rs.example.com"))
+///      .issuer(String::from("coaps://as.example.com"))
+///      .claim(CwtClaimName::Cnf, key.clone().to_cbor_value()?)
+///      .build();
+///
+/// let token = sign_access_token(&mut backend, &key, claims, &None, Some(unprotected_header), None)?;
+/// assert!(verify_access_token(&mut backend, &key, &token, &None).is_ok());
+/// # Ok::<(), AccessTokenError<<OpensslContext as CryptoBackend>::Error>>(())
+/// ```
+pub fn sign_access_token<T, AAD: AadProvider + ?Sized>(
     backend: &mut T,
     key: &CoseKey,
     claims: ClaimsSet,
@@ -363,7 +351,7 @@ pub fn sign_access_token<T, AAD: CoseAadProvider + ?Sized>(
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
 where
-    T: CoseSignCipher,
+    T: SignCryptoBackend,
 {
     CoseSign1Builder::new()
         .payload(claims.to_vec()?)
@@ -380,31 +368,73 @@ where
 }
 
 /// Signs the given `claims` with the given headers and `external_aad` for each recipient
-/// by using the `keys` with the cipher given by type parameter `T`,
-/// returning the token as a serialized bytestring of the [`CoseSign`] structure.
+/// by using the `keys` with the cryptographic `backend`, returning the token as a serialized
+/// bytestring of the [`CoseSign`] structure.
 ///
 /// For each key in `keys`, another signature will be added, created with that respective key.
 /// The given headers will be used for the [`CoseSign`] structure as a whole, not for each
 /// individual signature.
 ///
 /// # Errors
-/// - When there's a [`CoseError`](coset::CoseError) while serializing the given `claims` to CBOR.
-/// - When there's a [`CoseError`](coset::CoseError) while serializing the [`CoseSign`] structure.
-/// - When the given headers conflict with the headers set by the cipher `T`.
+/// Returns an error if the [ClaimsSet] could not be encoded or an error during signing
+/// occurs (see [CoseSignBuilderExt::try_add_sign] for possible errors).
 ///
 /// # Example
-/// For example, assuming we have a [`MultipleSignCipher`] in `FakeCrypto`,
-/// a random number generator in `rng`, and some `claims`, we can then create a token
-/// with signatures for two recipients (with keys `key1` and `key2`, respectively) as follows:
-/// ```ignore
-/// let signed = sign_access_token_multiple::<FakeCrypto, FakeRng>(
-///     vec![&key1, &key2],
-///     claims,
-///     None, None, None,
-///     rng
-/// )?;
 /// ```
-pub fn sign_access_token_multiple<'a, T, I, AAD: CoseAadProvider + ?Sized>(
+/// use base64::Engine;
+/// use coset::{AsCborValue, CoseKeyBuilder, CoseSignatureBuilder, HeaderBuilder, iana};
+/// use coset::cwt::ClaimsSetBuilder;
+/// use coset::iana::CwtClaimName;
+/// use dcaf::{sign_access_token, sign_access_token_multiple, verify_access_token, verify_access_token_multiple};
+/// use dcaf::error::{AccessTokenError, CoseCipherError};
+/// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+/// use dcaf::token::cose::{CryptoBackend, HeaderBuilderExt};
+///
+/// let mut backend = OpensslContext::new();
+///
+/// let cose_ec2_key1_x = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("usWxHK2PmfnHKwXPS54m0kTcGJ90UiglWiGahtagnv8").unwrap();
+/// let cose_ec2_key1_y = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("IBOL-C3BttVivg-lSreASjpkttcsz-1rb7btKLv8EX4").unwrap();
+/// let cose_ec2_key1_d = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("V8kgd2ZBRuh2dgyVINBUqpPDr7BOMGcF22CQMIUHtNM").unwrap();
+/// let key1 = CoseKeyBuilder::new_ec2_priv_key(
+///                             iana::EllipticCurve::P_256,
+///                             cose_ec2_key1_x,
+///                             cose_ec2_key1_y,
+///                             cose_ec2_key1_d
+///                 )
+///                 .key_id("example_key".as_bytes().to_vec())
+///                 .build();
+/// let cose_ec2_key2_x = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("kTJyP2KSsBBhnb4kjWmMF7WHVsY55xUPgb7k64rDcjatChoZ1nvjKmYmPh5STRKc").unwrap();
+/// let cose_ec2_key2_y = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("mM0weMVU2DKsYDxDJkEP9hZiRZtB8fPfXbzINZj_fF7YQRynNWedHEyzAJOX2e8s").unwrap();
+/// let cose_ec2_key2_d = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("ok3Nq97AXlpEusO7jIy1FZATlBP9PNReMU7DWbkLQ5dU90snHuuHVDjEPmtV0fTo").unwrap();
+/// let key2 = CoseKeyBuilder::new_ec2_priv_key(
+///                             iana::EllipticCurve::P_384,
+///                             cose_ec2_key2_x,
+///                             cose_ec2_key2_y,
+///                             cose_ec2_key2_d
+///                 )
+///                 .key_id("example_key2".as_bytes().to_vec())
+///                 .build();
+///
+/// let unprotected_sig1_header = HeaderBuilder::new().algorithm(iana::Algorithm::ES256).build();
+/// let unprotected_sig2_header = HeaderBuilder::new().algorithm(iana::Algorithm::ES384).build();
+///
+/// let sig1 = CoseSignatureBuilder::new().unprotected(unprotected_sig1_header).build();
+/// let sig2 = CoseSignatureBuilder::new().unprotected(unprotected_sig2_header).build();
+///
+/// let claims = ClaimsSetBuilder::new()
+///      .audience(String::from("coaps://rs.example.com"))
+///      .issuer(String::from("coaps://as.example.com"))
+///      .claim(CwtClaimName::Cnf, key1.clone().to_cbor_value()?)
+///      .build();
+///
+/// let keys = vec![(&key1, sig1), (&key2, sig2)];
+///
+/// let token = sign_access_token_multiple(&mut backend, keys, claims, &None, None, None)?;
+/// assert!(verify_access_token_multiple(&mut backend, &key1, &token, &None).is_ok());
+/// assert!(verify_access_token_multiple(&mut backend, &key2, &token, &None).is_ok());
+/// # Ok::<(), AccessTokenError<<OpensslContext as CryptoBackend>::Error>>(())
+/// ```
+pub fn sign_access_token_multiple<'a, T, I, AAD: AadProvider + ?Sized>(
     backend: &mut T,
     keys: I,
     claims: ClaimsSet,
@@ -413,7 +443,7 @@ pub fn sign_access_token_multiple<'a, T, I, AAD: CoseAadProvider + ?Sized>(
     protected_header: Option<Header>,
 ) -> Result<ByteString, AccessTokenError<T::Error>>
 where
-    T: CoseSignCipher,
+    T: SignCryptoBackend,
     I: IntoIterator<Item = (&'a CoseKey, CoseSignature)>,
 {
     let mut builder = CoseSignBuilder::new().payload(claims.to_vec()?);
@@ -482,104 +512,94 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
     }
 }
 
-/// Verifies the given `token` and `external_aad` with the `key` using the cipher
-/// given by type parameter `T`, returning an error in case it could not be verified.
+/// Verifies the given `token` and `external_aad` using keys from the given `key_provider` and the
+/// cryptographic `backend`, returning an error in case it could not be verified.
 ///
 /// This method should be used when the given `token` is a [`CoseSign1`] rather than
 /// [`CoseSign`] (i.e., if it is intended for a single recipient). In case the token is an
 /// instance of the latter, use [`verify_access_token_multiple`] instead.
 ///
-/// NOTE: Protected headers are not verified as of now.
+/// # Errors
+/// Returns an error if the [CoseSign1] structure could not be parsed, an error during decryption
+/// occurs (see [CoseSign1Ext::try_verify] for possible errors) or the contained payload is not a
+/// valid [ClaimsSet].
+///
+/// # Example
 ///
 /// For an example, see the documentation of [`sign_access_token`].
-///
-/// # Errors
-/// - When there's a [`CoseError`](coset::CoseError) while deserializing the given `token`
-///   to a [`CoseSign1`] structure
-///   (e.g., if it's not in fact a [`CoseSign1`] structure but rather something else).
-/// - When there's a verification error coming from the cipher `T`
-///   (e.g., if the `token`'s data does not match its signature).
-pub fn verify_access_token<T, CKP, AAD: CoseAadProvider + ?Sized>(
+pub fn verify_access_token<T, CKP, AAD: AadProvider + ?Sized>(
     backend: &mut T,
     key_provider: &CKP,
-
     token: &ByteString,
     external_aad: &AAD,
 ) -> Result<(), AccessTokenError<T::Error>>
 where
-    T: CoseSignCipher,
-    CKP: CoseKeyProvider,
+    T: SignCryptoBackend,
+    CKP: KeyProvider,
 {
     let sign = CoseSign1::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
     sign.try_verify(backend, key_provider, external_aad)
         .map_err(AccessTokenError::from)
 }
 
-/// Verifies the given `token` and `external_aad` with the `key` using the cipher
-/// given by type parameter `T`, returning an error in case it could not be verified.
+/// Verifies the given `token` and `external_aad` using keys from the given `key_provider` and the
+/// cryptographic `backend`, returning an error in case it could not be verified.
 ///
 /// This method should be used when the given `token` is a [`CoseSign`] rather than
 /// [`CoseSign1`] (i.e., if it is intended for a multiple recipients). In case the token is an
 /// instance of the latter, use [`verify_access_token`] instead.
 ///
-/// NOTE: Protected headers are not verified as of now.
-///
 /// # Errors
-/// - When there's a [`CoseError`](coset::CoseError) while deserializing the given `token`
-///   to a [`CoseSign`] structure
-///   (e.g., if it's not in fact a [`CoseSign`] structure but rather something else).
-/// - When there's a verification error coming from the cipher `T`
-///   (e.g., if the `token`'s data does not match its signature).
-pub fn verify_access_token_multiple<T, CKP, AAD: CoseAadProvider + ?Sized>(
+/// Returns an error if the [CoseSign] structure could not be parsed, an error during decryption
+/// occurs (see [CoseSignExt::try_verify] for possible errors) or the contained payload is not a
+/// valid [ClaimsSet].
+pub fn verify_access_token_multiple<T, CKP, AAD: AadProvider + ?Sized>(
     backend: &mut T,
     key_provider: &CKP,
-
     token: &ByteString,
     external_aad: &AAD,
 ) -> Result<(), AccessTokenError<T::Error>>
 where
-    T: CoseSignCipher,
-    CKP: CoseKeyProvider,
+    T: SignCryptoBackend,
+    CKP: KeyProvider,
 {
     let sign = CoseSign::from_slice(token.as_slice()).map_err(AccessTokenError::CoseError)?;
     sign.try_verify(backend, key_provider, external_aad)?;
     Ok(())
 }
 
-/// Decrypts the given `token` and `external_aad` using the `key` and the cipher
-/// given by type parameter `T`, returning the decrypted [`ClaimsSet`].
+/// Decrypts the given `token` and `external_aad` using keys from the given `key_provider` and the
+/// cryptographic `backend`, returning the decrypted [`ClaimsSet`].
 ///
 /// This method should be used when the given `token` is a [`CoseEncrypt0`] rather than
 /// [`CoseEncrypt`] (i.e., if it is intended for a single recipient). In case the token is an
 /// instance of the latter, use [`decrypt_access_token_multiple`] instead.
 ///
-/// For an example, see the documentation of [`encrypt_access_token`].
-///
 /// # Errors
-/// - When there's a [`CoseError`](coset::CoseError) while deserializing
-///   the given `token` to a [`CoseEncrypt0`] structure
-///   (e.g., if it's not in fact a [`CoseEncrypt0`] structure but rather something else).
-/// - When there's a decryption error coming from the cipher given by `T`.
-/// - When the deserialized and decrypted [`CoseEncrypt0`] structure does not contain a valid
-///   [`ClaimsSet`].
-pub fn decrypt_access_token<T, CKP, AAD: CoseAadProvider + ?Sized>(
+/// Returns an error if the [CoseEncrypt0] structure could not be parsed, an error during decryption
+/// occurs (see [CoseEncrypt0Ext::try_decrypt_with_recipients] for possible errors) or the decrypted
+/// payload is not a valid [ClaimsSet].
+///
+/// # Example
+///
+/// For an example, see the documentation of [`encrypt_access_token`].
+pub fn decrypt_access_token<T, CKP, AAD: AadProvider + ?Sized>(
     backend: &mut T,
     key_provider: &CKP,
-
     token: &ByteString,
     external_aad: &AAD,
 ) -> Result<ClaimsSet, AccessTokenError<T::Error>>
 where
-    T: CoseEncryptCipher,
-    CKP: CoseKeyProvider,
+    T: EncryptCryptoBackend,
+    CKP: KeyProvider,
 {
     let encrypt = CoseEncrypt0::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
     let result = encrypt.try_decrypt(backend, key_provider, external_aad)?;
     ClaimsSet::from_slice(result.as_slice()).map_err(AccessTokenError::from)
 }
 
-/// Decrypts the given `token` and `external_aad` using the Key Encryption Key `kek` and the cipher given
-/// by type parameter `T`, returning the decrypted [`ClaimsSet`].
+/// Decrypts the given `token` and `external_aad` using keys from the given `key_provider` and the
+/// cryptographic `backend`, returning the decrypted [`ClaimsSet`].
 ///
 /// Note that the given `kek` must have an associated `kid` (key ID) field when converted
 /// to a COSE key, as the recipient inside the [`CoseEncrypt`] is identified in this way.
@@ -589,24 +609,18 @@ where
 /// instance of the latter, use [`decrypt_access_token`] instead.
 ///
 /// # Errors
-/// - When there's a [`CoseError`](coset::CoseError) while deserializing
-///   the given `token` to a [`CoseEncrypt`] structure
-///   (e.g., if it's not in fact a [`CoseEncrypt`] structure but rather something else).
-/// - When there's a decryption error coming from the cipher given by `T`.
-/// - When the deserialized and decrypted [`CoseEncrypt`] structure does not contain a valid
-///   [`ClaimsSet`].
-/// - When the [`CoseEncrypt`] contains either multiple matching recipients or none at all for
-///   the given `kek`.
-pub fn decrypt_access_token_multiple<T, CKP, AAD: CoseAadProvider + ?Sized>(
+/// Returns an error if the [CoseEncrypt] structure could not be parsed, an error during decryption
+/// occurs (see [CoseEncryptExt::try_decrypt_with_recipients] for possible errors) or the decrypted
+/// payload is not a valid [ClaimsSet].
+pub fn decrypt_access_token_multiple<T, CKP, AAD: AadProvider + ?Sized>(
     backend: &mut T,
     key_provider: &CKP,
-
     token: &ByteString,
     external_aad: &AAD,
 ) -> Result<ClaimsSet, AccessTokenError<T::Error>>
 where
-    T: CoseEncryptCipher + CoseKeyDistributionCipher,
-    CKP: CoseKeyProvider,
+    T: EncryptCryptoBackend + KeyDistributionCryptoBackend,
+    CKP: KeyProvider,
 {
     let encrypt = CoseEncrypt::from_slice(token.as_slice()).map_err(AccessTokenError::from)?;
     let result = encrypt.try_decrypt_with_recipients(backend, key_provider, external_aad)?;

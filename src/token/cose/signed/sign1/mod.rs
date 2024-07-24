@@ -1,9 +1,20 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use coset::{CoseSign1, CoseSign1Builder, Header};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
+use crate::token::cose::aad::AadProvider;
+use crate::token::cose::key::KeyProvider;
 use crate::token::cose::signed;
-use crate::token::cose::CoseSignCipher;
+use crate::token::cose::SignCryptoBackend;
 
 #[cfg(all(test, feature = "std"))]
 mod tests;
@@ -40,13 +51,13 @@ pub trait CoseSign1BuilderExt: Sized {
     ///
     /// # Examples
     ///
-    /// TODO
+    /// Refer to [the documentation for the CoseSign1 extensions](CoseSign1Ext) for examples.
     ///
     /// TODO: Setting all of these options at once kind of defeats the purpose of
     ///       the builder pattern, but it is necessary here, as we lack access to the `protected`
     ///       and `unprotected` headers that were previously set (the field is private).
     ///       This should be fixed when porting all of this to coset.
-    fn try_sign<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    fn try_sign<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -85,13 +96,13 @@ pub trait CoseSign1BuilderExt: Sized {
     ///
     /// # Examples
     ///
-    /// TODO
-    ///
-    /// TODO: Setting all of these options at once kind of defeats the purpose of
-    ///       the builder pattern, but it is necessary here, as we lack access to the `protected`
-    ///       and `unprotected` headers that were previously set (the field is private).
-    ///       This should be fixed when porting all of this to coset.
-    fn try_sign_detached<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    /// Refer to [the documentation for the CoseSign1 extensions](CoseSign1Ext) for examples.
+    // TODO: Setting all of these options at once kind of defeats the purpose of
+    //       the builder pattern, but it is necessary here, as we lack access to the `protected`
+    //       and `unprotected` headers that were previously set (the field is private).
+    //       This should be fixed when porting all of this to coset.
+    //       This applies to all COSE structures.
+    fn try_sign_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -103,7 +114,7 @@ pub trait CoseSign1BuilderExt: Sized {
 }
 
 impl CoseSign1BuilderExt for CoseSign1Builder {
-    fn try_sign<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    fn try_sign<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -132,7 +143,7 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
             },
         )
     }
-    fn try_sign_detached<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    fn try_sign_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -165,6 +176,88 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
     }
 }
 
+/// Extensions to the [CoseSign1] type that enable usage of cryptographic backends.
+///
+/// # Examples
+///
+/// Create a simple [CoseSign] instance that uses the provided key directly and compute a signature
+/// for it, then verify it:
+///
+/// ```
+///
+/// use base64::Engine;
+/// use coset::{CoseKeyBuilder, CoseRecipientBuilder, CoseSign1Builder, CoseSignatureBuilder, HeaderBuilder, iana};
+/// use dcaf::error::CoseCipherError;
+/// use dcaf::token::cose::{CryptoBackend, CoseSign1BuilderExt, CoseSign1Ext};
+/// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+///
+/// let mut backend = OpensslContext::new();
+///
+/// let cose_ec2_key_x = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("usWxHK2PmfnHKwXPS54m0kTcGJ90UiglWiGahtagnv8").unwrap();
+/// let cose_ec2_key_y = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("IBOL-C3BttVivg-lSreASjpkttcsz-1rb7btKLv8EX4").unwrap();
+/// let cose_ec2_key_d = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("V8kgd2ZBRuh2dgyVINBUqpPDr7BOMGcF22CQMIUHtNM").unwrap();
+/// let key = CoseKeyBuilder::new_ec2_priv_key(
+///                             iana::EllipticCurve::P_256,
+///                             cose_ec2_key_x,
+///                             cose_ec2_key_y,
+///                             cose_ec2_key_d
+///                 )
+///                 .key_id("example_key".as_bytes().to_vec())
+///                 .build();
+///
+/// let unprotected = HeaderBuilder::new()
+///                     .algorithm(iana::Algorithm::ES256)
+///                     .key_id("example_key".as_bytes().to_vec())
+///                     .build();
+///
+/// let cose_object = CoseSign1Builder::new()
+///                     .payload("This is the payload!".as_bytes().to_vec())
+///                     .try_sign(&mut backend, &key, None, Some(unprotected), &[] as &[u8])?
+///                     .build();
+///
+/// assert!(cose_object.try_verify(&mut backend, &key, &[] as &[u8]).is_ok());
+///
+/// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
+/// ```
+///
+/// Create a simple [CoseSign] instance with a detached payload that uses the provided key directly
+/// and compute a signature for it, then verify it:
+///
+/// ```
+///
+/// use base64::Engine;
+/// use coset::{CoseKeyBuilder, CoseRecipientBuilder, CoseSign1Builder, CoseSignatureBuilder, HeaderBuilder, iana};
+/// use dcaf::error::CoseCipherError;
+/// use dcaf::token::cose::{CryptoBackend, CoseSign1BuilderExt, CoseSign1Ext};
+/// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+///
+/// let mut backend = OpensslContext::new();
+///
+/// let cose_ec2_key_x = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("usWxHK2PmfnHKwXPS54m0kTcGJ90UiglWiGahtagnv8").unwrap();
+/// let cose_ec2_key_y = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("IBOL-C3BttVivg-lSreASjpkttcsz-1rb7btKLv8EX4").unwrap();
+/// let cose_ec2_key_d = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("V8kgd2ZBRuh2dgyVINBUqpPDr7BOMGcF22CQMIUHtNM").unwrap();
+/// let key = CoseKeyBuilder::new_ec2_priv_key(
+///                             iana::EllipticCurve::P_256,
+///                             cose_ec2_key_x,
+///                             cose_ec2_key_y,
+///                             cose_ec2_key_d
+///                 )
+///                 .key_id("example_key".as_bytes().to_vec())
+///                 .build();
+///
+/// let unprotected = HeaderBuilder::new()
+///                     .algorithm(iana::Algorithm::ES256)
+///                     .key_id("example_key".as_bytes().to_vec())
+///                     .build();
+///
+/// let cose_object = CoseSign1Builder::new()
+///                     .try_sign_detached(&mut backend, &key, None, Some(unprotected), "This is the payload!".as_bytes(), &[] as &[u8])?
+///                     .build();
+///
+/// assert!(cose_object.try_verify_detached(&mut backend, &key, "This is the payload!".as_bytes(), &[] as &[u8]).is_ok());
+///
+/// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
+/// ```
 pub trait CoseSign1Ext {
     /// Attempts to verify the signature using a cryptographic backend.
     ///
@@ -198,8 +291,73 @@ pub trait CoseSign1Ext {
     ///
     /// # Examples
     ///
-    /// TODO
-    fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    /// Verify the example `sign1-tests/sign-pass-01.json` from the `cose-wg/Examples` repository
+    /// referenced in RFC 9052 using the [crate::token::cose::crypto_impl::openssl::OpensslContext]
+    /// backend:
+    /// ```
+    /// use base64::Engine;
+    /// use coset::{CoseKeyBuilder, CoseSign1, iana, TaggedCborSerializable};
+    /// use dcaf::token::cose::{CoseSign1Ext};
+    /// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+    ///
+    /// let cose_object_cbor_data = hex::decode("D28441A0A201260442313154546869732069732074686520636F6E74656E742E584087DB0D2E5571843B78AC33ECB2830DF7B6E0A4D5B7376DE336B23C591C90C425317E56127FBE04370097CE347087B233BF722B64072BEB4486BDA4031D27244F").unwrap();
+    /// let cose_ec2_key_x = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("usWxHK2PmfnHKwXPS54m0kTcGJ90UiglWiGahtagnv8").unwrap();
+    /// let cose_ec2_key_y = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("IBOL-C3BttVivg-lSreASjpkttcsz-1rb7btKLv8EX4").unwrap();
+    /// let cose_ec2_key_d = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("V8kgd2ZBRuh2dgyVINBUqpPDr7BOMGcF22CQMIUHtNM").unwrap();
+    ///
+    /// // Parse the object using `coset`.
+    /// let cose_object = CoseSign1::from_tagged_slice(cose_object_cbor_data.as_slice()).expect("unable to parse COSE object");
+    /// // Create key and AAD as specified in the example.
+    /// let key = CoseKeyBuilder::new_ec2_priv_key(iana::EllipticCurve::P_256, cose_ec2_key_x, cose_ec2_key_y, cose_ec2_key_d).build();
+    /// let aad: Vec<u8> = Vec::new();
+    ///
+    /// assert!(
+    ///     cose_object.try_verify(
+    ///         &mut OpensslContext::new(),
+    ///         &mut &key,
+    ///         &aad
+    ///     ).is_ok()
+    /// );
+    /// ```
+    ///
+    /// Attempt to verify the example `sign1-tests/sign-fail-02` from the `cose-wg/Examples`
+    /// repository referenced in RFC 9052 using the
+    /// [crate::token::cose::crypto_impl::openssl::OpensslContext] backend (should fail, as the
+    /// signature is invalid):
+    /// ```
+    /// use base64::Engine;
+    /// use coset::{CoseKeyBuilder, CoseSign, CoseSign1, iana, TaggedCborSerializable};
+    /// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+    /// use dcaf::error::CoseCipherError;
+    /// use dcaf::token::cose::CoseSign1Ext;
+    ///
+    /// let cose_object_cbor_data =
+    ///     hex::decode("D28443A10126A10442313154546869732069732074686520636F6E74656E742F58408EB33E4CA31D1C465AB05AAC34CC6B23D58FEF5C083106C4D25A91AEF0B0117E2AF9A291AA32E14AB834DC56ED2A223444547E01F11D3B0916E5A4C345CACB36")
+    ///         .unwrap();
+    /// let cose_ec2_key_x = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("usWxHK2PmfnHKwXPS54m0kTcGJ90UiglWiGahtagnv8").unwrap();
+    /// let cose_ec2_key_y = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("IBOL-C3BttVivg-lSreASjpkttcsz-1rb7btKLv8EX4").unwrap();
+    /// let cose_ec2_key_d = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("V8kgd2ZBRuh2dgyVINBUqpPDr7BOMGcF22CQMIUHtNM").unwrap();
+    ///
+    /// // Parse the object using `coset`.
+    /// let cose_object = CoseSign1::from_tagged_slice(
+    ///                     cose_object_cbor_data.as_slice()
+    ///                   ).expect("unable to parse COSE object");
+    /// // Create key and AAD as specified in the example.
+    /// let key = CoseKeyBuilder::new_ec2_priv_key(iana::EllipticCurve::P_256, cose_ec2_key_x, cose_ec2_key_y, cose_ec2_key_d).build();
+    /// let aad: Vec<u8> = Vec::new();
+    ///
+    /// assert!(
+    ///     matches!(
+    ///         cose_object.try_verify(
+    ///             &mut OpensslContext::new(),
+    ///             &mut &key,
+    ///             &aad
+    ///         ),
+    ///         Err(CoseCipherError::NoMatchingKeyFound(_))
+    ///     )
+    /// );
+    /// ```
+    fn try_verify<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -241,8 +399,8 @@ pub trait CoseSign1Ext {
     ///
     /// # Examples
     ///
-    /// TODO
-    fn try_verify_detached<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    /// Refer to the trait-level documentation for examples.
+    fn try_verify_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -253,7 +411,7 @@ pub trait CoseSign1Ext {
 }
 
 impl CoseSign1Ext for CoseSign1 {
-    fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    fn try_verify<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -277,14 +435,12 @@ impl CoseSign1Ext for CoseSign1 {
         )
     }
 
-    // TODO This one probably needs some test cases as well (the COSE examples don't capture this,
-    //      I think).
     fn try_verify_detached<
         'a,
         'b,
-        B: CoseSignCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider + ?Sized,
+        B: SignCryptoBackend,
+        CKP: KeyProvider,
+        CAP: AadProvider + ?Sized,
     >(
         &self,
         backend: &mut B,

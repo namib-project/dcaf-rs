@@ -1,3 +1,13 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
@@ -5,17 +15,19 @@ use core::cell::RefCell;
 use coset::{CoseEncrypt, CoseEncryptBuilder, EncryptionContext, Header};
 
 use crate::error::CoseCipherError;
+use crate::token::cose::aad::AadProvider;
 use crate::token::cose::encrypted;
 use crate::token::cose::encrypted::try_decrypt;
-use crate::token::cose::encrypted::{CoseEncryptCipher, CoseKeyDistributionCipher};
-use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
+use crate::token::cose::encrypted::EncryptCryptoBackend;
+use crate::token::cose::key::KeyProvider;
 use crate::token::cose::recipient::{
-    struct_to_recipient_context, CoseNestedRecipientSearchContext,
+    struct_to_recipient_context, CoseNestedRecipientSearchContext, KeyDistributionCryptoBackend,
 };
 
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
+/// Extensions to the [CoseEncryptBuilder] type that enable usage of cryptographic backends.
 pub trait CoseEncryptBuilderExt: Sized {
     /// Attempts to encrypt the provided payload using a cryptographic backend.
     ///
@@ -56,8 +68,8 @@ pub trait CoseEncryptBuilderExt: Sized {
     ///
     /// # Examples
     ///
-    /// TODO
-    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    /// Refer to [the documentation for the CoseEncrypt extensions](CoseEncryptExt) for examples.
+    fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -70,7 +82,7 @@ pub trait CoseEncryptBuilderExt: Sized {
 }
 
 impl CoseEncryptBuilderExt for CoseEncryptBuilder {
-    fn try_encrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -110,6 +122,118 @@ impl CoseEncryptBuilderExt for CoseEncryptBuilder {
     }
 }
 
+/// Extensions to the [CoseEncrypt] type that enable usage of cryptographic backends.
+///
+/// # Examples
+///
+/// Create a simple [CoseEncrypt] instance that uses the provided key directly and encrypts a
+/// payload, then decrypt it:
+///
+/// ```
+///
+/// use coset::{CoseEncryptBuilder, CoseKeyBuilder, CoseRecipientBuilder, HeaderBuilder, iana};
+/// use dcaf::error::CoseCipherError;
+/// use dcaf::token::cose::{CryptoBackend, CoseEncryptBuilderExt, CoseEncryptExt, HeaderBuilderExt};
+/// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+///
+/// let mut backend = OpensslContext::new();
+///
+/// let mut key_data = vec![0; 32];
+/// backend.generate_rand(key_data.as_mut_slice())?;
+/// let key = CoseKeyBuilder::new_symmetric_key(key_data).build();
+///
+/// let unprotected = HeaderBuilder::new()
+///                     .algorithm(iana::Algorithm::A256GCM)
+///                     .gen_iv(&mut backend, iana::Algorithm::A256GCM)?
+///                     .key_id("example_key".as_bytes().to_vec())
+///                     .build();
+///
+/// let recipient = CoseRecipientBuilder::new()
+///                     .unprotected(
+///                         HeaderBuilder::new()
+///                             .algorithm(iana::Algorithm::Direct)
+///                             .key_id("example_key".as_bytes().to_vec())
+///                             .build()
+///                     )
+///                     .build();
+///
+/// let cose_object = CoseEncryptBuilder::new()
+///                     .add_recipient(recipient)
+///                     .try_encrypt(
+///                         &mut backend,
+///                         &key,
+///                         None,
+///                         Some(unprotected),
+///                         "This is the payload!".as_bytes(),
+///                         &[] as &[u8]
+///                     )?
+///                     .build();
+///
+/// let plaintext = cose_object.try_decrypt(&mut backend, &key, &[] as &[u8])?;
+/// assert_eq!(plaintext.as_slice(), "This is the payload!".as_bytes());
+///
+/// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
+/// ```
+///
+/// Create a simple [CoseEncrypt] instance with recipients that protect a content encryption key
+/// using AES key wrap. Encrypt a plaintext for it, then verify it:
+/// ```
+///
+/// use coset::{CoseEncryptBuilder, CoseKeyBuilder, CoseRecipientBuilder, EncryptionContext, HeaderBuilder, iana};
+/// use dcaf::error::CoseCipherError;
+/// use dcaf::token::cose::{CryptoBackend, CoseRecipientBuilderExt, CoseEncryptBuilderExt, CoseEncryptExt, HeaderBuilderExt};
+/// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+///
+/// let mut backend = OpensslContext::new();
+///
+/// let mut kek_data = vec![0; 32];
+/// backend.generate_rand(kek_data.as_mut_slice())?;
+/// let kek = CoseKeyBuilder::new_symmetric_key(kek_data).build();
+///
+/// let mut cek_data = vec![0; 32];
+/// backend.generate_rand(cek_data.as_mut_slice())?;
+/// let cek = CoseKeyBuilder::new_symmetric_key(cek_data.clone()).build();
+///
+/// let unprotected = HeaderBuilder::new()
+///                     .algorithm(iana::Algorithm::A256GCM)
+///                     .gen_iv(&mut backend, iana::Algorithm::A256GCM)?
+///                     .build();
+///
+/// let recipient_unprotected = HeaderBuilder::new()
+///                             .algorithm(iana::Algorithm::A256KW)
+///                             .key_id("example_key".as_bytes().to_vec())
+///                             .build();
+/// let recipient = CoseRecipientBuilder::new()
+///                     .try_encrypt(
+///                         &mut backend,
+///                         &kek,
+///                         EncryptionContext::MacRecipient,
+///                         None,
+///                         Some(recipient_unprotected),
+///                         cek_data.as_slice(),
+///                         &[] as &[u8]
+///                     )?
+///                     .build();
+///
+/// let cose_object = CoseEncryptBuilder::new()
+///                     .try_encrypt(
+///                         &mut backend,
+///                         &cek,
+///                         None,
+///                         Some(unprotected),
+///                         "This is the payload!".as_bytes(),
+///                         &[] as &[u8]
+///                     )?
+///                     .add_recipient(recipient)
+///                     .build();
+///
+/// let plaintext = cose_object.try_decrypt_with_recipients(&mut backend, &kek, &[] as &[u8])?;
+///
+/// assert_eq!(plaintext.as_slice(), "This is the payload!".as_bytes());
+///
+///
+/// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
+/// ```
 pub trait CoseEncryptExt {
     /// Attempts to decrypt the payload contained in this object using a cryptographic backend.
     ///
@@ -151,8 +275,72 @@ pub trait CoseEncryptExt {
     ///
     /// # Examples
     ///
-    /// TODO
-    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    /// Verify the example `enveloped-tests/env-pass-01.json` from the `cose-wg/Examples` repository
+    /// referenced in RFC 9052 using the [crate::token::cose::crypto_impl::openssl::OpensslContext]
+    /// backend:
+    /// ```
+    /// use base64::Engine;
+    /// use coset::{CoseEncrypt, CoseKeyBuilder, TaggedCborSerializable};
+    /// use dcaf::token::cose::CoseEncryptExt;
+    /// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+    ///
+    /// let cose_object_cbor_data = hex::decode("D8608441A0A20101054C02D1F7E6F26C43D4868D87CE582460973A94BB2898009EE52ECFD9AB1DD25867374B9874993C63B0382A855573F0990CD18E818340A20125044A6F75722D73656372657440").unwrap();
+    /// let cose_symmetric_key_k = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("hJtXIZ2uSN5kbQfbtTNWbg").unwrap();
+    ///
+    /// // Parse the object using `coset`.
+    /// let cose_object = CoseEncrypt::from_tagged_slice(cose_object_cbor_data.as_slice()).expect("unable to parse COSE object");
+    /// // Create key and AAD as specified in the example.
+    /// let key = CoseKeyBuilder::new_symmetric_key(cose_symmetric_key_k).build();
+    /// let aad: Vec<u8> = Vec::new();
+    ///
+    /// assert!(
+    ///     cose_object.try_decrypt(
+    ///         &mut OpensslContext::new(),
+    ///         &mut &key,
+    ///         &aad
+    ///     ).is_ok()
+    /// );
+    /// ```
+    ///
+    /// Attempt to verify the example `enveloped-tests/env-fail-02` from the `cose-wg/Examples`
+    /// repository referenced in RFC 9052 using the
+    /// [crate::token::cose::crypto_impl::openssl::OpensslContext] backend (should fail, as the
+    /// ciphertext is invalid):
+    /// ```
+    /// use base64::Engine;
+    /// use coset::{CoseEncrypt, CoseKeyBuilder, TaggedCborSerializable};
+    /// use dcaf::token::cose::CoseEncryptExt;
+    /// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+    /// use dcaf::error::CoseCipherError;
+    ///
+    /// let cose_object_cbor_data =
+    ///     hex::decode("D8608443A10101A1054C02D1F7E6F26C43D4868D87CE582460973A94BB2898009EE52ECFD9AB1DD25867374B3581F2C80039826350B97AE2300E42FD818340A20125044A6F75722D73656372657440")
+    ///         .unwrap();
+    /// let cose_symmetric_key_k =
+    ///     base64::engine::general_purpose::URL_SAFE_NO_PAD
+    ///         .decode("hJtXIZ2uSN5kbQfbtTNWbg")
+    ///         .unwrap();
+    ///
+    /// // Parse the object using `coset`.
+    /// let cose_object = CoseEncrypt::from_tagged_slice(
+    ///                     cose_object_cbor_data.as_slice()
+    ///                   ).expect("unable to parse COSE object");
+    /// // Create key and AAD as specified in the example.
+    /// let key = CoseKeyBuilder::new_symmetric_key(cose_symmetric_key_k).build();
+    /// let aad: Vec<u8> = Vec::new();
+    ///
+    /// assert!(
+    ///     matches!(
+    ///         cose_object.try_decrypt(
+    ///             &mut OpensslContext::new(),
+    ///             &mut &key,
+    ///             &aad
+    ///         ),
+    ///         Err(CoseCipherError::NoMatchingKeyFound(_))
+    ///     )
+    /// );
+    /// ```
+    fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -200,11 +388,39 @@ pub trait CoseEncryptExt {
     ///
     /// # Examples
     ///
-    /// TODO
+    /// Verify the example `aes-wrap-examples/aes-wrap-128-04.json` from the `cose-wg/Examples`
+    /// repository referenced in RFC 9052 using the
+    /// [crate::token::cose::crypto_impl::openssl::OpensslContext] backend:
+    /// ```
+    /// use base64::Engine;
+    /// use coset::{CoseEncrypt, CoseKeyBuilder, CoseMac, TaggedCborSerializable};
+    /// use dcaf::error::CoseCipherError;
+    /// use dcaf::token::cose::{CryptoBackend, CoseEncryptExt, CoseMacExt};
+    /// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+    ///
+    /// let cose_object_cbor_data = hex::decode("D8608443A10101A1054CDDDC08972DF9BE62855291A158246F5556D71834CD1BD3FDCBFFF28CFA0F7D598C138D23B40C225AF5E3F2096A46C766813D818340A20122044A6F75722D7365637265745818112872F405A5AC48A2EDE46AC20E93E3D3A38B9762D0A3E8").unwrap();
+    /// let cose_symmetric_key_k = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode("hJtXIZ2uSN5kbQfbtTNWbg").unwrap();
+    ///
+    /// // Parse the object using `coset`.
+    /// let cose_object = CoseEncrypt::from_tagged_slice(cose_object_cbor_data.as_slice()).expect("unable to parse COSE object");
+    /// // Create key and AAD as specified in the example.
+    /// let key = CoseKeyBuilder::new_symmetric_key(cose_symmetric_key_k).build();
+    /// let aad: Vec<u8> = Vec::new();
+    ///
+    /// let plaintext = cose_object.try_decrypt_with_recipients(
+    ///                     &mut OpensslContext::new(),
+    ///                     &mut &key,
+    ///                     &aad
+    ///                 )?;
+    ///
+    /// assert_eq!(plaintext.as_slice(), "This is the content.".as_bytes());
+    ///
+    /// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
+    /// ```
     fn try_decrypt_with_recipients<
-        B: CoseKeyDistributionCipher + CoseEncryptCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider + ?Sized,
+        B: KeyDistributionCryptoBackend + EncryptCryptoBackend,
+        CKP: KeyProvider,
+        CAP: AadProvider + ?Sized,
     >(
         &self,
         backend: &mut B,
@@ -215,7 +431,7 @@ pub trait CoseEncryptExt {
 }
 
 impl CoseEncryptExt for CoseEncrypt {
-    fn try_decrypt<B: CoseEncryptCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -245,9 +461,9 @@ impl CoseEncryptExt for CoseEncrypt {
     }
 
     fn try_decrypt_with_recipients<
-        B: CoseKeyDistributionCipher + CoseEncryptCipher,
-        CKP: CoseKeyProvider,
-        CAP: CoseAadProvider + ?Sized,
+        B: KeyDistributionCryptoBackend + EncryptCryptoBackend,
+        CKP: KeyProvider,
+        CAP: AadProvider + ?Sized,
     >(
         &self,
         backend: &mut B,

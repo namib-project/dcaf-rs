@@ -1,3 +1,13 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use alloc::borrow::ToOwned;
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
@@ -8,8 +18,8 @@ use coset::iana::EnumI64;
 use coset::{iana, Algorithm, CoseKey, Header, HeaderBuilder, KeyOperation, Label};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::key::CoseKeyProvider;
-use crate::token::cose::{CoseCipher, CoseEncryptCipher};
+use crate::token::cose::key::KeyProvider;
+use crate::token::cose::{CryptoBackend, EncryptCryptoBackend};
 
 /// A header parameter that can be used in a COSE header.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,7 +131,7 @@ pub(crate) fn determine_algorithm<CE: Display>(
 /// This function performs the algorithm-independent checks for whether a key is a suitable
 /// candidate, but not any algorithm-specific checks (e.g. required key parameters, key length,
 /// etc.). Those will have to be checked by the caller.
-pub(crate) fn determine_key_candidates<'a, CKP: CoseKeyProvider, CE: Display>(
+pub(crate) fn determine_key_candidates<'a, CKP: KeyProvider, CE: Display>(
     key_provider: &'a CKP,
     protected: Option<&'a Header>,
     unprotected: Option<&'a Header>,
@@ -163,8 +173,16 @@ pub(crate) fn determine_key_candidates<'a, CKP: CoseKeyProvider, CE: Display>(
     })
 }
 
+/// Extensions to the [HeaderBuilder] type that enable usage of cryptographic backends.
 pub trait HeaderBuilderExt: Sized {
-    fn gen_iv<B: CoseEncryptCipher>(
+    /// Generate an initialization vector for the given `alg` (algorithm) using the given
+    /// cryptographic `backend`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the algorithm is unsupported/unknown or the cryptographic backend
+    /// returns an error.
+    fn gen_iv<B: EncryptCryptoBackend>(
         self,
         backend: &mut B,
         alg: iana::Algorithm,
@@ -174,7 +192,7 @@ pub trait HeaderBuilderExt: Sized {
 const AES_GCM_NONCE_SIZE: usize = 12;
 
 impl HeaderBuilderExt for HeaderBuilder {
-    fn gen_iv<B: CoseCipher>(
+    fn gen_iv<B: CryptoBackend>(
         self,
         backend: &mut B,
         alg: iana::Algorithm,
@@ -196,7 +214,7 @@ impl HeaderBuilderExt for HeaderBuilder {
     }
 }
 
-pub(crate) fn try_cose_crypto_operation<BE: Display, CKP: CoseKeyProvider, F, R>(
+pub(crate) fn try_cose_crypto_operation<BE: Display, CKP: KeyProvider, F, R>(
     key_provider: &CKP,
     protected: Option<&Header>,
     unprotected: Option<&Header>,

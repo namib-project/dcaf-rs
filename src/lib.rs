@@ -18,7 +18,8 @@
 //! as well as the possibility to create COSE encrypted/signed access tokens
 //! (as described in the standard) along with decryption/verification functions.
 //! Implementations of the cryptographic functions must be provided by the user by implementing
-//! [`CoseEncryptCipher`](token::CoseEncryptCipher) or [`CoseSignCipher`](token::CoseSignCipher).
+//! [`EncryptCryptoBackend`](token::cose::EncryptCryptoBackend) or
+//! [`SignCryptoBackend`](token::cose::SignCryptoBackend).
 //!
 //! Note that actually transmitting the serialized values (e.g., via CoAP) or providing more complex
 //! features not mentioned in the ACE-OAuth RFC (e.g., a permission management system for
@@ -81,137 +82,6 @@
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
 //!
-//! ## Access Tokens
-//! Following up from the previous example, let's assume we now want to create a signed
-//! access token containing the existing `key`, as well as claims about the audience and issuer
-//! of the token, using an existing cipher of type `FakeCrypto`[^cipher]:
-//! ```ignore
-//! # use ciborium::value::Value;
-//! # use coset::{AsCborValue, CoseKey, CoseKeyBuilder, Header, iana, Label, ProtectedHeader};
-//! # use coset::cwt::{ClaimsSetBuilder, Timestamp};
-//! # use coset::iana::{Algorithm, CwtClaimName};
-//! # use rand::{CryptoRng, RngCore};
-//! # use dcaf::{ToCborMap, sign_access_token, verify_access_token, CoseSignCipher};
-//! # use dcaf::common::cbor_values::{ByteString, ProofOfPossessionKey};
-//! # use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
-//! # use dcaf::error::{AccessTokenError, CoseCipherError};
-//! use dcaf::token::CoseCipher;
-//!
-//! # struct FakeCrypto {}
-//! #
-//! # #[derive(Clone, Copy)]
-//! # pub(crate) struct FakeRng;
-//! #
-//! # fn get_k_from_key(key: &CoseKey) -> Option<Vec<u8>> {
-//! #     const K_PARAM: i64 = iana::SymmetricKeyParameter::K as i64;
-//! #     for (label, value) in key.params.iter() {
-//! #         if let Label::Int(K_PARAM) = label {
-//! #             if let Value::Bytes(k_val) = value {
-//! #                 return Some(k_val.clone());
-//! #             }
-//! #         }
-//! #     }
-//! #     None
-//! # }
-//! #
-//! # impl RngCore for FakeRng {
-//! #     fn next_u32(&mut self) -> u32 {
-//! #         0
-//! #     }
-//! #
-//! #     fn next_u64(&mut self) -> u64 {
-//! #         0
-//! #     }
-//! #
-//! #     fn fill_bytes(&mut self, dest: &mut [u8]) {
-//! #         dest.fill(0);
-//! #     }
-//! #
-//! #     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-//! #         dest.fill(0);
-//! #         Ok(())
-//! #     }
-//! # }
-//! #
-//! # impl CryptoRng for FakeRng {}
-//! #
-//! # impl CoseCipher for FakeCrypto {
-//! #     type Error = String;
-//! #
-//! #     fn set_headers<RNG: RngCore + CryptoRng>(key: &CoseKey, unprotected_header: &mut Header, protected_header: &mut Header, rng: RNG) -> Result<(), CoseCipherError<Self::Error>> {
-//! #         // We have to later verify these headers really are used.
-//! #         if let Some(label) = unprotected_header
-//! #             .rest
-//! #             .iter()
-//! #             .find(|x| x.0 == Label::Int(47))
-//! #         {
-//! #             return Err(CoseCipherError::existing_header_label(&label.0));
-//! #         }
-//! #         if protected_header.alg != None {
-//! #             return Err(CoseCipherError::existing_header("alg"));
-//! #         }
-//! #         unprotected_header.rest.push((Label::Int(47), Value::Null));
-//! #         protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));
-//! #         Ok(())
-//! #     }
-//! # }
-//! #
-//! # /// Implements basic operations from the [`CoseSignCipher`](crate::token::CoseSignCipher) trait
-//! # /// without actually using any "real" cryptography.
-//! # /// This is purely to be used for testing and obviously offers no security at all.
-//! # impl CoseSignCipher for FakeCrypto {
-//! #     fn sign(
-//! #         key: &CoseKey,
-//! #         target: &[u8],
-//! #         unprotected_header: &Header,
-//! #         protected_header: &Header,
-//! #     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-//! #         // We simply append the key behind the data.
-//! #         let mut signature = target.to_vec();
-//! #         let k = get_k_from_key(key);
-//! #         signature.append(&mut k.expect("k must be present in key!"));
-//! #         Ok(signature)
-//! #     }
-//! #
-//! #     fn verify(
-//! #         key: &CoseKey,
-//! #         signature: &[u8],
-//! #         signed_data: &[u8],
-//! #         unprotected_header: &Header,
-//! #         protected_header: &ProtectedHeader,
-//! #         unprotected_signature_header: Option<&Header>,
-//! #         protected_signature_header: Option<&ProtectedHeader>,
-//! #     ) -> Result<(), CoseCipherError<Self::Error>> {
-//! #         if signature
-//! #             == Self::sign(
-//! #             key,
-//! #             signed_data,
-//! #             unprotected_header,
-//! #             &protected_header.header,
-//! #         )?
-//! #         {
-//! #             Ok(())
-//! #         } else {
-//! #             Err(CoseCipherError::VerificationFailure)
-//! #         }
-//! #     }
-//! # }
-//!
-//! let rng = FakeRng;
-//! let key = CoseKeyBuilder::new_symmetric_key(vec![1,2,3,4,5]).key_id(vec![0xDC, 0xAF]).build();
-//! let claims = ClaimsSetBuilder::new()
-//!      .audience(String::from("coaps://rs.example.com"))
-//!      .issuer(String::from("coaps://as.example.com"))
-//!      .claim(CwtClaimName::Cnf, key.clone().to_cbor_value()?)
-//!      .build();
-//! let token = sign_access_token::<FakeCrypto, FakeRng>(&key, claims, None, None, None, rng)?;
-//! assert!(verify_access_token::<FakeCrypto>(&key, &token, None).is_ok());
-//! # Ok::<(), AccessTokenError<String>>(())
-//! ```
-//!
-//! [^cipher]: Note that we are deliberately omitting details about the implementation of the
-//! `cipher` here, since such implementations won't be in the scope of this crate.
-//!
 //! # Provided Data Models
 //!
 //! ## Token Endpoint
@@ -240,70 +110,12 @@
 //! - While not really a data type, various constants representing values used in ACE-OAuth
 //!   are provided in the [`constants`](constants) module.
 //!
-//! # Creating Access Tokens
-//! In order to create access tokens, you can use either [`encrypt_access_token`](encrypt_access_token)
-//! or [`sign_access_token`](sign_access_token),
-//! depending on whether you want the access token to be wrapped in a
-//! `COSE_Encrypt0` or `COSE_Sign1` structure. Support for a combination of both is planned for the
-//! future. In case you want to create a token intended for multiple recipients (each with their
-//! own key), you can use [`encrypt_access_token_multiple`](encrypt_access_token_multiple)
-//! or [`sign_access_token_multiple`](sign_access_token_multiple).
+//! # Token handling
 //!
-//! Both functions take a [`ClaimsSet`](coset::cwt::ClaimsSet) containing the claims that
-//! shall be part of the access token, a key used to encrypt or sign the token,
-//! optional `aad` (additional authenticated data), un-/protected headers and a cipher (explained
-//! further below) identified by type parameter `T`.
-//! Note that if the headers you pass in set fields which the cipher wants to set as well,
-//! the function will fail with a `HeaderAlreadySet` error.
-//! The function will return a [`Result`](Result) of the opaque
-//! [`ByteString`](ByteString) containing the access token.
+//! This crate also provides some functionality regarding the encoding and decoding of access
+//! tokens, especially of CBOR Web Tokens.
 //!
-//! # Verifying and Decrypting Access Tokens
-//! In order to verify or decrypt existing access tokens represented as [`ByteString`](ByteString)s,
-//! use [`verify_access_token`](verify_access_token) or
-//! [`decrypt_access_token`](decrypt_access_token) respectively.
-//! In case the token was created for multiple recipients (each with their own key),
-//! use [`verify_access_token_multiple`](verify_access_token_multiple)
-//! or [`decrypt_access_token_multiple`](decrypt_access_token_multiple).
-//!
-//! Both functions take the access token, a `key` used to decrypt or verify, optional `aad`
-//! (additional authenticated data) and a cipher implementing cryptographic operations identified
-//! by type parameter `T`.
-//!
-//! [`decrypt_access_token`](decrypt_access_token) will return a result containing
-//! the decrypted [`ClaimsSet`](coset::cwt::ClaimsSet).
-//! [`verify_access_token`](verify_access_token) will return an empty result which
-//! indicates that the token was successfully verified---an [`Err`](Result)
-//! would indicate failure.
-//!
-//! # Extracting Headers from an Access Token
-//! Regardless of whether a token was signed, encrypted, or MAC-tagged, you can extract its
-//! headers using [`get_token_headers`](get_token_headers),
-//! which will return an option containing both
-//! unprotected and protected headers (or which will be [`None`](None) in case
-//! the token is invalid).
-//!
-//! # COSE Cipher
-//! TODO rewrite this.
-//! As mentioned before, cryptographic functions are outside the scope of this crate.
-//! For this reason, the various COSE cipher traits exist; namely,
-//! [`CoseEncryptCipher`](token::CoseEncryptCipher), [`CoseSignCipher`](token::CoseSignCipher),
-//! and [`CoseMacCipher`](token::CoseMacCipher), each implementing
-//! a corresponding COSE operation as specified in sections 4, 5, and 6 of
-//! [RFC 8152](https://www.rfc-editor.org/rfc/rfc8152).
-//! There are also the traits [`MultipleEncryptCipher`](token::MultipleEncryptCipher),
-//! [`MultipleSignCipher`](token::MultipleSignCipher), and
-//! [`MultipleMacCipher`](token::MultipleMacCipher),
-//! which are used for creating tokens intended for multiple recipients.
-//!
-//! Note that these ciphers *don't* need to wrap their results in, e.g.,
-//! a `Cose_Encrypt0` structure, as this part is already handled by this library
-//! (which uses [`coset`](coset))---only the cryptographic algorithms themselves need to be implemented
-//! (e.g., step 4 of "how to decrypt a message" in [section 5.3 of RFC 8152](https://www.rfc-editor.org/rfc/rfc8152#section-5.3)).
-//!
-//! When implementing any of the specific COSE ciphers, you'll also need to specify the type
-//! of the key (which must be convertible to a `CoseKey`) and implement a method which sets
-//! headers for the token, for example, the used algorithm, the key ID, an IV, and so on.
+//! See the [token] module-level documentation for more information.
 
 #![deny(
     rustdoc::broken_intra_doc_links,

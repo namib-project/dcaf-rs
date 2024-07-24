@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024 The NAMIB Project Developers.
+ * Copyright (c) 2024 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -17,21 +17,14 @@ pub use sign::{CoseSignBuilderExt, CoseSignExt};
 pub use sign1::{CoseSign1BuilderExt, CoseSign1Ext};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::key::{CoseEc2Key, CoseKeyProvider, CoseParsedKey};
-use crate::token::cose::{header_util, key, CoseCipher};
+use crate::token::cose::key::{CoseEc2Key, CoseParsedKey, KeyProvider};
+use crate::token::cose::{header_util, key, CryptoBackend};
 
 mod sign;
 mod sign1;
 
 /// Provides basic operations for signing and verifying COSE structures.
-///
-/// This will be used by [`sign_access_token`] and [`verify_access_token`] (as well as the
-/// equivalents for multiple recipients: [`sign_access_token_multiple`] and
-/// [`verify_access_token_multiple`]) to apply the
-/// corresponding cryptographic operations to the constructed token bytestring.
-/// The [`set_headers` method](CoseCipher::set_headers) can be used to set parameters
-/// this cipher requires to be set.
-pub trait CoseSignCipher: CoseCipher {
+pub trait SignCryptoBackend: CryptoBackend {
     /// Cryptographically signs the `payload` value with the `key` using ECDSA and returns the
     /// signature.
     ///
@@ -164,7 +157,7 @@ pub trait CoseSignCipher: CoseCipher {
     ) -> Result<(), CoseCipherError<Self::Error>>;
 }
 
-fn try_sign<B: CoseSignCipher, CKP: CoseKeyProvider>(
+fn try_sign<B: SignCryptoBackend, CKP: KeyProvider>(
     backend: &mut B,
     key_provider: &CKP,
     protected: Option<&Header>,
@@ -197,7 +190,7 @@ fn try_sign<B: CoseSignCipher, CKP: CoseKeyProvider>(
     )
 }
 
-fn try_verify<B: CoseSignCipher, CKP: CoseKeyProvider>(
+fn try_verify<B: SignCryptoBackend, CKP: KeyProvider>(
     backend: &mut B,
     key_provider: &CKP,
     protected: &Header,

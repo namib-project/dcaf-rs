@@ -20,10 +20,10 @@ use rand::{CryptoRng, Rng};
 
 use crate::common::cbor_map::ToCborMap;
 use crate::error::CoseCipherError;
-use crate::token::cose::CoseCipher;
-use crate::token::cose::CoseSignCipher;
+use crate::token::cose::EncryptCryptoBackend;
+use crate::token::cose::SignCryptoBackend;
 use crate::token::cose::{CoseEc2Key, CoseSymmetricKey};
-use crate::token::cose::{CoseEncryptCipher, CoseKeyDistributionCipher};
+use crate::token::cose::{CryptoBackend, KeyDistributionCryptoBackend};
 use alloc::collections::BTreeMap;
 use core::convert::Infallible;
 use {
@@ -148,7 +148,7 @@ impl<R: CryptoRng + Rng> MockCipher<R> {
     }
 }
 
-impl<R: CryptoRng + Rng> CoseCipher for MockCipher<R> {
+impl<R: CryptoRng + Rng> CryptoBackend for MockCipher<R> {
     type Error = Infallible;
 
     fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
@@ -157,7 +157,7 @@ impl<R: CryptoRng + Rng> CoseCipher for MockCipher<R> {
     }
 }
 
-impl<R: CryptoRng + Rng> CoseEncryptCipher for MockCipher<R> {
+impl<R: CryptoRng + Rng> EncryptCryptoBackend for MockCipher<R> {
     fn encrypt_aes_gcm(
         &mut self,
         algorithm: iana::Algorithm,
@@ -199,7 +199,7 @@ impl<R: CryptoRng + Rng> CoseEncryptCipher for MockCipher<R> {
     }
 }
 
-impl<R: CryptoRng + Rng> CoseSignCipher for MockCipher<R> {
+impl<R: CryptoRng + Rng> SignCryptoBackend for MockCipher<R> {
     fn sign_ecdsa(
         &mut self,
         alg: iana::Algorithm,
@@ -235,7 +235,7 @@ impl<R: CryptoRng + Rng> CoseSignCipher for MockCipher<R> {
     }
 }
 
-impl<R: Rng + CryptoRng> CoseKeyDistributionCipher for MockCipher<R> {
+impl<R: Rng + CryptoRng> KeyDistributionCryptoBackend for MockCipher<R> {
     fn aes_key_wrap(
         &mut self,
         algorithm: iana::Algorithm,

@@ -1,3 +1,13 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
 use core::convert::Infallible;
 use std::path::PathBuf;
 
@@ -9,17 +19,17 @@ use rstest::rstest;
 
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
 use crate::token::cose::encrypted::encrypt::{CoseEncryptBuilderExt, CoseEncryptExt};
-use crate::token::cose::encrypted::{CoseEncryptCipher, CoseKeyDistributionCipher};
+use crate::token::cose::encrypted::EncryptCryptoBackend;
 use crate::token::cose::header_util::{determine_algorithm, HeaderBuilderExt};
 use crate::token::cose::key::CoseSymmetricKey;
-use crate::token::cose::recipient::CoseRecipientBuilderExt;
+use crate::token::cose::recipient::{CoseRecipientBuilderExt, KeyDistributionCryptoBackend};
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, perform_cose_reference_output_test,
     perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,
 };
-use crate::token::cose::CoseCipher;
+use crate::token::cose::CryptoBackend;
 
-impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTestHelper<B>
+impl<B: CryptoBackend + EncryptCryptoBackend + KeyDistributionCryptoBackend> CoseStructTestHelper<B>
     for CoseEncrypt
 {
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self {
@@ -159,7 +169,9 @@ impl<B: CoseCipher + CoseEncryptCipher + CoseKeyDistributionCipher> CoseStructTe
 }
 
 #[rstest]
-fn cose_examples_enveloped_reference_output<B: CoseEncryptCipher + CoseKeyDistributionCipher>(
+fn cose_examples_enveloped_reference_output<
+    B: EncryptCryptoBackend + KeyDistributionCryptoBackend,
+>(
     #[files("tests/cose_examples/enveloped-tests/env-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -167,7 +179,7 @@ fn cose_examples_enveloped_reference_output<B: CoseEncryptCipher + CoseKeyDistri
 }
 
 #[rstest]
-fn cose_examples_enveloped_self_signed<B: CoseEncryptCipher + CoseKeyDistributionCipher>(
+fn cose_examples_enveloped_self_signed<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/enveloped-tests/env-*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -175,7 +187,9 @@ fn cose_examples_enveloped_self_signed<B: CoseEncryptCipher + CoseKeyDistributio
 }
 
 #[rstest]
-fn cose_examples_aes_wrap_reference_output<B: CoseEncryptCipher + CoseKeyDistributionCipher>(
+fn cose_examples_aes_wrap_reference_output<
+    B: EncryptCryptoBackend + KeyDistributionCryptoBackend,
+>(
     #[files("tests/cose_examples/aes-wrap-examples/aes-wrap-*-0[45].json")] test_path: PathBuf, // The other tests use (as of now) unsupported algorithms
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -183,7 +197,7 @@ fn cose_examples_aes_wrap_reference_output<B: CoseEncryptCipher + CoseKeyDistrib
 }
 
 #[rstest]
-fn cose_examples_aes_wrap_self_signed<B: CoseEncryptCipher + CoseKeyDistributionCipher>(
+fn cose_examples_aes_wrap_self_signed<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/aes-wrap-examples/aes-wrap-*-0[45].json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -191,7 +205,7 @@ fn cose_examples_aes_wrap_self_signed<B: CoseEncryptCipher + CoseKeyDistribution
 }
 
 #[rstest]
-fn aes_wrap_tests<B: CoseEncryptCipher + CoseKeyDistributionCipher>(
+fn aes_wrap_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/dcaf_cose_examples/aes-kw/*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {
@@ -199,7 +213,7 @@ fn aes_wrap_tests<B: CoseEncryptCipher + CoseKeyDistributionCipher>(
 }
 
 #[rstest]
-fn aes_gcm_tests<B: CoseEncryptCipher + CoseKeyDistributionCipher>(
+fn aes_gcm_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/dcaf_cose_examples/aes-gcm/*.json")] test_path: PathBuf,
     #[values(OpensslContext {})] backend: B,
 ) {

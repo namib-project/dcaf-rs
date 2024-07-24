@@ -1,11 +1,26 @@
+/*
+ * Copyright (c) 2024 The NAMIB Project Developers.
+ * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+ * option. This file may not be copied, modified, or distributed
+ * except according to those terms.
+ *
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ */
+//! Extensions for COSE_Mac0 objects and builders ([CoseMac0], [CoseMac0Builder]).
+//!
+//! Refer to the module-level documentation of [crate::token::cose] for some general information
+//! regarding the way that headers and keys need to be set up.
 use alloc::rc::Rc;
 use core::cell::RefCell;
 
 use coset::{CoseMac0, CoseMac0Builder, Header};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::key::{CoseAadProvider, CoseKeyProvider};
-use crate::token::cose::maced::{try_compute, try_verify, CoseMacCipher};
+use crate::token::cose::aad::AadProvider;
+use crate::token::cose::key::KeyProvider;
+use crate::token::cose::maced::{try_compute, try_verify, MacCryptoBackend};
 
 #[cfg(all(test, feature = "std"))]
 mod tests;
@@ -42,8 +57,8 @@ pub trait CoseMac0BuilderExt: Sized {
     ///
     /// # Examples
     ///
-    /// TODO
-    fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    /// Refer to [the documentation for the CoseMac0 extensions](CoseMac0Ext) for examples.
+    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -54,7 +69,7 @@ pub trait CoseMac0BuilderExt: Sized {
 }
 
 impl CoseMac0BuilderExt for CoseMac0Builder {
-    fn try_compute<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -87,6 +102,34 @@ impl CoseMac0BuilderExt for CoseMac0Builder {
 }
 
 /// Extensions to the [CoseMac0] type that enable usage of cryptographic backends.
+///
+/// # Examples
+///
+/// Create a [CoseMac0] instance and compute a MAC for it, then verify it:
+/// ```
+///
+/// use coset::{CoseKeyBuilder, CoseMac0Builder, HeaderBuilder, iana};
+/// use dcaf::error::CoseCipherError;
+/// use dcaf::token::cose::{CryptoBackend, CoseMac0BuilderExt, CoseMac0Ext};
+/// use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+///
+/// let mut backend = OpensslContext::new();
+///
+/// let mut key_data = vec![0; 32];
+/// backend.generate_rand(key_data.as_mut_slice())?;
+/// let key = CoseKeyBuilder::new_symmetric_key(key_data).build();
+///
+/// let unprotected = HeaderBuilder::new().algorithm(iana::Algorithm::HMAC_256_256).build();
+///
+/// let cose_object = CoseMac0Builder::new()
+///                     .payload("This is the payload!".as_bytes().to_vec())
+///                     .try_compute(&mut backend, &key, None, Some(unprotected), &[] as &[u8])?
+///                     .build();
+///
+/// assert!(cose_object.try_verify(&mut backend, &key, &[] as &[u8]).is_ok());
+///
+/// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
+/// ```
 pub trait CoseMac0Ext {
     /// Attempts to verify the MAC using a cryptographic backend.
     ///
@@ -185,7 +228,7 @@ pub trait CoseMac0Ext {
     ///     )
     /// );
     /// ```
-    fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -194,7 +237,7 @@ pub trait CoseMac0Ext {
 }
 
 impl CoseMac0Ext for CoseMac0 {
-    fn try_verify<B: CoseMacCipher, CKP: CoseKeyProvider, CAP: CoseAadProvider + ?Sized>(
+    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         &self,
         backend: &mut B,
         key_provider: &CKP,

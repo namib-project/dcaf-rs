@@ -313,6 +313,10 @@ where
     ///
     /// The contained vector describes the error that occurred while validating each signature.
     NoValidSignatureFound(Vec<(CoseSignature, CoseCipherError<T>)>),
+    /// Provided payload is not supported for this algorithm.
+    ///
+    /// For instance AES key wrap inputs must be a multiple of 64 bits.
+    InvalidPayload(Vec<u8>),
     /// A different error has occurred. Details are provided in the contained error.
     Other(T),
 }
@@ -392,6 +396,9 @@ where
                     f,
                     "could not validate any of the signatures with any of the provided keys"
                 )
+            }
+            CoseCipherError::InvalidPayload(_) => {
+                write!(f, "payload is invalid for the given algorithm")
             }
         }
     }
