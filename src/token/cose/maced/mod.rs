@@ -12,17 +12,15 @@ use alloc::collections::BTreeSet;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
-use core::fmt::Display;
 
-use ciborium::Value;
 use coset::{iana, Algorithm, Header, KeyOperation};
 
 pub use mac::{CoseMacBuilderExt, CoseMacExt};
 pub use mac0::{CoseMac0BuilderExt, CoseMac0Ext};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::key::{CoseParsedKey, CoseSymmetricKey, KeyParam, KeyProvider};
-use crate::token::cose::{header_util, CryptoBackend};
+use crate::token::cose::key::{CoseParsedKey, CoseSymmetricKey, KeyProvider};
+use crate::token::cose::{header_util, key, CryptoBackend};
 
 mod mac;
 mod mac0;
@@ -30,14 +28,14 @@ mod mac0;
 /// Trait for cryptographic backends that can perform Message Authentication Code (MAC) computation
 /// and verification operations for algorithms used in COSE structures.
 pub trait MacCryptoBackend: CryptoBackend {
-    /// Computes an HMAC for the given `payload` using the given `alg`orithm and `key`.
+    /// Computes an HMAC for the given `payload` using the given `algorithm` and `key`.
     ///
     /// The MAC should be computed with the padding specified in RFC 2104 (as described in RFC 9053,
     /// Section 3.1).
     ///
     /// # Arguments
     ///
-    /// * `alg` - The HMAC variant to use (determines the hash function).
+    /// * `algorithm` - The HMAC variant to use (determines the hash function).
     ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
@@ -73,12 +71,12 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// defined).
     fn compute_hmac(
         &mut self,
-        alg: iana::Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         payload: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 
-    /// Verifies the HMAC provided as `tag` for the given `payload` using the given `alg`orithm and
+    /// Verifies the HMAC provided as `tag` for the given `payload` using the given `algorithm` and
     /// `key`.
     ///
     /// The MAC should be computed with the padding specified in RFC 2104 (as described in RFC 9053,
@@ -89,7 +87,7 @@ pub trait MacCryptoBackend: CryptoBackend {
     ///
     /// # Arguments
     ///
-    /// * `alg` - The HMAC variant to use (determines the hash function).
+    /// * `algorithm` - The HMAC variant to use (determines the hash function).
     ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
@@ -126,65 +124,28 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// defined).
     fn verify_hmac(
         &mut self,
-        alg: iana::Algorithm,
+        algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         tag: &[u8],
         payload: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>>;
 }
 
-pub(crate) fn ensure_valid_hmac_key<BE: Display>(
-    algorithm: iana::Algorithm,
-    parsed_key: CoseParsedKey<BE>,
-) -> Result<CoseSymmetricKey<BE>, CoseCipherError<BE>> {
-    // Checks according to RFC 9053, Section 3.1.
-
-    // Key type must be symmetric.
-    let symm_key = if let CoseParsedKey::Symmetric(symm_key) = parsed_key {
-        symm_key
-    } else {
-        return Err(CoseCipherError::KeyTypeAlgorithmMismatch(
-            parsed_key.as_ref().kty.clone(),
-            Algorithm::Assigned(algorithm),
-        ));
-    };
-
-    // Algorithm in key must match algorithm to use.
-    if let Some(key_alg) = &symm_key.as_ref().alg {
-        if key_alg != &Algorithm::Assigned(algorithm) {
-            return Err(CoseCipherError::KeyAlgorithmMismatch(
-                key_alg.clone(),
-                Algorithm::Assigned(algorithm),
-            ));
-        }
-    }
-
-    // For algorithms that we know, check the key length (would lead to a cipher error later on).
-    let key_len = match algorithm {
-        iana::Algorithm::HMAC_256_256 | iana::Algorithm::HMAC_256_64 => Some(32),
-        iana::Algorithm::HMAC_384_384 => Some(48),
-        iana::Algorithm::HMAC_512_512 => Some(64),
-        _ => None,
-    };
-
-    if let Some(key_len) = key_len {
-        if symm_key.k.len() != key_len {
-            return Err(CoseCipherError::InvalidKeyParam(
-                KeyParam::Symmetric(iana::SymmetricKeyParameter::K),
-                Value::Bytes(symm_key.k.to_vec()),
-            ));
-        }
-    }
-
-    Ok(symm_key)
-}
-
+/// Attempts to perform a COSE HMAC computation operation for a [`CoseMac`](coset::CoseMac) or
+/// [`CoseMac0`](coset::CoseMac0) structure with the given `protected` and `unprotected`
+/// headers and `payload` using the given `backend` and `key_provider`.
+///
+/// Also performs checks that ensure that the given parameters (esp. headers and keys) are valid and
+/// are coherent with each other.
+///
+/// If the `key_provider` returns multiple keys, all will be tried until one can be successfully
+/// used for the given operation.
 fn try_compute<B: MacCryptoBackend, CKP: KeyProvider>(
     backend: &mut B,
     key_provider: &CKP,
     protected: Option<&Header>,
     unprotected: Option<&Header>,
-    input: &[u8],
+    payload: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
     header_util::try_cose_crypto_operation(
         key_provider,
@@ -196,8 +157,8 @@ fn try_compute<B: MacCryptoBackend, CKP: KeyProvider>(
 
             match alg {
                 iana::Algorithm::HMAC_256_256 => {
-                    let symm_key = ensure_valid_hmac_key(alg, parsed_key)?;
-                    backend.compute_hmac(alg, symm_key, input)
+                    let symm_key = key::ensure_valid_hmac_key(alg, parsed_key)?;
+                    backend.compute_hmac(alg, symm_key, payload)
                 }
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
                     alg,
@@ -207,13 +168,22 @@ fn try_compute<B: MacCryptoBackend, CKP: KeyProvider>(
     )
 }
 
+/// Attempts to perform a COSE HMAC verification operation for a [`CoseMac`](coset::CoseMac) or
+/// [`CoseMac0`](coset::CoseMac0) structure with the given `protected` and `unprotected`
+/// headers and `payload` using the given `backend` and `key_provider`.
+///
+/// Also performs checks that ensure that the given parameters (esp. headers and keys) are valid and
+/// are coherent with each other.
+///
+/// If the `key_provider` returns multiple keys, all will be tried until one can be successfully
+/// used for the given operation.
 pub(crate) fn try_verify<B: MacCryptoBackend, CKP: KeyProvider>(
     backend: &Rc<RefCell<&mut B>>,
     key_provider: &CKP,
     protected: &Header,
     unprotected: &Header,
     tag: &[u8],
-    data: &[u8],
+    payload: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
     header_util::try_cose_crypto_operation(
         key_provider,
@@ -225,8 +195,8 @@ pub(crate) fn try_verify<B: MacCryptoBackend, CKP: KeyProvider>(
 
             match alg {
                 iana::Algorithm::HMAC_256_256 => {
-                    let symm_key = ensure_valid_hmac_key(alg, parsed_key)?;
-                    (*backend.borrow_mut()).verify_hmac(alg, symm_key, tag, data)
+                    let symm_key = key::ensure_valid_hmac_key(alg, parsed_key)?;
+                    (*backend.borrow_mut()).verify_hmac(alg, symm_key, tag, payload)
                 }
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
                     alg,

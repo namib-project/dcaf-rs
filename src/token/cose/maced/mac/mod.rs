@@ -23,7 +23,7 @@ use crate::token::cose::recipient::KeyDistributionCryptoBackend;
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
-/// Extensions to the [`CoseMacBuilder`]  type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseMacBuilder`] type that enable usage of cryptographic backends.
 pub trait CoseMacBuilderExt: Sized {
     /// Attempts to compute the MAC using a cryptographic backend.
     ///
@@ -57,7 +57,7 @@ pub trait CoseMacBuilderExt: Sized {
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] will be returned.
     ///
     /// # Examples
     ///
@@ -105,11 +105,11 @@ impl CoseMacBuilderExt for CoseMacBuilder {
     }
 }
 
-/// Extensions to the [`CoseMac`]  type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseMac`] type that enable usage of cryptographic backends.
 ///
 /// # Examples
 ///
-/// Create a simple [`CoseMac`]  instance that uses the provided key directly and compute a MAC for it,
+/// Create a simple [`CoseMac`] instance that uses the provided key directly and compute a MAC for it,
 /// then verify it:
 ///
 /// ```
@@ -150,7 +150,7 @@ impl CoseMacBuilderExt for CoseMacBuilder {
 /// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
 /// ```
 ///
-/// Create a simple [`CoseMac`]  instance with recipients that protect a content encryption key using
+/// Create a simple [`CoseMac`] instance with recipients that protect a content encryption key using
 /// AES key wrap. Compute a MAC for it, then verify it:
 /// ```
 ///
@@ -205,7 +205,7 @@ pub trait CoseMacExt {
     /// Note that [`CoseRecipient`](coset::CoseRecipient)s are not considered for key lookup here, the key provider must
     /// provide the key used directly for MAC calculation.
     /// If your key provider can/should be able to provide the key for a contained
-    /// [`CoseRecipient](coset::CoseRecipient), not for the [CoseMac`] instance itself, use
+    /// [`CoseRecipient`](coset::CoseRecipient), not for the [`CoseMac`] instance itself, use
     /// [`CoseMac::try_verify_with_recipients`] instead.
     ///
     /// # Parameters
@@ -228,7 +228,7 @@ pub trait CoseMacExt {
     /// occur.
     ///
     /// If the COSE object is not malformed, but MAC verification fails for all key candidates
-    /// provided by the key provider a [`CoseCipherError::NoMatchingKeyFound`] error will be
+    /// provided by the key provider a [`CoseCipherError::NoMatchingKeyFound`] will be
     /// returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
@@ -314,6 +314,11 @@ pub trait CoseMacExt {
     /// Attempts to verify the MAC using a cryptographic backend, performing a search through the
     /// contained [`CoseRecipient`](coset::CoseRecipient)s in order to decrypt the content encryption key (CEK).
     ///
+    /// Note: As of now, if a recipient of type [`iana::Algorithm::Direct`](coset::iana::Algorithm::Direct)
+    /// is present, there is no check to ensure that `Direct` is the only method used on the message
+    /// (RFC 9052, Section 8.5.1).
+    /// If you _need_ to ensure this, you must implement this check on your own.
+    ///
     /// # Parameters
     ///
     /// - `backend`      - cryptographic backend to use.
@@ -351,8 +356,8 @@ pub trait CoseMacExt {
     /// Verify the example `aes-wrap-examples/aes-wrap-128-01.json` from the `cose-wg/Examples`
     /// repository referenced in RFC 9052 using the
     /// [`OpensslContext`](super::super::crypto_impl::openssl::OpensslContext) backend:
-    /// TODO this example is currently ignored, as the required algorithm is not implemented yet
-    ///      (AES-MAC-128/64)
+    /// TODO (#17): this example is currently ignored, as the required algorithm is not implemented
+    ///             yet (AES-MAC-128/64)
     /// ```ignore
     /// use base64::Engine;
     /// use coset::{CoseKeyBuilder, CoseMac, TaggedCborSerializable};

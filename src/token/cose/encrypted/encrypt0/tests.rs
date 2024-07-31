@@ -38,7 +38,7 @@ impl<B: CryptoBackend + EncryptCryptoBackend> CoseStructTestHelper<B> for CoseEn
             .first()
             .expect("test case has no recipient");
 
-        // Need to generate an IV. Have to do this quite ugly, because we have implemented our IV
+        // Need to generate an IV. Have to do this quite uglily, because we have implemented our IV
         // generation on the header builder only.
         let alg = if let coset::Algorithm::Assigned(alg) = encrypt0_cfg
             .protected
@@ -113,7 +113,7 @@ impl<B: CryptoBackend + EncryptCryptoBackend> CoseStructTestHelper<B> for CoseEn
             let plaintext = verify_result.expect("unable to verify token");
 
             assert_eq!(case.input.plaintext.as_bytes(), plaintext.as_slice());
-            // IV is apprarently taken from rng_stream field, not header field, but still implicitly added to header.
+            // IV is apparently taken from rng_stream field, not header field, but still implicitly added to header.
             // ugh...
             let mut unprotected = test_case.unprotected.clone().unwrap_or_default();
             let mut protected = test_case.protected.clone().unwrap_or_default();

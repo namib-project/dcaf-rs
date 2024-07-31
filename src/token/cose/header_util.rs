@@ -18,13 +18,14 @@ use coset::iana::EnumI64;
 use coset::{iana, Algorithm, CoseKey, Header, HeaderBuilder, KeyOperation, Label};
 
 use crate::error::CoseCipherError;
+use crate::token::cose::encrypted::AES_GCM_NONCE_SIZE;
 use crate::token::cose::key::KeyProvider;
 use crate::token::cose::{CryptoBackend, EncryptCryptoBackend};
 
 /// A header parameter that can be used in a COSE header.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeaderParam {
-    /// Generic header parmeter applicable to all algorithms.
+    /// Generic header parameter applicable to all algorithms.
     Generic(iana::HeaderParameter),
     /// Header parameter that is specific for a set of algorithms.
     Algorithm(iana::HeaderAlgorithmParameter),
@@ -42,6 +43,7 @@ impl From<iana::HeaderAlgorithmParameter> for HeaderParam {
     }
 }
 
+/// Returns the set of header parameters that are set in the given `header_bucket`.
 fn create_header_parameter_set(header_bucket: &Header) -> BTreeSet<Label> {
     let mut header_bucket_fields = BTreeSet::new();
 
@@ -72,6 +74,8 @@ fn create_header_parameter_set(header_bucket: &Header) -> BTreeSet<Label> {
     header_bucket_fields
 }
 
+/// Ensures that there are no duplicate headers in the `protected_header` and `unprotected_header`
+/// buckets.
 pub(crate) fn check_for_duplicate_headers<E: Display>(
     protected_header: &Header,
     unprotected_header: &Header,
@@ -173,23 +177,21 @@ pub(crate) fn determine_key_candidates<'a, CKP: KeyProvider, CE: Display>(
     })
 }
 
-/// Extensions to the [`HeaderBuilder`]  type that enable usage of cryptographic backends.
+/// Extensions to the [`HeaderBuilder`] type that enable usage of cryptographic backends.
 pub trait HeaderBuilderExt: Sized {
-    /// Generate an initialization vector for the given `alg` (algorithm) using the given
+    /// Generate an initialization vector for the given `algorithm` using the given
     /// cryptographic `backend`.
     ///
     /// # Errors
     ///
-    /// Returns an error if the algorithm is unsupported/unknown or the cryptographic backend
+    /// Returns an error if the `algorithm` is unsupported/unknown or the cryptographic backend
     /// returns an error.
     fn gen_iv<B: EncryptCryptoBackend>(
         self,
         backend: &mut B,
-        alg: iana::Algorithm,
+        algorithm: iana::Algorithm,
     ) -> Result<Self, CoseCipherError<B::Error>>;
 }
-
-const AES_GCM_NONCE_SIZE: usize = 12;
 
 impl HeaderBuilderExt for HeaderBuilder {
     fn gen_iv<B: CryptoBackend>(
@@ -214,6 +216,19 @@ impl HeaderBuilderExt for HeaderBuilder {
     }
 }
 
+/// Attempts to perform the COSE operation `op` for a COSE structure with the given `protected` and
+/// `unprotected` headers after verifying that there are no duplicate headers, using the
+/// `key_provider` to determine suitable key candidates.
+///
+/// `key_ops` should be a set of [`KeyOperation`]s that denote that a key is able to perform the
+/// given operation.
+/// Only one of these must be set in the key in order for it to be considered a valid candidate.
+///
+/// If the `key_provider` provides multiple keys, the operation will be attempted for every
+/// candidate until one does not return an error or no more candidates are available.
+///
+/// Errors will be collected into a [`CoseCipherError::NoMatchingKeyFound`], which will be returned
+/// if none of the keys can successfully perform the operation.
 pub(crate) fn try_cose_crypto_operation<BE: Display, CKP: KeyProvider, F, R>(
     key_provider: &CKP,
     protected: Option<&Header>,

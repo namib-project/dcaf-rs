@@ -5,7 +5,7 @@ use coset::{EncryptionContext, Header};
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-/// A trait for types that can determine the corresponding Additional Authenticated Data to be
+/// A trait for types that can determine the corresponding additional authenticated data to be
 /// provided for a given COSE structure.
 pub trait AadProvider: Sized {
     /// Look up the additional authenticated data for the given COSE structure.
@@ -25,7 +25,7 @@ pub trait AadProvider: Sized {
         unprotected: Option<&Header>,
     ) -> Option<&[u8]>;
 
-    /// Lookup up the additional authenticated data for nested COSE structures nested inside the
+    /// Look up the additional authenticated data for nested COSE structures nested inside the
     /// one whose decryption was actually requested.
     ///
     /// For the provided implementations, this will usually return an empty slice.
@@ -187,7 +187,7 @@ impl<T: AadProvider, U: AadProvider> AadProvider for (T, U) {
     }
 }
 
-/// Swap lookup_aad and lookup_nested_aad of an existing [`AadProvider`] .
+/// Swap lookup_aad and lookup_nested_aad of an existing [`AadProvider`].
 pub struct InvertedAadProvider<T: AadProvider>(pub T);
 
 impl<T: AadProvider> AadProvider for InvertedAadProvider<T> {
@@ -229,8 +229,8 @@ impl<T: AadProvider> AadProvider for &T {
     }
 }
 
-/// Use [`AadProvider::lookup_aad`] as a fallback for [`AadProvider::lookup_nested_aad`]  if the
-/// boolean is `true` and [`AadProvider::lookup_nested_aad`]  returns None.
+/// Use [`AadProvider::lookup_aad`] as a fallback for [`AadProvider::lookup_nested_aad`] if the
+/// boolean is `true` and [`AadProvider::lookup_nested_aad`] returns None.
 impl<T: AadProvider> AadProvider for (T, bool) {
     fn lookup_aad(
         &self,

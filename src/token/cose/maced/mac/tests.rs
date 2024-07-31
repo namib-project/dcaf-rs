@@ -39,7 +39,7 @@ impl<B: CryptoBackend + MacCryptoBackend + KeyDistributionCryptoBackend> CoseStr
             .input
             .mac
             .as_ref()
-            .expect("expected a CoseEncrypt test case, but it was not found");
+            .expect("expected a CoseMac test case, but it was not found");
 
         let mac = CoseMacBuilder::new();
 
@@ -64,7 +64,7 @@ impl<B: CryptoBackend + MacCryptoBackend + KeyDistributionCryptoBackend> CoseStr
             enc_key = CoseKeyBuilder::new_symmetric_key(
                 case.intermediates
                     .as_ref()
-                    .expect("CoseEncrypt test case should have intermediates")
+                    .expect("CoseMac test case should have intermediates")
                     .cek
                     .clone(),
             )
@@ -93,7 +93,7 @@ impl<B: CryptoBackend + MacCryptoBackend + KeyDistributionCryptoBackend> CoseStr
                 Some(unprotected),
                 mac_cfg.external.as_slice(),
             )
-            .expect("unable to encrypt Encrypt object")
+            .expect("unable to encrypt Mac object")
             .build()
     }
 

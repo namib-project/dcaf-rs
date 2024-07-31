@@ -134,13 +134,8 @@ fn test_scenario<B: CryptoBackend + SignCryptoBackend>(
     let result = pseudo_send_receive(response.clone())?;
     assert_eq!(response, result);
 
-    verify_access_token(
-        &mut backend,
-        &mut &key,
-        &response.access_token,
-        &aad.as_slice(),
-    )
-    .map_err(|x| x.to_string())?;
+    verify_access_token(&mut backend, &key, &response.access_token, &aad.as_slice())
+        .map_err(|x| x.to_string())?;
 
     let error = ErrorResponse::builder()
         .error(ErrorCode::InvalidRequest)

@@ -26,7 +26,7 @@ use openssl::symm::{decrypt_aead, encrypt_aead, Cipher};
 use strum_macros::Display;
 
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypted::EncryptCryptoBackend;
+use crate::token::cose::encrypted::{EncryptCryptoBackend, AES_GCM_TAG_LEN};
 use crate::token::cose::header_util::HeaderParam;
 use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
 use crate::token::cose::maced::MacCryptoBackend;
@@ -72,7 +72,7 @@ impl From<openssl::aes::KeyError> for CoseCipherError<CoseOpensslCipherError> {
 
 /// Context for the OpenSSL cryptographic backend.
 ///
-/// Can be used as a [`CryptoBackend`]  for COSE operations.
+/// Can be used as a [`CryptoBackend`] for COSE operations.
 ///
 /// Generic properties of this backend:
 /// - [ ] Can derive EC public key components if only the private component (d) is present.
@@ -202,6 +202,8 @@ impl SignCryptoBackend for OpensslContext {
     }
 }
 
+/// Determine the openssl [`EcGroup`] instance and coordinate size that should be used for the given
+/// ECDSA key (based on its curve).
 fn get_ecdsa_group_params(
     key: &CoseEc2Key<'_, CoseOpensslCipherError>,
 ) -> Result<(usize, EcGroup), CoseCipherError<CoseOpensslCipherError>> {
@@ -215,7 +217,7 @@ fn get_ecdsa_group_params(
             Ok((48, EcGroup::from_curve_name(Nid::SECP384R1).unwrap()))
         }
         EllipticCurve::Assigned(iana::EllipticCurve::P_521) => {
-            // ECDSA using P-384 curve, coordinates are padded to 528 bits (521 bits rounded up
+            // ECDSA using P-521 curve, coordinates are padded to 528 bits (521 bits rounded up
             // to the nearest full bytes).
             Ok((66, EcGroup::from_curve_name(Nid::SECP521R1).unwrap()))
         }
@@ -223,6 +225,8 @@ fn get_ecdsa_group_params(
     }
 }
 
+/// Determine the hash function (represented in OpenSSL as a [`MessageDigest`]) that should be used
+/// for a given [`iana::Algorithm`].
 fn get_algorithm_hash_function(
     alg: iana::Algorithm,
 ) -> Result<MessageDigest, CoseCipherError<CoseOpensslCipherError>> {
@@ -236,6 +240,7 @@ fn get_algorithm_hash_function(
     }
 }
 
+/// Perform an ECDSA signature operation with the given parameters.
 fn sign_ecdsa(
     group: &EcGroup,
     pad_size: i32,
@@ -277,6 +282,7 @@ fn sign_ecdsa(
     Ok(sig)
 }
 
+/// Perform an ECDSA verification operation with the given parameters.
 fn verify_ecdsa(
     group: &EcGroup,
     pad_size: usize,
@@ -310,6 +316,8 @@ fn verify_ecdsa(
         })
 }
 
+/// Converts a private [`CoseEc2Key`] instance to its corresponding representation as an [`EcKey`]
+/// in `openssl`.
 fn cose_ec2_to_ec_private_key(
     key: &CoseEc2Key<'_, CoseOpensslCipherError>,
     group: &EcGroup,
@@ -330,6 +338,8 @@ fn cose_ec2_to_ec_private_key(
     .map_err(CoseCipherError::<CoseOpensslCipherError>::from)
 }
 
+/// Converts a public [`CoseEc2Key`] instance to its corresponding representation as an [`EcKey`]
+/// in `openssl`.
 fn cose_ec2_to_ec_public_key(
     key: &CoseEc2Key<'_, CoseOpensslCipherError>,
     group: &EcGroup,
@@ -349,8 +359,6 @@ fn cose_ec2_to_ec_public_key(
     )
     .map_err(CoseCipherError::<CoseOpensslCipherError>::from)
 }
-
-const AES_GCM_TAG_LEN: usize = 16;
 
 impl EncryptCryptoBackend for OpensslContext {
     fn encrypt_aes_gcm(
@@ -388,6 +396,8 @@ impl EncryptCryptoBackend for OpensslContext {
     }
 }
 
+/// Converts the provided [`iana::Algorithm`] to an OpenSSL [`Cipher`] that can be used for a
+/// symmetric [`Crypter`].
 fn algorithm_to_cipher(
     algorithm: iana::Algorithm,
 ) -> Result<Cipher, CoseCipherError<CoseOpensslCipherError>> {
@@ -446,6 +456,7 @@ impl KeyDistributionCryptoBackend for OpensslContext {
     }
 }
 
+/// Computes an HMAC for `input` using the given `algorithm` and `key`.
 fn compute_hmac(
     algorithm: iana::Algorithm,
     key: &CoseSymmetricKey<'_, CoseOpensslCipherError>,

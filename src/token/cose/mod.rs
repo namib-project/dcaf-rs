@@ -8,7 +8,7 @@
  *
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
-//! Extensions to [`coset`]  for easier cryptographic operations.
+//! Extensions to [`coset`] for easier cryptographic operations.
 //!
 //! This module is intended to abstract away most of the complexities regarding cryptographic
 //! operations for COSE structures, i.e. they allow you to encrypt/sign/compute/decrypt/verify COSE
@@ -20,10 +20,10 @@
 //! Cryptographic operations require one or more keys to be provided to the library.
 //! Usually, you may do so by simply providing a reference to a key or [`Vec`] of keys, optionally
 //! restricting the returned keys to those with matching key IDs to the COSE structure using the
-//! [`KeyProviderFilterMatchingKeyId`]  wrapper.
+//! [`KeyProviderFilterMatchingKeyId`] wrapper.
 //!
-//! For more advances use cases (e.g. retrieving keys on demand from a database), you might want to
-//! consider implementing the [`KeyProvider`]  trait yourself.
+//! For more advanced use cases (e.g. retrieving keys on demand from a database), you might want to
+//! consider implementing the [`KeyProvider`] trait yourself.
 //!
 //! # AAD providers
 //!
@@ -34,7 +34,7 @@
 //!
 //! In cases where you need to provide multiple sets of AAD at once, e.g. for nested COSE recipient
 //! structures where different recipients have different AAD, you may look at either implementing
-//! [`AadProvider`] yourself or using the predefined operations defined in the [`aad`]  module.
+//! [`AadProvider`] yourself or using the predefined operations defined in the [`aad`] module.
 //!
 //! # COSE Cipher
 //! This crate does not implement the basic cryptographic functions used for encrypting/signing or

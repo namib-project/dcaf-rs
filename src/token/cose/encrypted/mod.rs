@@ -25,10 +25,18 @@ mod encrypt0;
 pub use encrypt::{CoseEncryptBuilderExt, CoseEncryptExt};
 pub use encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
 
+/// Authentication tag length to use for AES-GCM (fixed to 128 bits according to
+/// [RFC 9053, section 4.1](https://datatracker.ietf.org/doc/html/rfc9053#section-4.1)).
+pub const AES_GCM_TAG_LEN: usize = 16;
+
+/// Nonce size used for AES-GCM (fixed to 96 bits according to
+/// [RFC 9053, section 4.1](https://datatracker.ietf.org/doc/html/rfc9053#section-4.1)).
+pub const AES_GCM_NONCE_SIZE: usize = 12;
+
 /// Trait for cryptographic backends that can perform encryption and decryption operations for
 /// algorithms used for COSE.
 pub trait EncryptCryptoBackend: CryptoBackend {
-    /// Encrypts the given `payload` using the AES-GCM variant provided as `alg` and the given
+    /// Encrypts the given `payload` using the AES-GCM variant provided as `algorithm` and the given
     /// `key`.
     ///
     /// Note that for all AES-GCM variants defined in RFC 9053, Section 4.1, the authentication tag
@@ -36,8 +44,8 @@ pub trait EncryptCryptoBackend: CryptoBackend {
     ///
     /// # Arguments
     ///
-    /// * `alg` - The AES-GCM variant to use.
-    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
+    /// * `algorithm` - The AES-GCM variant to use.
+    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`]
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
     ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
@@ -48,7 +56,7 @@ pub trait EncryptCryptoBackend: CryptoBackend {
     ///           Implementations may assume that the provided key has the right length for the
     ///           provided algorithm, and panic if this is not the case.
     /// * `plaintext` - Data that should be encrypted.
-    /// * `aad` - Additional Authenticated Data that should be included in the calculation of the
+    /// * `aad` - additional authenticated data that should be included in the calculation of the
     ///           authentication tag, but not encrypted.
     /// * `iv`  - Initialization vector that should be used for the encryption process.
     ///
@@ -82,7 +90,7 @@ pub trait EncryptCryptoBackend: CryptoBackend {
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 
-    /// Decrypts the given `payload` using the AES-GCM variant provided as `alg` and the given
+    /// Decrypts the given `payload` using the AES-GCM variant provided as `algorithm` and the given
     /// `key`.
     ///
     /// Note that for all AES-GCM variants defined in RFC 9053, Section 4.1, the authentication tag
@@ -90,7 +98,7 @@ pub trait EncryptCryptoBackend: CryptoBackend {
     ///
     /// # Arguments
     ///
-    /// * `alg` - The AES-GCM variant to use.
+    /// * `algorithm` - The AES-GCM variant to use.
     ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
@@ -104,14 +112,14 @@ pub trait EncryptCryptoBackend: CryptoBackend {
     /// * `ciphertext_with_tag` - The ciphertext that should be decrypted concatenated with the
     ///           authentication tag that should be verified.
     ///           Is guaranteed to be at least as long as the authentication tag should be.
-    /// * `aad` - Additional Authenticated Data that should be included in the calculation of the
+    /// * `aad` - additional authenticated data that should be included in the calculation of the
     ///           authentication tag, but not encrypted.
     /// * `iv`  - Initialization vector that should be used for the encryption process.
     ///
     /// # Returns
     ///
     /// It is expected that the return value is either the computed plaintext if decryption and
-    /// authentication are successful, or a [`CoseCipherError::VerificationFailure`] one of these
+    /// authentication are successful, or a [`CoseCipherError::VerificationFailure`] if one of these
     /// steps fails even though the input is well-formed.
     ///
     /// # Errors
@@ -140,6 +148,15 @@ pub trait EncryptCryptoBackend: CryptoBackend {
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
 }
 
+/// Attempts to perform a COSE encryption operation for a [`CoseEncrypt`](coset::CoseEncrypt) or
+/// [`CoseEncrypt0`](coset::CoseEncrypt0) structure with the given `protected` and `unprotected`
+/// headers, `plaintext` and `enc_structure` using the given `backend` and `key_provider`.
+///
+/// Also performs checks that ensure that the given parameters (esp. headers and keys) are valid and
+/// are coherent with each other.
+///
+/// If the `key_provider` returns multiple keys, all will be tried until one can be successfully
+/// used for the given operation.
 fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
     backend: &mut B,
     key_provider: &CKP,
@@ -182,6 +199,15 @@ fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
     )
 }
 
+/// Attempts to perform a COSE decryption operation for a [`CoseEncrypt`](coset::CoseEncrypt) or
+/// [`CoseEncrypt0`](coset::CoseEncrypt0) structure with the given `protected` and `unprotected`
+/// headers, `plaintext` and `enc_structure` using the given `backend` and `key_provider`.
+///
+/// Also performs checks that ensure that the given parameters (esp. headers and keys) are valid and
+/// are coherent with each other.
+///
+/// If the `key_provider` returns multiple keys, all will be tried until one can be successfully
+/// used for the given operation.
 pub(crate) fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
     backend: &Rc<RefCell<&mut B>>,
     key_provider: &CKP,
@@ -215,7 +241,8 @@ pub(crate) fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
                         )))?;
 
                     // Authentication tag is 16 bytes long and should be included in the ciphertext.
-                    if ciphertext.len() < 16 {
+                    // Empty payloads are allowed, therefore we check for ciphertext.len() < 16, not <= 16.
+                    if ciphertext.len() < AES_GCM_TAG_LEN {
                         return Err(CoseCipherError::VerificationFailure);
                     }
 

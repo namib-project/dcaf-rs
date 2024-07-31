@@ -29,7 +29,7 @@ fn find_param_by_label<'a>(label: &Label, param_vec: &'a [(Label, Value)]) -> Op
 /// An IANA-defined key parameter for a [`CoseKey`](coset::CoseKey).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum KeyParam {
-    /// Key parameters that are not specific for a certain key type.
+    /// Key parameters that are not specific to a certain key type.
     Common(iana::KeyParameter),
     /// Key parameters specific to EC2 elliptic curve keys.
     Ec2(iana::Ec2KeyParameter),
@@ -130,7 +130,7 @@ pub type EllipticCurve = RegisteredLabelWithPrivate<iana::EllipticCurve>;
 ///
 /// In the CBOR representation of this key, the sign and Y coordinate are both represented as
 /// different types of the same map field (`y`), see
-/// <https://datatracker.ietf.org/doc/html/rfc9053#section-7.1.1>.
+/// [section 7.1.1 of RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053#section-7.1.1).
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoseEc2Key<'a, OE: Display> {
     /// Key that is referenced by this view.
@@ -168,7 +168,7 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseEc2Key<'a, OE> {
         ]))?;
         // Curve must be of correct type
         let crv = EllipticCurve::from_cbor_value(crv.clone()).map_err(|_e| {
-            // TODO e as error source (as soon as we use core::error::Error).
+            // TODO (#14) e as error source (as soon as we use core::error::Error).
             CoseCipherError::InvalidKeyParam(iana::Ec2KeyParameter::Crv.into(), crv.clone())
         })?;
 
@@ -291,7 +291,7 @@ impl<'a, OE: Display> TryFrom<&'a CoseKey> for CoseOkpKey<'a, OE> {
 
         // Curve must be of correct type
         let crv = EllipticCurve::from_cbor_value(crv.clone()).map_err(|_e| {
-            // TODO e as error source (as soon as we use core::error::Error).
+            // TODO (#14): e as error source (as soon as we use core::error::Error).
             CoseCipherError::InvalidKeyParam(iana::OkpKeyParameter::Crv.into(), crv.clone())
         })?;
 
@@ -403,7 +403,7 @@ pub trait KeyProvider: Sized {
     /// matching the one provided, or all [`CoseKey`](coset::CoseKey)s available if key_id is None.
     fn lookup_key(&self, key_id: Option<&[u8]>) -> impl Iterator<Item = impl Borrow<CoseKey>>;
 
-    /// Create a [`KeyProvider`] filtering this key providers output for keys with key IDs
+    /// Create a [`KeyProvider`] filtering this key provider's output for keys with key IDs
     /// matching the COSE structure's header.
     fn match_key_ids(self) -> KeyProviderFilterMatchingKeyId<Self> {
         KeyProviderFilterMatchingKeyId(self)
@@ -457,7 +457,7 @@ impl KeyProvider for CoseKey {
     }
 }
 
-/// [`KeyProvider`] that filters another [`KeyProvider`] s output to only output keys with
+/// [`KeyProvider`] that filters another [`KeyProvider`]s output to only output keys with
 /// key IDs matching the ones provided in the COSE structure's headers.
 pub struct KeyProviderFilterMatchingKeyId<T: KeyProvider>(T);
 
@@ -476,6 +476,7 @@ impl<T: KeyProvider> KeyProvider for &T {
     }
 }
 
+/// Determines the key size that a key for the given `algorithm` should have.
 fn symmetric_key_size<BE: Display>(
     algorithm: iana::Algorithm,
 ) -> Result<usize, CoseCipherError<BE>> {
@@ -499,6 +500,10 @@ fn symmetric_key_size<BE: Display>(
     }
 }
 
+/// Attempts to parse the given `parsed_key` as an AES symmetric key.
+///
+/// Performs the checks required for symmetric keys suitable for AES according to
+/// [RFC 9053, Section 4](https://datatracker.ietf.org/doc/html/rfc9053#section-4).
 pub(crate) fn ensure_valid_aes_key<BE: Display>(
     algorithm: iana::Algorithm,
     parsed_key: CoseParsedKey<BE>,
@@ -537,33 +542,22 @@ pub(crate) fn ensure_valid_aes_key<BE: Display>(
     Ok(symm_key)
 }
 
+/// Generates a random content encryption key for the given `algorithm` using the given `backend`.
 pub(crate) fn generate_cek_for_alg<B: CryptoBackend>(
     backend: &mut B,
-    alg: iana::Algorithm,
+    algorithm: iana::Algorithm,
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    match alg {
-        iana::Algorithm::A128GCM
-        | iana::Algorithm::AES_CCM_16_64_128
-        | iana::Algorithm::AES_CCM_64_64_128
-        | iana::Algorithm::AES_CCM_16_128_128
-        | iana::Algorithm::AES_CCM_64_128_128
-        | iana::Algorithm::A192GCM
-        | iana::Algorithm::A256GCM
-        | iana::Algorithm::AES_CCM_16_64_256
-        | iana::Algorithm::AES_CCM_64_64_256
-        | iana::Algorithm::AES_CCM_16_128_256
-        | iana::Algorithm::AES_CCM_64_128_256 => {
-            let key_len = symmetric_key_size(alg)?;
-            let mut key = vec![0u8; key_len];
-            backend.generate_rand(key.as_mut_slice())?;
-            Ok(key)
-        }
-        v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-            v,
-        ))),
-    }
+    let key_len = symmetric_key_size(algorithm)?;
+    let mut key = vec![0u8; key_len];
+    backend.generate_rand(key.as_mut_slice())?;
+    Ok(key)
 }
 
+/// Attempts to parse the given `parsed_key` as an ECDSA key.
+///
+/// Performs the checks required for ECDSA keys according to
+/// [RFC 9053, Section 2.1](https://datatracker.ietf.org/doc/html/rfc9053#section-2.1) and/or
+/// [RFC 8812, Section 3.2](https://datatracker.ietf.org/doc/html/rfc8812#section-3.2).
 pub(crate) fn ensure_valid_ecdsa_key<BE: Display>(
     algorithm: iana::Algorithm,
     parsed_key: CoseParsedKey<BE>,
@@ -601,14 +595,66 @@ pub(crate) fn ensure_valid_ecdsa_key<BE: Display>(
         if ec2_key.x.is_none() {
             return Err(CoseCipherError::MissingKeyParam(vec![
                 iana::Ec2KeyParameter::X.into(),
+                iana::Ec2KeyParameter::D.into(),
             ]));
         }
         if ec2_key.y.is_none() {
             return Err(CoseCipherError::MissingKeyParam(vec![
                 iana::Ec2KeyParameter::Y.into(),
+                iana::Ec2KeyParameter::D.into(),
             ]));
         }
     }
 
     Ok(ec2_key)
+}
+
+/// Attempts to parse the given `parsed_key` as an HMAC key.
+///
+/// Performs the checks required for symmetric keys suitable for HMAC according to
+/// [RFC 9053, Section 3.1](https://datatracker.ietf.org/doc/html/rfc9053#section-3.1).
+pub(crate) fn ensure_valid_hmac_key<BE: Display>(
+    algorithm: iana::Algorithm,
+    parsed_key: CoseParsedKey<BE>,
+) -> Result<CoseSymmetricKey<BE>, CoseCipherError<BE>> {
+    // Checks according to RFC 9053, Section 3.1.
+
+    // Key type must be symmetric.
+    let symm_key = if let CoseParsedKey::Symmetric(symm_key) = parsed_key {
+        symm_key
+    } else {
+        return Err(CoseCipherError::KeyTypeAlgorithmMismatch(
+            parsed_key.as_ref().kty.clone(),
+            Algorithm::Assigned(algorithm),
+        ));
+    };
+
+    // Algorithm in key must match algorithm to use.
+    if let Some(key_alg) = &symm_key.as_ref().alg {
+        if key_alg != &Algorithm::Assigned(algorithm) {
+            return Err(CoseCipherError::KeyAlgorithmMismatch(
+                key_alg.clone(),
+                Algorithm::Assigned(algorithm),
+            ));
+        }
+    }
+
+    // For algorithms that we know, check the key length (would lead to a cipher error later on).
+    let key_len = match algorithm {
+        iana::Algorithm::HMAC_256_256 | iana::Algorithm::HMAC_256_64 => Some(32),
+        iana::Algorithm::HMAC_384_384 => Some(48),
+        iana::Algorithm::HMAC_512_512 => Some(64),
+        _ => None,
+    };
+
+    if let Some(key_len) = key_len {
+        if symm_key.k.len() != key_len {
+            return Err(CoseCipherError::InvalidKeyParam(
+                KeyParam::Symmetric(iana::SymmetricKeyParameter::K),
+                Value::Bytes(symm_key.k.to_vec()),
+            ));
+        }
+    }
+
+    Ok(symm_key)
 }

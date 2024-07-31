@@ -30,7 +30,7 @@ pub trait SignCryptoBackend: CryptoBackend {
     ///
     /// # Arguments
     ///
-    /// * `alg` - The variant of ECDSA to use (determines the hash function).
+    /// * `algorithm` - The variant of ECDSA to use (determines the hash function).
     ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
@@ -82,7 +82,7 @@ pub trait SignCryptoBackend: CryptoBackend {
     /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new ECDSA variants are defined).
     fn sign_ecdsa(
         &mut self,
-        alg: iana::Algorithm,
+        algorithm: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
         payload: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
@@ -91,7 +91,7 @@ pub trait SignCryptoBackend: CryptoBackend {
     ///
     /// # Arguments
     ///
-    /// * `alg` - The variant of ECDSA to use (determines the hash function).
+    /// * `algorithm` - The variant of ECDSA to use (determines the hash function).
     ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
     ///           should be returned.
     ///           If the given algorithm is an IANA-assigned value that is unknown, the
@@ -130,7 +130,7 @@ pub trait SignCryptoBackend: CryptoBackend {
     ///
     /// # Errors
     ///
-    /// If the signature is not malformed, but not valid for the given `alg`, `key`,
+    /// If the signature is not malformed, but not valid for the given `algorithm`, `key`,
     /// and `payload`, a [`CoseCipherError::VerificationFailure`] must be returned.
     ///
     /// In case of other errors, the implementation may return any valid [`CoseCipherError`]
@@ -150,19 +150,28 @@ pub trait SignCryptoBackend: CryptoBackend {
     /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new ECDSA variants are defined).
     fn verify_ecdsa(
         &mut self,
-        alg: iana::Algorithm,
+        algorithm: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
         sig: &[u8],
         payload: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>>;
 }
 
+/// Attempts to perform a COSE signing operation for a [`CoseSign`](coset::CoseSign) or
+/// [`CoseSign1`](coset::CoseSign1) structure with the given `protected` and `unprotected`
+/// headers and `payload` using the given `backend` and `key_provider`.
+///
+/// Also performs checks that ensure that the given parameters (esp. headers and keys) are valid and
+/// are coherent with each other.
+///
+/// If the `key_provider` returns multiple keys, all will be tried until one can be successfully
+/// used for the given operation.
 fn try_sign<B: SignCryptoBackend, CKP: KeyProvider>(
     backend: &mut B,
     key_provider: &CKP,
     protected: Option<&Header>,
     unprotected: Option<&Header>,
-    tosign: &[u8],
+    payload: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
     header_util::try_cose_crypto_operation(
         key_provider,
@@ -180,7 +189,7 @@ fn try_sign<B: SignCryptoBackend, CKP: KeyProvider>(
                     let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(alg, parsed_key, true)?;
 
                     // Perform signing operation using backend.
-                    backend.sign_ecdsa(alg, &ec2_key, tosign)
+                    backend.sign_ecdsa(alg, &ec2_key, payload)
                 }
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
                     alg,
@@ -190,6 +199,15 @@ fn try_sign<B: SignCryptoBackend, CKP: KeyProvider>(
     )
 }
 
+/// Attempts to perform a COSE signature verification operation for a [`CoseSign`](coset::CoseSign)
+/// or [`CoseSign1`](coset::CoseSign1) structure with the given `protected` and `unprotected`
+/// headers and `payload` using the given `backend` and `key_provider`.
+///
+/// Also performs checks that ensure that the given parameters (esp. headers and keys) are valid and
+/// are coherent with each other.
+///
+/// If the `key_provider` returns multiple keys, all will be tried until one can be successfully
+/// used for the given operation.
 fn try_verify<B: SignCryptoBackend, CKP: KeyProvider>(
     backend: &mut B,
     key_provider: &CKP,

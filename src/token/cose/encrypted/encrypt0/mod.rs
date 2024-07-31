@@ -23,7 +23,7 @@ use crate::token::cose::key::KeyProvider;
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
-/// Extensions to the [`CoseEncrypt0Builder`]  type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseEncrypt0Builder`] type that enable usage of cryptographic backends.
 pub trait CoseEncrypt0BuilderExt: Sized {
     /// Attempts to encrypt the given `payload` using a cryptographic backend.
     ///
@@ -47,7 +47,7 @@ pub trait CoseEncrypt0BuilderExt: Sized {
     /// or otherwise unsuitable for encryption, this function will return the most fitting
     /// [`CoseCipherError`] for the specific type of error.
     ///
-    /// If Additional Authenticated Data is provided even though the chosen algorithm is not an AEAD
+    /// If additional authenticated data is provided even though the chosen algorithm is not an AEAD
     /// algorithm, a [`CoseCipherError::AadUnsupported`] will be returned.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
@@ -56,7 +56,7 @@ pub trait CoseEncrypt0BuilderExt: Sized {
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] will be returned.
     ///
     /// # Examples
     ///
@@ -114,11 +114,11 @@ impl CoseEncrypt0BuilderExt for CoseEncrypt0Builder {
     }
 }
 
-/// Extensions to the [`CoseEncrypt0`]  type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseEncrypt0`] type that enable usage of cryptographic backends.
 ///
 /// # Examples
 ///
-/// Create a simple [`CoseEncrypt0`]  instance that uses the provided key directly and encrypts a
+/// Create a simple [`CoseEncrypt0`] instance that uses the provided key directly and encrypts a
 /// payload, then decrypt it:
 ///
 /// ```
@@ -173,7 +173,7 @@ pub trait CoseEncrypt0Ext {
     /// or otherwise unsuitable for decryption, this function will return the most fitting
     /// [`CoseCipherError`] for the specific type of error.
     ///
-    /// If Additional Authenticated Data is provided even though the chosen algorithm is not an AEAD
+    /// If additional authenticated data is provided even though the chosen algorithm is not an AEAD
     /// algorithm, a [`CoseCipherError::AadUnsupported`] will be returned.
     ///
     /// If the COSE object is not malformed, but an error in the cryptographic backend occurs, a
@@ -182,7 +182,7 @@ pub trait CoseEncrypt0Ext {
     /// occur.
     ///
     /// If the COSE object is not malformed, but decryption fails for all key candidates provided
-    /// by the key provider a [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
+    /// by the key provider a [`CoseCipherError::NoMatchingKeyFound`] will be returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
     /// the verification error for that key.

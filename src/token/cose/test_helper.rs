@@ -23,6 +23,7 @@ use coset::{
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
 
+/// Deserialize a key from a test case JSON file.
 fn deserialize_key<'de, D>(deserializer: D) -> Result<CoseKey, D::Error>
 where
     D: Deserializer<'de>,
@@ -54,7 +55,7 @@ where
             {
                 v
             } else {
-                return Err(de::Error::custom("COSE key does not have valid x"));
+                return Err(de::Error::custom("COSE key does not have valid y"));
             };
             let d = if let Some(v) = key_obj
                 .get("d")
@@ -63,7 +64,7 @@ where
             {
                 v
             } else {
-                return Err(de::Error::custom("COSE key does not have valid x"));
+                return Err(de::Error::custom("COSE key does not have valid d"));
             };
 
             let mut builder = CoseKeyBuilder::new_ec2_priv_key(curve, x, y, d);
@@ -97,6 +98,7 @@ where
     }
 }
 
+/// Parse a string to an [iana::Algorithm].
 fn string_to_algorithm<'de, D: Deserializer<'de>>(
     alg: Option<&str>,
 ) -> Result<Option<iana::Algorithm>, D::Error> {
@@ -119,6 +121,7 @@ fn string_to_algorithm<'de, D: Deserializer<'de>>(
     }
 }
 
+/// Deserialize a header from a test case JSON file.
 fn deserialize_header<'de, D>(deserializer: D) -> Result<Option<Header>, D::Error>
 where
     D: Deserializer<'de>,
@@ -162,6 +165,7 @@ where
     Ok(Some(builder.build()))
 }
 
+/// Deserialize an algorithm from a test case JSON file.
 fn deserialize_algorithm<'de, D>(deserializer: D) -> Result<Option<Algorithm>, D::Error>
 where
     D: Deserializer<'de>,
@@ -174,6 +178,7 @@ where
     Ok(string_to_algorithm::<D>(alg.as_str())?.map(Algorithm::Assigned))
 }
 
+/// Test case parsed from a JSON file as it would be found in the cose-wg/Examples repository.
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCase {
     pub title: String,
@@ -186,6 +191,8 @@ pub struct TestCase {
     pub output: TestCaseOutput,
 }
 
+/// Modifications that should be applied to a created COSE object to cause potential failures in a
+/// JSON test case.
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct TestCaseFailures {
     #[serde(rename = "ChangeTag")]
@@ -208,6 +215,7 @@ pub struct TestCaseFailures {
     pub remove_protected_headers: Option<Header>,
 }
 
+/// Inputs to a JSON-based test case.
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCaseInput {
     pub plaintext: String,
@@ -223,6 +231,7 @@ pub struct TestCaseInput {
     pub failures: TestCaseFailures,
 }
 
+/// Signature inputs to a JSON-based test case.
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCaseSign {
     #[serde(deserialize_with = "deserialize_header", default)]
@@ -232,6 +241,7 @@ pub struct TestCaseSign {
     pub signers: Vec<TestCaseRecipient>,
 }
 
+/// Encryption inputs to a JSON-based test case.
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCaseEncrypted {
     #[serde(deserialize_with = "deserialize_header", default)]
@@ -243,6 +253,7 @@ pub struct TestCaseEncrypted {
     pub recipients: Vec<TestCaseRecipient>,
 }
 
+/// MAC inputs to a JSON-based test case.
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCaseMac {
     #[serde(deserialize_with = "deserialize_header", default)]
@@ -254,6 +265,7 @@ pub struct TestCaseMac {
     pub recipients: Vec<TestCaseRecipient>,
 }
 
+/// Recipients for a JSON-based test case.
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCaseRecipient {
     #[serde(deserialize_with = "deserialize_key")]
@@ -283,18 +295,21 @@ impl From<TestCaseRecipient> for CoseRecipientBuilder {
     }
 }
 
+/// Intermediates that should be used in a JSON-based test case.
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCaseIntermediates {
     #[serde(rename = "CEK_hex", deserialize_with = "hex::deserialize", default)]
     pub cek: Vec<u8>,
 }
 
+/// Expected output of a JSON-based test case.
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct TestCaseOutput {
     #[serde(deserialize_with = "hex::deserialize")]
     pub cbor: Vec<u8>,
 }
 
+/// Print some basic information about a JSON test case.
 fn print_test_information(case: &TestCase) {
     println!("COSE Examples Test information:");
     println!("Name: {}", case.title);
@@ -305,6 +320,11 @@ fn print_test_information(case: &TestCase) {
     println!("Verification should fail: {}", case.fail);
 }
 
+/// Tests a JSON-based test case by attempting to deserialize and verify the expected output
+/// provided in the JSON file.
+///
+/// Only tests the verification procedure, the creation procedure will not run here (as we use the
+/// expected output from the JSON-file instead).
 pub fn perform_cose_reference_output_test<T: CoseStructTestHelper<B>, B: CryptoBackend>(
     test_path: PathBuf,
     mut backend: B,
@@ -331,6 +351,12 @@ pub fn perform_cose_reference_output_test<T: CoseStructTestHelper<B>, B: CryptoB
     example_output.check_against_test_case(&test_case_description, &mut backend);
 }
 
+/// Tests a JSON-based test case by attempting to construct the COSE structure described in it,
+/// applying the appropriate encryption/signing/authentication operation, and then attempting to
+/// deserialize and verify the resulting structure.
+///
+/// Unlike [perform_cose_reference_output_test], this tests both creation and verification
+/// procedures.
 pub fn perform_cose_self_signed_test<T: CoseStructTestHelper<B>, B: CryptoBackend>(
     test_path: PathBuf,
     mut backend: B,
@@ -370,20 +396,28 @@ pub fn perform_cose_self_signed_test<T: CoseStructTestHelper<B>, B: CryptoBacken
     redeserialized.check_against_test_case(&test_case_description, &mut backend);
 }
 
+/// Helper methods to perform operations on COSE structures based on a parsed test case.
 pub trait CoseStructTestHelper<B: CryptoBackend>:
     Sized + CborSerializable + TaggedCborSerializable
 {
+    /// Deserialize an expected test case output into a COSE structure of this type.
     fn from_test_case_output(output: &[u8]) -> Result<Self, CoseError> {
         Self::from_tagged_slice(output).or_else(|_e1| Self::from_slice(output))
     }
 
+    /// Attempts to create and encrypt/sign/calculate a MAC for this COSE structure based on its
+    /// description in a test case.
     fn from_test_case(case: &TestCase, backend: &mut B) -> Self;
 
+    /// Serialize this COSE structure, applying possible modifications as described in the test
+    /// case's [TestCaseFailures] instance.
     fn serialize_and_apply_failures(self, case: &TestCase) -> Result<Vec<u8>, CoseError>;
 
+    /// Checks whether this COSE structure's fields match those provided in a test case.
     fn check_against_test_case(&self, case: &TestCase, backend: &mut B);
 }
 
+/// Apply failures to `hdr` based on a description given in `failures`.
 pub(crate) fn apply_header_failures(hdr: &mut Header, failures: &TestCaseFailures) {
     if let Some(headers_to_remove) = &failures.remove_protected_headers {
         if !headers_to_remove.key_id.is_empty() {
@@ -463,6 +497,8 @@ pub(crate) fn apply_header_failures(hdr: &mut Header, failures: &TestCaseFailure
     }
 }
 
+/// Serialize the given COSE structure, applying possible failures that concern the entire
+/// serialized structure (such as modifying the CBOR tag).
 pub(crate) fn serialize_cose_with_failures<T: AsCborValue + TaggedCborSerializable>(
     value: T,
     failures: &TestCaseFailures,
@@ -470,7 +506,7 @@ pub(crate) fn serialize_cose_with_failures<T: AsCborValue + TaggedCborSerializab
     if let Some(new_tag) = &failures.change_cbor_tag {
         let untagged_value = value
             .to_cbor_value()
-            .expect("unable to generate CBOR value of CoseSign1");
+            .expect("unable to generate CBOR value of COSE structure");
         ciborium::Value::Tag(*new_tag, Box::new(untagged_value))
             .to_vec()
             .expect("unable to serialize CBOR value")
@@ -481,6 +517,11 @@ pub(crate) fn serialize_cose_with_failures<T: AsCborValue + TaggedCborSerializab
     }
 }
 
+/// Apply attribute modifications causing failures to `header` based on a description given in
+/// `failures`.
+///
+/// Unlike [apply_header_failures], these changes might be applied in other places instead of the
+/// `header`, this was just the most convenient way of implementing them.
 // CLion does not understand that `v` is actually used in the format string.
 // Clippy should still detect any such issues, though.
 //noinspection RsLiveness

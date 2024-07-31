@@ -30,8 +30,6 @@ use {
     alloc::string::{String, ToString},
     alloc::vec::Vec,
 };
-//use crate::token::MultipleEncryptCipher;
-//use crate::{CoseEncryptCipher, CoseMacCipher, CoseSignCipher};
 
 /// Helper function for tests which ensures that [`value`] serializes to the hexadecimal bytestring
 /// [expected_hex] and deserializes back to [`value`].
@@ -85,6 +83,7 @@ where
     }
 }
 
+/// Parameters used for a [`MockCipher`] AEAD operation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct MockCipherAeadParams {
     key: Vec<u8>,
@@ -109,6 +108,7 @@ impl MockCipherAeadParams {
     }
 }
 
+/// Parameters used for a [`MockCipher`] ECDSA operation.
 #[derive(Clone, Debug, PartialEq)]
 struct MockCipherEcdsaParams {
     key: CoseKey,
@@ -130,7 +130,16 @@ impl MockCipherEcdsaParams {
     }
 }
 
-pub struct MockCipher<R: CryptoRng + Rng> {
+/// "Mocked" Implementation of a cryptographic backend that does not actually perform cryptographic
+/// operations.
+///
+/// Instead, it stores the parameters passed to it during the creation of COSE objects and performs
+/// a lookup of those parameters (alongside a random value returned during creation) when attempting
+/// to authenticate or decrypt the object.
+///
+/// Due to the way this cryptographic backend works, created COSE objects can only be
+/// "authenticated" by the `MockCipher` instance they were created with.
+pub(crate) struct MockCipher<R: CryptoRng + Rng> {
     rng: R,
     aes_gcm_inputs: BTreeMap<Vec<u8>, (MockCipherAeadParams, Vec<u8>)>,
     aes_kw_inputs: BTreeMap<Vec<u8>, (MockCipherAeadParams, Vec<u8>)>,

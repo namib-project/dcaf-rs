@@ -25,7 +25,7 @@ mod tests;
 /// Extension trait that enables signing using predefined backends instead of by providing signature
 /// functions.
 pub trait CoseSignBuilderExt: Sized {
-    /// Calculates and adds a signature for the CoseSign object using the given backend..
+    /// Calculates and adds a signature for the CoseSign object using the given backend.
     ///
     /// # Parameters
     ///
@@ -48,7 +48,7 @@ pub trait CoseSignBuilderExt: Sized {
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] will be returned.
     ///
     /// # Examples
     ///
@@ -86,7 +86,7 @@ pub trait CoseSignBuilderExt: Sized {
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] will be returned.
     ///
     /// # Examples
     ///
@@ -152,11 +152,11 @@ impl CoseSignBuilderExt for CoseSignBuilder {
     }
 }
 
-/// Extensions to the [`CoseSign`]  type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseSign`] type that enable usage of cryptographic backends.
 ///
 /// # Examples
 ///
-/// Create a simple [`CoseSign`]  instance that uses the provided key directly and compute a signature
+/// Create a simple [`CoseSign`] instance that uses the provided key directly and compute a signature
 /// for it, then verify it:
 ///
 /// ```

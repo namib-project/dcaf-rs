@@ -156,7 +156,7 @@ impl<B: CryptoBackend + EncryptCryptoBackend + KeyDistributionCryptoBackend> Cos
             let plaintext = verify_result.expect("unable to verify token");
 
             assert_eq!(case.input.plaintext.as_bytes(), plaintext.as_slice());
-            // IV is apprarently taken from rng_stream field, not header field, but still implicitly
+            // IV is apparently taken from rng_stream field, not header field, but still implicitly
             // added to header. ugh...
             let mut unprotected = test_case.unprotected.clone().unwrap_or_default();
             let mut protected = test_case.protected.clone().unwrap_or_default();

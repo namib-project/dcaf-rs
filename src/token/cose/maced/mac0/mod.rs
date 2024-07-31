@@ -8,9 +8,9 @@
  *
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
-//! Extensions for COSE_Mac0 objects and builders ([`CoseMac0], [`CoseMac0Builder``] ).
+//! Extensions for COSE_Mac0 objects and builders ([`CoseMac0`], [`CoseMac0Builder`]).
 //!
-//! Refer to the module-level documentation of [`crate::token::cose`]  for some general information
+//! Refer to the module-level documentation of [`crate::token::cose`] for some general information
 //! regarding the way that headers and keys need to be set up.
 use alloc::rc::Rc;
 use core::cell::RefCell;
@@ -25,7 +25,7 @@ use crate::token::cose::maced::{try_compute, try_verify, MacCryptoBackend};
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
-/// Extensions to the [`CoseMac0Builder`]  type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseMac0Builder`] type that enable usage of cryptographic backends.
 pub trait CoseMac0BuilderExt: Sized {
     /// Attempts to compute the MAC using a cryptographic backend.
     ///
@@ -53,7 +53,7 @@ pub trait CoseMac0BuilderExt: Sized {
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] will be returned.
     ///
     /// # Examples
     ///
@@ -101,11 +101,11 @@ impl CoseMac0BuilderExt for CoseMac0Builder {
     }
 }
 
-/// Extensions to the [`CoseMac0`]  type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseMac0`] type that enable usage of cryptographic backends.
 ///
 /// # Examples
 ///
-/// Create a [`CoseMac0`]  instance and compute a MAC for it, then verify it:
+/// Create a [`CoseMac0`] instance and compute a MAC for it, then verify it:
 /// ```
 ///
 /// use coset::{CoseKeyBuilder, CoseMac0Builder, HeaderBuilder, iana};
@@ -153,7 +153,7 @@ pub trait CoseMac0Ext {
     /// occur.
     ///
     /// If the COSE object is not malformed, but MAC verification fails for all key candidates
-    /// provided by the key provider a [`CoseCipherError::NoMatchingKeyFound`] error will be
+    /// provided by the key provider, a [`CoseCipherError::NoMatchingKeyFound`] will be
     /// returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to

@@ -47,16 +47,16 @@ pub trait CoseSign1BuilderExt: Sized {
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] will be returned.
     ///
     /// # Examples
     ///
     /// Refer to [the documentation for the CoseSign1 extensions](CoseSign1Ext) for examples.
     ///
-    /// TODO: Setting all of these options at once kind of defeats the purpose of
-    ///       the builder pattern, but it is necessary here, as we lack access to the `protected`
-    ///       and `unprotected` headers that were previously set (the field is private).
-    ///       This should be fixed when porting all of this to coset.
+    // TODO: Setting all of these options at once kind of defeats the purpose of
+    //       the builder pattern, but it is necessary here, as we lack access to the `protected`
+    //       and `unprotected` headers that were previously set (the field is private).
+    //       This should be fixed when porting all of this to coset.
     fn try_sign<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
         self,
         backend: &mut B,
@@ -92,7 +92,7 @@ pub trait CoseSign1BuilderExt: Sized {
     /// occur.
     ///
     /// If the COSE object is not malformed, but the key provider does not provide a key, a
-    /// [`CoseCipherError::NoMatchingKeyFound`] error will be returned.
+    /// [`CoseCipherError::NoMatchingKeyFound`] will be returned.
     ///
     /// # Examples
     ///
@@ -176,7 +176,7 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
     }
 }
 
-/// Extensions to the [`CoseSign1`]  type that enable usage of cryptographic backends.
+/// Extensions to the [`CoseSign1`] type that enable usage of cryptographic backends.
 ///
 /// # Examples
 ///
@@ -220,7 +220,7 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
 /// # Result::<(), CoseCipherError<<OpensslContext as CryptoBackend>::Error>>::Ok(())
 /// ```
 ///
-/// Create a simple [`CoseSign1`]  instance with a detached payload that uses the provided key directly
+/// Create a simple [`CoseSign1`] instance with a detached payload that uses the provided key directly
 /// and compute a signature for it, then verify it:
 ///
 /// ```
@@ -281,7 +281,7 @@ pub trait CoseSign1Ext {
     /// occur.
     ///
     /// If the COSE object is not malformed, but signature verification fails for all key candidates
-    /// provided by the key provider a [`CoseCipherError::NoMatchingKeyFound`] error will be
+    /// provided by the key provider a [`CoseCipherError::NoMatchingKeyFound`] will be
     /// returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to
@@ -389,7 +389,7 @@ pub trait CoseSign1Ext {
     /// occur.
     ///
     /// If the COSE object is not malformed, but signature verification fails for all key candidates
-    /// provided by the key provider a [`CoseCipherError::NoMatchingKeyFound`] error will be
+    /// provided by the key provider a [`CoseCipherError::NoMatchingKeyFound`] will be
     /// returned.
     ///
     /// The error will then contain a list of attempted keys and the corresponding error that led to

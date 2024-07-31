@@ -266,12 +266,17 @@ where
     /// headers or the key itself).
     NoAlgorithmDeterminable,
     /// The provided key does not support the given operation.
+    /// The first field specifies the operations provided by the key, the second one
+    /// specifies the set of operations that would fulfill the requirements of the
+    /// operation (only one of which must be provided by the key).
     KeyOperationNotPermitted(BTreeSet<KeyOperation>, BTreeSet<KeyOperation>),
     /// Key in given curve must be in different format.
     KeyTypeCurveMismatch(KeyType, EllipticCurve),
     /// Provided algorithm requires a different key type.
     KeyTypeAlgorithmMismatch(KeyType, Algorithm),
     /// Algorithm provided in key does not match algorithm selected for operation.
+    /// The first field specifies the algorithm provided by the key, the second one
+    /// specifies the algorithm provided in the headers.
     KeyAlgorithmMismatch(Algorithm, Algorithm),
     /// At least one header was provided both in the protected and the unprotected bucket
     /// simultaneously.
@@ -299,7 +304,7 @@ where
     /// corresponding error.
     NoMatchingKeyFound(Vec<(CoseKey, CoseCipherError<T>)>),
     /// For structures that are validated using a CEK encoded in [CoseRecipient] structures
-    /// ([CoseEncrypt](coset::CoseEncrypt), [CoseMac](coset::CoseMac): Unable to find a suitable
+    /// ([CoseEncrypt](coset::CoseEncrypt), [CoseMac](coset::CoseMac)): Unable to find a suitable
     /// recipient to decrypt.
     ///
     /// The first element provides the errors that occurred while decrypting each recipient, the

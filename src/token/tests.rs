@@ -33,7 +33,7 @@ fn example_key_one(alg: Algorithm) -> CoseKey {
     .build()
 }
 
-/// Generates a test key with content `[10, 9, 8, 7, 6, ...]` and key id `[0xCA, 0xFE]`.
+/// Generates a test key with content `[0xF, 0xE, 0xD, 0xC, 0xB, ...]` and key id `[0xCA, 0xFE]`.
 fn example_key_two(alg: Algorithm) -> CoseKey {
     CoseKeyBuilder::new_symmetric_key(vec![
         0xf, 0xe, 0xd, 0xc, 0xb, 0xa, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
