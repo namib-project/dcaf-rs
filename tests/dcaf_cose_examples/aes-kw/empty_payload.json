@@ -1,0 +1,37 @@
+{
+  "title": "128 bit key wrap for AES-128-GCM: Encryption with empty payload",
+  "input": {
+    "plaintext": "",
+    "enveloped": {
+      "protected": {
+        "alg": "A128GCM"
+      },
+      "recipients": [
+        {
+          "unprotected": {
+            "kid": "our-secret",
+            "alg": "A128KW"
+          },
+          "key": {
+            "kty": "oct",
+            "kid": "our-secret",
+            "use": "enc",
+            "k": "hJtXIZ2uSN5kbQfbtTNWbg"
+          }
+        }
+      ]
+    },
+    "rng_stream": [
+      "7A1B4CF78F4B8C6E9AB68198C43D22F3",
+      "DDDC08972DF9BE62855291A1"
+    ]
+  },
+  "intermediates": {
+    "recipients": [
+      {
+      }
+    ],
+    "AAD_hex": "8367456E637279707443A1010140",
+    "CEK_hex": "7A1B4CF78F4B8C6E9AB68198C43D22F3"
+  }
+}

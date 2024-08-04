@@ -10,7 +10,7 @@
  */
 
 //! Contains the data model for
-//! [Authorization Server Request Creation Hints](self::AuthServerRequestCreationHint),
+//! [Authorization Server Request Creation Hints](AuthServerRequestCreationHint),
 //! as described in [RFC 9200, section 5.3](https://www.rfc-editor.org/rfc/rfc9200#name-as-request-creation-hints).
 //!
 //! See the documentation of [`AuthServerRequestCreationHint`] for details and an example.
@@ -18,7 +18,6 @@
 use crate::common::cbor_values::ByteString;
 use crate::Scope;
 
-#[cfg(not(feature = "std"))]
 use {alloc::string::String, alloc::vec::Vec};
 
 #[cfg(test)]
@@ -125,7 +124,7 @@ mod builder {
 ///
 /// One part of this is converting enum types from and to their CBOR abbreviations in
 /// [`cbor_abbreviations`](crate::constants::cbor_abbreviations),
-/// another part is implementing the [`ToCborMap`](crate::ToCborMap) type for the
+/// another part is implementing the [`ToCborMap`](ToCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
     #[cfg(not(feature = "std"))]
@@ -142,12 +141,15 @@ mod conversion {
 
     impl ToCborMap for AuthServerRequestCreationHint {
         fn to_cbor_map(&self) -> Vec<(i128, Option<Box<dyn ErasedSerialize + '_>>)> {
-            cbor_map_vec! {
-                creation_hint::AS => self.auth_server.as_ref(),
-                creation_hint::KID => self.kid.as_ref(),
-                creation_hint::AUDIENCE => self.audience.as_ref(),
-                creation_hint::SCOPE => self.scope.as_ref(),
-                creation_hint::CNONCE => self.client_nonce.as_ref().map(|v| Value::Bytes(v.clone()))
+            #[allow(clippy::cast_lossless)]
+            {
+                cbor_map_vec! {
+                    creation_hint::AS => self.auth_server.as_ref(),
+                    creation_hint::KID => self.kid.as_ref(),
+                    creation_hint::AUDIENCE => self.audience.as_ref(),
+                    creation_hint::SCOPE => self.scope.as_ref(),
+                    creation_hint::CNONCE => self.client_nonce.as_ref().map(|v| Value::Bytes(v.clone()))
+                }
             }
         }
 

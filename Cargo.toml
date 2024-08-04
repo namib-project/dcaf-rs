@@ -4,31 +4,37 @@ description = "An implementation of the ACE-OAuth framework"
 version = "0.4.0"
 edition = "2021"
 authors = ["Falko Galperin <falko1@uni-bremen.de>"]
-rust-version = "1.58"
+rust-version = "1.62"
 license = "MIT OR Apache-2.0"
 keywords = ["no_std", "framework", "oauth", "ace"]
 categories = ["authentication", "data-structures", "embedded", "encoding", "no-std"]
 repository = "https://github.com/namib-project/dcaf-rs"
 exclude = [
-    ".gitlab/*", ".gitlab-ci.yml"
+    ".gitlab/*", ".gitlab-ci.yml", ".github/*"
 ]
 
 [features]
-default = ["std"]
+default = ["std", "openssl"]
 std = ["serde/std", "ciborium/std", "serde_bytes/std", "erased-serde/std", "derive_builder/std"]
 
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 ciborium = { version = "^0.2", default-features = false }
 ciborium-io = { version = "^0.2", default-features = false }
-coset = { version = "^0.3", default-features = false }
+coset = { version = "^0.3", default-features = false, git = "https://github.com/namib-project/coset.git", branch = "fix_zero_length_map" }#, path = "../coset" }
 serde_bytes = { version = "^0.11", default-features = false, features = ["alloc"] }
-erased-serde = { version = "^0.3", default-features = false, features = ["alloc"] }
-derive_builder = { version = "^0.12", default-features = false }
-strum = { version = "^0.24", default-features = false, features = ["derive"] }
-strum_macros = { version = "^0.24", default-features = false }
+erased-serde = { version = "0.4.5", default-features = false, features = ["alloc"] }
+derive_builder = { version = "0.20", default-features = false, features = ["alloc"] }
+strum = { version = "0.26", default-features = false, features = ["derive"] }
+strum_macros = { version = "0.26", default-features = false }
 enumflags2 = { version = "^0.7", default-features = false }
 rand = { version = "^0.8", default-features = false }
+openssl = { version = "^0.10", optional = true }
+lazy_static = "1.4.0"
 
 [dev-dependencies]
-hex = { version = "^0.4" }
+hex = { version = "^0.4", features = ["serde"] }
+base64 = "0.22.1"
+rstest = "0.21.0"
+serde_json = "1.0.118"
+rand = { version = "^0.8", default-features = false, features = ["std_rng", "std"] }

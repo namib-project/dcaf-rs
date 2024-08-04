@@ -11,20 +11,22 @@
 
 //! Contains error types used across this crate.
 
+use alloc::collections::BTreeSet;
+use alloc::vec::Vec;
 use core::any::type_name;
 use core::fmt::{Display, Formatter};
 
 use ciborium::value::Value;
-use coset::{CoseError, Label};
+use coset::{
+    Algorithm, CoseError, CoseKey, CoseRecipient, CoseSignature, KeyOperation, KeyType, Label,
+};
 use strum_macros::IntoStaticStr;
 
-#[cfg(not(feature = "std"))]
-use {
-    alloc::format, alloc::string::String, alloc::string::ToString, core::num::TryFromIntError,
-    derive_builder::export::core::marker::PhantomData,
-};
-#[cfg(feature = "std")]
-use {std::marker::PhantomData, std::num::TryFromIntError};
+use {alloc::format, alloc::string::String, alloc::string::ToString};
+
+use crate::token::cose::HeaderParam;
+use crate::token::cose::{EllipticCurve, KeyParam};
+use core::{marker::PhantomData, num::TryFromIntError};
 
 /// Error type used when the parameter of the type `T` couldn't be
 /// converted into [`expected_type`](WrongSourceTypeError::expected_type) because the received
@@ -237,26 +239,90 @@ impl Display for InvalidAifEncodedScopeError {
     }
 }
 
-/// Error type used when a [`CoseEncryptCipher`](crate::CoseEncryptCipher),
-/// [`CoseSignCipher`](crate::CoseSignCipher), or [`CoseMacCipher`](crate::CoseMacCipher).
-/// fails to perform an operation.
+/// Error type used when a [`EncryptCryptoBackend`](crate::token::cose::EncryptCryptoBackend),
+/// [`SignCryptoBackend`](crate::token::cose::SignCryptoBackend), or
+/// [`MacCryptoBackend`](crate::token::cose::MacCryptoBackend) fails to perform an operation.
 ///
 /// `T` is the type of the nested error represented by the [`Other`](CoseCipherError::Other) variant.
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Clone)]
 #[non_exhaustive]
 pub enum CoseCipherError<T>
 where
     T: Display,
 {
-    /// A header which the cipher is supposed to set has already been set.
-    HeaderAlreadySet {
-        /// The name of the header which has already been set.
-        existing_header_name: String,
-    },
-    /// The given signature or MAC tag is either invalid or does not match the given data.
+    /// The given encrypted, signed or MAC-ed structure could not be verified and/or decrypted.
     VerificationFailure,
-    /// The given ciphertext could not be decrypted.
-    DecryptionFailure,
+    /// Key type is not supported.
+    UnsupportedKeyType(KeyType),
+    /// Curve is not supported by coset or the chosen cryptographic backend.
+    UnsupportedCurve(EllipticCurve),
+    /// Algorithm is not supported by coset, the chosen cryptographic backend or dcaf-rs itself.
+    UnsupportedAlgorithm(Algorithm),
+    /// The cryptographic backend does not support deriving the public key from the private key, and
+    /// the provided key does not provide the public key parts even though it is required for this
+    /// operation.
+    UnsupportedKeyDerivation,
+    /// The algorithm has not explicitly been specified anywhere (protected headers, unprotected
+    /// headers or the key itself).
+    NoAlgorithmDeterminable,
+    /// The provided key does not support the given operation.
+    /// The first field specifies the operations provided by the key, the second one
+    /// specifies the set of operations that would fulfill the requirements of the
+    /// operation (only one of which must be provided by the key).
+    KeyOperationNotPermitted(BTreeSet<KeyOperation>, BTreeSet<KeyOperation>),
+    /// Key in given curve must be in different format.
+    KeyTypeCurveMismatch(KeyType, EllipticCurve),
+    /// Provided algorithm requires a different key type.
+    KeyTypeAlgorithmMismatch(KeyType, Algorithm),
+    /// Algorithm provided in key does not match algorithm selected for operation.
+    /// The first field specifies the algorithm provided by the key, the second one
+    /// specifies the algorithm provided in the headers.
+    KeyAlgorithmMismatch(Algorithm, Algorithm),
+    /// At least one header was provided both in the protected and the unprotected bucket
+    /// simultaneously.
+    DuplicateHeaders(Vec<Label>),
+    /// A key parameter that is required for this type of key and/or algorithm is missing.
+    ///
+    /// If multiple key parameters are provided, at least one of them (but possibly more than one)
+    /// is required (e.g. for EC keys, either D or (X and Y) must be set).
+    MissingKeyParam(Vec<KeyParam>),
+    /// A key parameter for this key has an invalid value.
+    InvalidKeyParam(KeyParam, Value),
+    /// A header parameter that is required for the selected algorithm is missing.
+    MissingHeaderParam(HeaderParam),
+    /// A header parameter has an invalid value.
+    InvalidHeaderParam(HeaderParam, Value),
+    /// Provided algorithm does not support additional authenticated data, but AAD was provided
+    /// (either directly or the protected header bucket is not empty).
+    AadUnsupported,
+    /// No suitable key for verifying this structure was found.
+    ///
+    /// Either no matching key was provided or all provided keys had an error while attempting to
+    /// verify.
+    ///
+    /// In the latter case, the error field will contain a list of all attempted keys and the
+    /// corresponding error.
+    NoMatchingKeyFound(Vec<(CoseKey, CoseCipherError<T>)>),
+    /// For structures that are validated using a CEK encoded in [CoseRecipient] structures
+    /// ([CoseEncrypt](coset::CoseEncrypt), [CoseMac](coset::CoseMac)): Unable to find a suitable
+    /// recipient to decrypt.
+    ///
+    /// The first element provides the errors that occurred while decrypting each recipient, the
+    /// second element describes the errors that occurred while attempting to decrypt the structure
+    /// itself with any successfully decrypted CEKs.
+    NoDecryptableRecipientFound(
+        Vec<(CoseRecipient, CoseCipherError<T>)>,
+        Vec<(CoseKey, CoseCipherError<T>)>,
+    ),
+    /// For structures with multiple signatures ([CoseSignature]): None of the signatures could be
+    /// verified.
+    ///
+    /// The contained vector describes the error that occurred while validating each signature.
+    NoValidSignatureFound(Vec<(CoseSignature, CoseCipherError<T>)>),
+    /// Provided payload is not supported for this algorithm.
+    ///
+    /// For instance AES key wrap inputs must be a multiple of 64 bits.
+    InvalidPayload(Vec<u8>),
     /// A different error has occurred. Details are provided in the contained error.
     Other(T),
 }
@@ -266,69 +332,11 @@ where
     T: Display,
 {
     /// Creates a new [`CoseCipherError`] of type
-    /// [`HeaderAlreadySet`](CoseCipherError::HeaderAlreadySet) where the header
-    /// that was already set has the name of the given `label`.
-    #[must_use]
-    pub fn existing_header_label(label: &Label) -> CoseCipherError<T> {
-        let existing_header_name = match label {
-            Label::Int(i) => i.to_string(),
-            Label::Text(s) => s.to_string(),
-        };
-        CoseCipherError::HeaderAlreadySet {
-            existing_header_name,
-        }
-    }
-
-    /// Creates a new [`CoseCipherError`] of type
-    /// [`HeaderAlreadySet`](CoseCipherError::HeaderAlreadySet) where the header
-    /// that was already set has the given `name`.
-    #[must_use]
-    pub fn existing_header<S>(name: S) -> CoseCipherError<T>
-    where
-        S: Into<String>,
-    {
-        CoseCipherError::HeaderAlreadySet {
-            existing_header_name: name.into(),
-        }
-    }
-
-    /// Creates a new [`CoseCipherError`] of type
     /// [`Other`](CoseCipherError::Other) (i.e., an error type that doesn't fit any other
     /// [`CoseCipherError`] variant) containing the given nested error `other`.
     #[must_use]
     pub fn other_error(other: T) -> CoseCipherError<T> {
         CoseCipherError::Other(other)
-    }
-
-    // TODO: Maybe there's a better way to do the below, parts of this are redundant and duplicated.
-    pub(crate) fn from_kek_error<C: Display>(
-        error: CoseCipherError<T>,
-    ) -> CoseCipherError<MultipleCoseError<T, C>> {
-        match error {
-            CoseCipherError::Other(x) => CoseCipherError::Other(MultipleCoseError::KekError(x)),
-            CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            } => CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            },
-            CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
-            CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
-        }
-    }
-
-    pub(crate) fn from_cek_error<K: Display>(
-        error: CoseCipherError<T>,
-    ) -> CoseCipherError<MultipleCoseError<K, T>> {
-        match error {
-            CoseCipherError::Other(x) => CoseCipherError::Other(MultipleCoseError::CekError(x)),
-            CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            } => CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            },
-            CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
-            CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
-        }
     }
 }
 
@@ -338,46 +346,73 @@ where
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
-            CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            } => write!(
-                f,
-                "cipher-defined header '{existing_header_name}' already set"
-            ),
-            CoseCipherError::VerificationFailure => write!(f, "data verification failed"),
-            CoseCipherError::DecryptionFailure => write!(f, "decryption failed"),
+            // TODO (#14): this can probably be done better (use thiserror instead as soon as std::error::Error has been moved to core?)
+            CoseCipherError::VerificationFailure => {
+                write!(f, "data verification and/or decryption failed")
+            }
             CoseCipherError::Other(s) => write!(f, "{s}"),
+            CoseCipherError::UnsupportedKeyType(_) => write!(f, "unsupported key type"),
+            CoseCipherError::UnsupportedCurve(_) => write!(f, "unsupported curve"),
+            CoseCipherError::UnsupportedAlgorithm(_) => write!(f, "unsupported alorithm"),
+            CoseCipherError::UnsupportedKeyDerivation => write!(
+                f,
+                "backend does not support public key derivation from private key"
+            ),
+            CoseCipherError::NoAlgorithmDeterminable => {
+                write!(f, "no algorithm was provided in headers or key")
+            }
+            CoseCipherError::KeyOperationNotPermitted(_, _) => {
+                write!(f, "key does not permit the requested operation")
+            }
+            CoseCipherError::KeyTypeCurveMismatch(_, _) => {
+                write!(f, "key type is not supported for the given curve")
+            }
+            CoseCipherError::KeyTypeAlgorithmMismatch(_, _) => {
+                write!(f, "key type is not supported for the given algorithm")
+            }
+            CoseCipherError::KeyAlgorithmMismatch(_, _) => {
+                write!(f, "key does not support the given algorithm")
+            }
+            CoseCipherError::DuplicateHeaders(_) => write!(f, "duplicate headers"),
+            CoseCipherError::MissingKeyParam(_) => write!(f, "required key parameter missing"),
+            CoseCipherError::InvalidKeyParam(_, _) => write!(f, "key parameter has invalid value"),
+            CoseCipherError::NoMatchingKeyFound(_) => {
+                write!(f, "no suitable key was found for this operation")
+            }
+            CoseCipherError::MissingHeaderParam(_) => {
+                write!(f, "header parameter missing")
+            }
+            CoseCipherError::InvalidHeaderParam(_, _) => {
+                write!(f, "header parameter invalid")
+            }
+            CoseCipherError::AadUnsupported => {
+                write!(
+                    f,
+                    "algorithm does not support additional authenticated data"
+                )
+            }
+            CoseCipherError::NoDecryptableRecipientFound(_, _) => {
+                write!(
+                    f,
+                    "could not decrypt any recipient with any of the provided keys"
+                )
+            }
+            CoseCipherError::NoValidSignatureFound(_) => {
+                write!(
+                    f,
+                    "could not validate any of the signatures with any of the provided keys"
+                )
+            }
+            CoseCipherError::InvalidPayload(_) => {
+                write!(f, "payload is invalid for the given algorithm")
+            }
         }
     }
 }
 
-/// Error type used when a token for multiple recipients (i.e., `CoseEncrypt`) is decrypted.
-///
-/// In that case, the recipients may be encrypted with a different cipher (`K`) than the
-/// actual content (`C`); hence, this error type differentiates between the two.
-#[derive(Debug)]
-pub enum MultipleCoseError<K, C>
-where
-    K: Display,
-    C: Display,
-{
-    /// Used when an error occurred in the Key Encryption Key's cipher.
-    KekError(K),
-
-    /// Used when an error occurred in the Content Encryption Key's cipher.
-    CekError(C),
-}
-
-impl<K, C> Display for MultipleCoseError<K, C>
-where
-    K: Display,
-    C: Display,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match self {
-            MultipleCoseError::KekError(k) => k.fmt(f),
-            MultipleCoseError::CekError(c) => c.fmt(f),
-        }
+impl<T: Display> From<T> for CoseCipherError<T> {
+    fn from(value: T) -> Self {
+        CoseCipherError::other_error(value)
     }
 }
 
@@ -500,14 +535,6 @@ where
     /// [`CoseEncrypt0`](coset::CoseEncrypt0), [`CoseSign1`](coset::CoseSign1),
     /// nor [`CoseMac0`](coset::CoseMac0).
     UnknownCoseStructure,
-    /// No matching recipient was found in the list of COSE_Recipient structures.
-    /// This means that the given Key Encryption Key could not be used to decrypt any of the
-    /// recipients, which means no Content Encryption Key could be extracted.
-    NoMatchingRecipient,
-    /// Multiple matching recipients were found in the list of COSE_Recipient structures.
-    /// This means that the given Key Encryption Key could be used to decrypt multiple of the
-    /// recipients, which means the token is malformed.
-    MultipleMatchingRecipients,
 }
 
 impl<T> Display for AccessTokenError<T>
@@ -522,12 +549,6 @@ where
                 f,
                 "input is either invalid or none of CoseEncrypt0, CoseSign1 nor CoseMac0"
             ),
-            AccessTokenError::NoMatchingRecipient => {
-                write!(f, "given KEK doesn't match any recipient")
-            }
-            AccessTokenError::MultipleMatchingRecipients => {
-                write!(f, "given KEK matches multiple recipients")
-            }
         }
     }
 }
@@ -549,46 +570,6 @@ where
     #[must_use]
     fn from(error: CoseError) -> Self {
         AccessTokenError::CoseError(error)
-    }
-}
-
-#[allow(dead_code)]
-impl<T> AccessTokenError<T>
-where
-    T: Display,
-{
-    // TODO: Again, as in CoseCipherError, maybe there's a better way to do the below.
-
-    pub(crate) fn from_kek_error<C: Display>(
-        error: AccessTokenError<T>,
-    ) -> AccessTokenError<MultipleCoseError<T, C>> {
-        match error {
-            AccessTokenError::CoseCipherError(x) => {
-                AccessTokenError::CoseCipherError(CoseCipherError::from_kek_error(x))
-            }
-            AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
-            AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-            AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
-            AccessTokenError::MultipleMatchingRecipients => {
-                AccessTokenError::MultipleMatchingRecipients
-            }
-        }
-    }
-
-    pub(crate) fn from_cek_error<K: Display>(
-        error: AccessTokenError<T>,
-    ) -> AccessTokenError<MultipleCoseError<K, T>> {
-        match error {
-            AccessTokenError::CoseCipherError(x) => {
-                AccessTokenError::CoseCipherError(CoseCipherError::from_cek_error(x))
-            }
-            AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
-            AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-            AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
-            AccessTokenError::MultipleMatchingRecipients => {
-                AccessTokenError::MultipleMatchingRecipients
-            }
-        }
     }
 }
 

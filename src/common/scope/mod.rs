@@ -97,7 +97,6 @@
 //! [RFC 9200, section 5.8.1](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.1-2.4).
 //! AIF is defined in [RFC 9237](https://www.rfc-editor.org/rfc/rfc9237).
 
-#[cfg(not(feature = "std"))]
 use {alloc::string::String, alloc::string::ToString, alloc::vec, alloc::vec::Vec};
 
 use core::fmt::{Display, Formatter};
@@ -1120,7 +1119,7 @@ mod conversion {
             D: Deserializer<'de>,
         {
             Scope::try_from(Value::deserialize(deserializer)?)
-                .map_err(|x| D::Error::custom(x.to_string()))
+                .map_err(|x| Error::custom(x.to_string()))
         }
     }
 }

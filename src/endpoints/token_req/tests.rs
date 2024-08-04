@@ -17,7 +17,6 @@ use coset::{
 };
 use enumflags2::{make_bitflags, BitFlags};
 
-#[cfg(not(feature = "std"))]
 use {alloc::string::ToString, alloc::vec};
 
 use crate::common::scope::{

@@ -15,39 +15,21 @@
 use core::convert::identity;
 use core::fmt::{Debug, Display};
 
-use ciborium::value::Value;
-use coset::iana::Algorithm;
-use coset::{iana, CoseKey, CoseKeyBuilder, Header, Label, ProtectedHeader};
-use rand::{CryptoRng, Error, RngCore};
-
-#[cfg(not(feature = "std"))]
-use {
-    alloc::string::{String, ToString},
-    alloc::vec,
-    alloc::vec::Vec,
-};
+use coset::{iana, CoseKey};
+use rand::{CryptoRng, Rng};
 
 use crate::common::cbor_map::ToCborMap;
-use crate::error::{AccessTokenError, CoseCipherError, MultipleCoseError};
-use crate::token::{CoseCipher, MultipleEncryptCipher, MultipleSignCipher};
-use crate::{CoseEncryptCipher, CoseMacCipher, CoseSignCipher};
-
-/// Returns the value of the given symmetric [`key`].
-///
-/// # Panics
-/// If [`key`] is not a symmetric key or has no valid key value.
-fn get_symmetric_key_value(key: &CoseKey) -> Vec<u8> {
-    const K_LABEL: i64 = iana::SymmetricKeyParameter::K as i64;
-    key.params
-        .iter()
-        .find(|x| matches!(x.0, Label::Int(K_LABEL)))
-        .and_then(|x| match x {
-            (_, Value::Bytes(x)) => Some(x),
-            _ => None,
-        })
-        .expect("Key value must be present!")
-        .clone()
-}
+use crate::error::CoseCipherError;
+use crate::token::cose::EncryptCryptoBackend;
+use crate::token::cose::SignCryptoBackend;
+use crate::token::cose::{CoseEc2Key, CoseSymmetricKey};
+use crate::token::cose::{CryptoBackend, KeyDistributionCryptoBackend};
+use alloc::collections::BTreeMap;
+use core::convert::Infallible;
+use {
+    alloc::string::{String, ToString},
+    alloc::vec::Vec,
+};
 
 /// Helper function for tests which ensures that [`value`] serializes to the hexadecimal bytestring
 /// [expected_hex] and deserializes back to [`value`].
@@ -101,246 +83,206 @@ where
     }
 }
 
-/// Used to implement a basic `CipherProvider` for tests (obviously not secure in any way).
-#[derive(Copy, Clone)]
-pub(crate) struct FakeCrypto {}
+/// Parameters used for a [`MockCipher`] AEAD operation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MockCipherAeadParams {
+    key: Vec<u8>,
+    algorithm: iana::Algorithm,
+    aad: Vec<u8>,
+    iv: Vec<u8>,
+}
 
-impl CoseCipher for FakeCrypto {
-    type Error = String;
+impl MockCipherAeadParams {
+    fn new_with_aes_params<E: Display + Debug>(
+        algorithm: iana::Algorithm,
+        key: &CoseSymmetricKey<'_, E>,
+        aad: &[u8],
+        iv: &[u8],
+    ) -> MockCipherAeadParams {
+        MockCipherAeadParams {
+            key: key.k.to_vec(),
+            algorithm,
+            aad: aad.to_vec(),
+            iv: iv.to_vec(),
+        }
+    }
+}
 
-    fn set_headers<RNG: RngCore + CryptoRng>(
-        key: &CoseKey,
-        unprotected_header: &mut Header,
-        protected_header: &mut Header,
-        _rng: RNG,
-    ) -> Result<(), CoseCipherError<Self::Error>> {
-        // We have to later verify these headers really are used.
-        if let Some(label) = unprotected_header
-            .rest
-            .iter()
-            .find(|x| x.0 == Label::Int(47))
-        {
-            return Err(CoseCipherError::existing_header_label(&label.0));
+/// Parameters used for a [`MockCipher`] ECDSA operation.
+#[derive(Clone, Debug, PartialEq)]
+struct MockCipherEcdsaParams {
+    key: CoseKey,
+    algorithm: iana::Algorithm,
+    target: Vec<u8>,
+}
+
+impl MockCipherEcdsaParams {
+    fn new_with_ecdsa_params<E: Display + Debug>(
+        alg: iana::Algorithm,
+        key: &CoseEc2Key<'_, E>,
+        target: &[u8],
+    ) -> MockCipherEcdsaParams {
+        MockCipherEcdsaParams {
+            key: key.as_ref().clone(),
+            algorithm: alg,
+            target: target.to_vec(),
         }
-        if protected_header.alg != None {
-            return Err(CoseCipherError::existing_header("alg"));
+    }
+}
+
+/// "Mocked" Implementation of a cryptographic backend that does not actually perform cryptographic
+/// operations.
+///
+/// Instead, it stores the parameters passed to it during the creation of COSE objects and performs
+/// a lookup of those parameters (alongside a random value returned during creation) when attempting
+/// to authenticate or decrypt the object.
+///
+/// Due to the way this cryptographic backend works, created COSE objects can only be
+/// "authenticated" by the `MockCipher` instance they were created with.
+pub(crate) struct MockCipher<R: CryptoRng + Rng> {
+    rng: R,
+    aes_gcm_inputs: BTreeMap<Vec<u8>, (MockCipherAeadParams, Vec<u8>)>,
+    aes_kw_inputs: BTreeMap<Vec<u8>, (MockCipherAeadParams, Vec<u8>)>,
+    ecdsa_inputs: BTreeMap<Vec<u8>, MockCipherEcdsaParams>,
+}
+
+impl<R: CryptoRng + Rng> MockCipher<R> {
+    pub fn new(rng: R) -> MockCipher<R> {
+        MockCipher {
+            rng,
+            aes_gcm_inputs: BTreeMap::default(),
+            aes_kw_inputs: BTreeMap::default(),
+            ecdsa_inputs: BTreeMap::default(),
         }
-        if !protected_header.key_id.is_empty() {
-            return Err(CoseCipherError::existing_header("kid"));
-        }
-        unprotected_header.rest.push((Label::Int(47), Value::Null));
-        protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));
-        protected_header.key_id = key.key_id.clone();
+    }
+}
+
+impl<R: CryptoRng + Rng> CryptoBackend for MockCipher<R> {
+    type Error = Infallible;
+
+    fn generate_rand(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
+        self.rng.fill_bytes(buf);
         Ok(())
     }
 }
 
-/// Implements basic operations from the [`CoseEncryptCipher`] trait without actually using any
-/// "real" cryptography.
-/// This is purely to be used for testing and obviously offers no security at all.
-impl CoseEncryptCipher for FakeCrypto {
-    fn encrypt(
-        key: &CoseKey,
+impl<R: CryptoRng + Rng> EncryptCryptoBackend for MockCipher<R> {
+    fn encrypt_aes_gcm(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
         plaintext: &[u8],
         aad: &[u8],
-        _protected_header: &Header,
-        _unprotected_header: &Header,
-    ) -> Vec<u8> {
-        // We put the key and the AAD before the data.
-        // Again, this obviously isn't secure in any sane definition of the word.
-        let mut result: Vec<u8> = get_symmetric_key_value(key);
-        result.append(&mut aad.to_vec());
-        result.append(&mut plaintext.to_vec());
-        result
-    }
-
-    fn decrypt(
-        key: &CoseKey,
-        ciphertext: &[u8],
-        aad: &[u8],
-        _unprotected_header: &Header,
-        protected_header: &ProtectedHeader,
+        iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
-        // Now we just split off the AAD and key we previously put at the end of the data.
-        // We return an error if it does not match.
-        if key.key_id != protected_header.header.key_id {
-            // Mismatching key
-            return Err(CoseCipherError::DecryptionFailure);
-        }
-        let key_value = get_symmetric_key_value(key);
-        if ciphertext.len() < (aad.len() + key_value.len()) {
-            return Err(CoseCipherError::Other(
-                "Encrypted data has invalid length!".to_string(),
-            ));
-        }
-        let mut result: Vec<u8> = ciphertext.to_vec();
-        let plaintext = result.split_off(aad.len() + key_value.len());
-        let aad_result = result.split_off(key_value.len());
-        if aad == aad_result && key_value == result.as_slice() {
-            Ok(plaintext)
-        } else {
-            Err(CoseCipherError::DecryptionFailure)
-        }
-    }
-}
-
-/// Implements basic operations from the [`CoseSign1Cipher`] trait without actually using any
-/// "real" cryptography.
-/// This is purely to be used for testing and obviously offers no security at all.
-impl CoseSignCipher for FakeCrypto {
-    fn sign(
-        key: &CoseKey,
-        target: &[u8],
-        _unprotected_header: &Header,
-        _protected_header: &Header,
-    ) -> Vec<u8> {
-        // We simply append the key behind the data.
-        let mut signature = target.to_vec();
-        signature.append(&mut get_symmetric_key_value(key));
-        signature
-    }
-
-    fn verify(
-        key: &CoseKey,
-        signature: &[u8],
-        signed_data: &[u8],
-        unprotected_header: &Header,
-        protected_header: &ProtectedHeader,
-        _unprotected_signature_header: Option<&Header>,
-        protected_signature_header: Option<&ProtectedHeader>,
-    ) -> Result<(), CoseCipherError<Self::Error>> {
-        let matching_kid = if let Some(protected) = protected_signature_header {
-            protected.header.key_id == key.key_id
-        } else {
-            protected_header.header.key_id == key.key_id
-        };
-        let signed_again = Self::sign(
-            key,
-            signed_data,
-            unprotected_header,
-            &protected_header.header,
+        let mut lookup_key = vec![0u8; 64];
+        self.rng.fill_bytes(lookup_key.as_mut_slice());
+        self.aes_gcm_inputs.insert(
+            lookup_key.clone(),
+            (
+                MockCipherAeadParams::new_with_aes_params(algorithm, &key, aad, iv),
+                plaintext.to_vec(),
+            ),
         );
-        if matching_kid && signed_again == signature {
-            Ok(())
-        } else {
-            Err(CoseCipherError::VerificationFailure)
+        Ok(lookup_key)
+    }
+
+    fn decrypt_aes_gcm(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext_with_tag: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let (expected_input, plaintext) = self
+            .aes_gcm_inputs
+            .get(ciphertext_with_tag)
+            .ok_or(CoseCipherError::VerificationFailure)?;
+        if expected_input.eq(&MockCipherAeadParams::new_with_aes_params(
+            algorithm, &key, aad, iv,
+        )) {
+            return Ok(plaintext.clone());
         }
+        Err(CoseCipherError::VerificationFailure)
     }
 }
 
-/// Implements basic operations from the [`CoseMac0Cipher`] trait without actually using any
-/// "real" cryptography.
-/// This is purely to be used for testing and obviously offers no security at all.
-impl CoseMacCipher for FakeCrypto {
-    fn compute(
-        key: &CoseKey,
+impl<R: CryptoRng + Rng> SignCryptoBackend for MockCipher<R> {
+    fn sign_ecdsa(
+        &mut self,
+        alg: iana::Algorithm,
+        key: &CoseEc2Key<'_, Self::Error>,
         target: &[u8],
-        _unprotected_header: &Header,
-        _protected_header: &Header,
-    ) -> Vec<u8> {
-        // We simply append the key behind the data.
-        let mut tag = target.to_vec();
-        tag.append(&mut get_symmetric_key_value(key));
-        tag
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let mut lookup_key = vec![0u8; 64];
+        self.rng.fill_bytes(lookup_key.as_mut_slice());
+        self.ecdsa_inputs.insert(
+            lookup_key.clone(),
+            MockCipherEcdsaParams::new_with_ecdsa_params(alg, key, target),
+        );
+        Ok(lookup_key)
     }
 
-    fn verify(
-        key: &CoseKey,
-        tag: &[u8],
-        maced_data: &[u8],
-        unprotected_header: &Header,
-        protected_header: &ProtectedHeader,
+    fn verify_ecdsa(
+        &mut self,
+        alg: iana::Algorithm,
+        key: &CoseEc2Key<'_, Self::Error>,
+        signature: &[u8],
+        target: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>> {
-        if protected_header.header.key_id == key.key_id
-            && tag
-                == Self::compute(
-                    key,
-                    maced_data,
-                    unprotected_header,
-                    &protected_header.header,
-                )
-        {
-            Ok(())
-        } else {
-            Err(CoseCipherError::VerificationFailure)
+        let expected_input = self
+            .ecdsa_inputs
+            .get(signature)
+            .ok_or(CoseCipherError::VerificationFailure)?;
+        if expected_input.eq(&MockCipherEcdsaParams::new_with_ecdsa_params(
+            alg, key, target,
+        )) {
+            return Ok(());
         }
+        Err(CoseCipherError::VerificationFailure)
     }
 }
 
-impl MultipleEncryptCipher for FakeCrypto {
-    fn generate_cek<RNG: RngCore + CryptoRng>(rng: &mut RNG) -> CoseKey {
-        let mut key = [0; 5];
-        let mut kid = [0; 2];
-        rng.fill_bytes(&mut key);
-        rng.fill_bytes(&mut kid);
-        CoseKeyBuilder::new_symmetric_key(key.to_vec())
-            .key_id(kid.to_vec())
-            .build()
-    }
-}
-
-impl MultipleSignCipher for FakeCrypto {}
-
-#[derive(Clone, Copy)]
-pub(crate) struct FakeRng;
-
-impl RngCore for FakeRng {
-    fn next_u32(&mut self) -> u32 {
-        0
+impl<R: Rng + CryptoRng> KeyDistributionCryptoBackend for MockCipher<R> {
+    fn aes_key_wrap(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let mut lookup_key = vec![0u8; 64];
+        self.rng.fill_bytes(lookup_key.as_mut_slice());
+        self.aes_kw_inputs.insert(
+            lookup_key.clone(),
+            (
+                MockCipherAeadParams::new_with_aes_params(algorithm, &key, &[] as &[u8], iv),
+                plaintext.to_vec(),
+            ),
+        );
+        Ok(lookup_key)
     }
 
-    fn next_u64(&mut self) -> u64 {
-        0
-    }
-
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        dest.fill(0);
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
-        dest.fill(0);
-        Ok(())
-    }
-}
-
-impl CryptoRng for FakeRng {}
-
-// Makes the tests easier later on, as we use String as the error type in there.
-impl<C, K> From<CoseCipherError<MultipleCoseError<C, K>>> for CoseCipherError<String>
-where
-    C: Display,
-    K: Display,
-{
-    fn from(x: CoseCipherError<MultipleCoseError<C, K>>) -> Self {
-        match x {
-            CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            } => CoseCipherError::HeaderAlreadySet {
-                existing_header_name,
-            },
-            CoseCipherError::VerificationFailure => CoseCipherError::VerificationFailure,
-            CoseCipherError::DecryptionFailure => CoseCipherError::DecryptionFailure,
-            CoseCipherError::Other(x) => CoseCipherError::Other(x.to_string()),
+    fn aes_key_unwrap(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let (expected_input, plaintext) = self
+            .aes_kw_inputs
+            .get(ciphertext)
+            .ok_or(CoseCipherError::VerificationFailure)?;
+        if expected_input.eq(&MockCipherAeadParams::new_with_aes_params(
+            algorithm,
+            &key,
+            &[] as &[u8],
+            iv,
+        )) {
+            return Ok(plaintext.clone());
         }
-    }
-}
-
-impl<C, K> From<AccessTokenError<MultipleCoseError<C, K>>> for AccessTokenError<String>
-where
-    C: Display,
-    K: Display,
-{
-    fn from(x: AccessTokenError<MultipleCoseError<C, K>>) -> Self {
-        match x {
-            AccessTokenError::CoseError(x) => AccessTokenError::CoseError(x),
-            AccessTokenError::CoseCipherError(x) => {
-                AccessTokenError::CoseCipherError(CoseCipherError::from(x))
-            }
-            AccessTokenError::UnknownCoseStructure => AccessTokenError::UnknownCoseStructure,
-            AccessTokenError::NoMatchingRecipient => AccessTokenError::NoMatchingRecipient,
-            AccessTokenError::MultipleMatchingRecipients => {
-                AccessTokenError::MultipleMatchingRecipients
-            }
-        }
+        Err(CoseCipherError::VerificationFailure)
     }
 }

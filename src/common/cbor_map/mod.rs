@@ -47,9 +47,9 @@
 //!
 //! [`AccessTokenRequest`]: crate::AccessTokenRequest
 
-use core::fmt::{Debug, Display, Formatter};
 #[cfg(feature = "std")]
-use std::any::type_name;
+use core::any::type_name;
+use core::fmt::{Debug, Display, Formatter};
 
 use ciborium::de::from_reader;
 use ciborium::ser::into_writer;
@@ -57,8 +57,10 @@ use ciborium::value::{Integer, Value};
 use ciborium_io::{Read, Write};
 use erased_serde::Serialize as ErasedSerialize;
 
+use {alloc::boxed::Box, alloc::format, alloc::vec::Vec};
+
 #[cfg(not(feature = "std"))]
-use {alloc::boxed::Box, alloc::format, alloc::vec::Vec, core::any::type_name};
+use core::any::type_name;
 
 use crate::common::scope::Scope;
 use crate::error::{TryFromCborMapError, ValueIsNotIntegerError};
@@ -407,12 +409,12 @@ mod conversion {
             match Value::deserialize(deserializer)? {
                 Value::Map(map) => {
                     let map: Vec<(i128, Value)> =
-                        T::cbor_map_from_int(map).map_err(D::Error::custom)?;
+                        T::cbor_map_from_int(map).map_err(Error::custom)?;
                     ToCborMap::try_from_cbor_map(map)
                         .map(CborMap)
-                        .map_err(D::Error::custom)
+                        .map_err(Error::custom)
                 }
-                _ => Err(D::Error::invalid_type(
+                _ => Err(Error::invalid_type(
                     Unexpected::Other("unknown type"),
                     &"a CBOR map",
                 )),

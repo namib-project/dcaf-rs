@@ -11,11 +11,12 @@ An implementation of the [ACE-OAuth framework (RFC 9200)](https://www.rfc-editor
 This crate implements the ACE-OAuth
 (Authentication and Authorization for Constrained Environments using the OAuth 2.0 Framework)
 framework as defined in [RFC 9200](https://www.rfc-editor.org/rfc/rfc9200).
-Key features include CBOR-(de-)serializable data models such as [`AccessTokenRequest`](https://docs.rs/dcaf/latest/dcaf/endpoints/token_req/struct.AccessTokenRequest.html),
+Key features include CBOR-(de-)serializable data models such as [`AccessTokenRequest`](https://docs.rs/dcaf/latest/dcaf/struct.AccessTokenRequest.html),
 as well as the possibility to create COSE encrypted/signed access tokens
 (as described in the standard) along with decryption/verification functions.
 Implementations of the cryptographic functions must be provided by the user by implementing
-[`CoseEncryptCipher`](https://docs.rs/dcaf/latest/dcaf/token/trait.CoseEncryptCipher.html) or [`CoseSignCipher`](https://docs.rs/dcaf/latest/dcaf/token/trait.CoseSignCipher.html).
+[`EncryptCryptoBackend`](https://docs.rs/dcaf/latest/dcaf/token/cose/trait.EncryptCryptoBackend.html)
+or [`SignCryptoBackend`](https://docs.rs/dcaf/latest/dcaf/token/cose/trait.SignCryptoBackend.html).
 
 Note that actually transmitting the serialized values (e.g., via CoAP) or providing more complex
 features not mentioned in the ACE-OAuth RFC (e.g., a permission management system for
@@ -54,10 +55,13 @@ token creation/verification functions. We'll quickly introduce both of these her
 ### Data models
 [For example](https://www.rfc-editor.org/rfc/rfc9200#figure-6),
 let's assume you (the client) want to request an access token from an Authorization Server.
-For this, you'd need to create an [`AccessTokenRequest`](https://docs.rs/dcaf/latest/dcaf/endpoints/token_req/struct.AccessTokenRequest.html), which has to include at least a
-`client_id`. We'll also specify an audience, a scope (using [`TextEncodedScope`](https://docs.rs/dcaf/latest/dcaf/common/scope/struct.TextEncodedScope.html)---note that
-[binary-encoded scopes](https://docs.rs/dcaf/latest/dcaf/common/scope/struct.BinaryEncodedScope.html) or [AIF-encoded scopes](https://docs.rs/dcaf/latest/dcaf/common/scope/struct.AifEncodedScope.html) would also work), as well as a
-[`ProofOfPossessionKey`](https://docs.rs/dcaf/latest/dcaf/common/cbor_values/enum.ProofOfPossessionKey.html) (the key the access token should be bound to) in the `req_cnf` field.
+For this, you'd need to create an [`AccessTokenRequest`](https://docs.rs/dcaf/latest/dcaf/struct.AccessTokenRequest.html),
+which has to include at least a `client_id`. We'll also specify an audience, a scope (using
+[`TextEncodedScope`](https://docs.rs/dcaf/latest/dcaf/struct.TextEncodedScope.html)---note that
+[binary-encoded scopes](https://docs.rs/dcaf/latest/dcaf/struct.BinaryEncodedScope.html) or
+[AIF-encoded scopes](https://docs.rs/dcaf/latest/dcaf/struct.AifEncodedScope.html) would also
+work), as well as a [`ProofOfPossessionKey`](https://docs.rs/dcaf/latest/dcaf/enum.ProofOfPossessionKey.html)
+(the key the access token should be bound to) in the `req_cnf` field.
 
 Creating, serializing and then de-serializing such a structure would look like this:
 ```rust
@@ -77,116 +81,83 @@ assert_eq!(AccessTokenRequest::deserialize_from(encoded.as_slice())?, request);
 ### Access Tokens
 Following up from the previous example, let's assume we now want to create a signed
 access token containing the existing `key`, as well as claims about the audience and issuer
-of the token, using an existing cipher of type `FakeCrypto`[^cipher]:
+of the token, using the `openssl` cryptographic backend and the signing key `sign_key`:
+
 ```rust
-use dcaf::token::CoseCipher;
+use coset::{AsCborValue, CoseKeyBuilder, HeaderBuilder, iana};
+use coset::cwt::ClaimsSetBuilder;
+use coset::iana::CwtClaimName;
+use dcaf::{sign_access_token, verify_access_token};
+use dcaf::error::{AccessTokenError, CoseCipherError};
+use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
+use dcaf::token::cose::{CryptoBackend, HeaderBuilderExt};
 
+let mut backend = OpensslContext::new();
 
-let rng = FakeRng;
-let key = CoseKeyBuilder::new_symmetric_key(vec![1,2,3,4,5]).key_id(vec![0xDC, 0xAF]).build();
+let sign_key = CoseKeyBuilder::new_ec2_priv_key(
+                            iana::EllipticCurve::P_256,
+                            cose_ec2_key_x, // X component of elliptic curve key
+                            cose_ec2_key_y, // Y component of elliptic curve key
+                            cose_ec2_key_d  // D component of elliptic curve key
+                )
+                .key_id("sign_key".as_bytes().to_vec())
+                .build();
+
+let mut key_data = vec![0; 32];
+backend.generate_rand(key_data.as_mut_slice()).map_err(CoseCipherError::from)?;
+let key = CoseKeyBuilder::new_symmetric_key(key_data).build();
+
+let unprotected_header = HeaderBuilder::new().algorithm(iana::Algorithm::ES256).build();
+
 let claims = ClaimsSetBuilder::new()
      .audience(String::from("coaps://rs.example.com"))
      .issuer(String::from("coaps://as.example.com"))
      .claim(CwtClaimName::Cnf, key.clone().to_cbor_value()?)
      .build();
-let token = sign_access_token::<FakeCrypto, FakeRng>(&key, claims, None, None, None, rng)?;
-assert!(verify_access_token::<FakeCrypto>(&key, &token, None).is_ok());
-```
 
-[^cipher]: Note that we are deliberately omitting details about the implementation of the
-`cipher` here, since such implementations won't be in the scope of this crate.
+let token = sign_access_token(&mut backend, &key, claims, &None, Some(unprotected_header), None)?;
+assert!(verify_access_token(&mut backend, &key, &token, &None).is_ok());
+```
 
 ## Provided Data Models
 
 ### Token Endpoint
 The most commonly used models will probably be the token endpoint's
-[`AccessTokenRequest`](https://docs.rs/dcaf/latest/dcaf/endpoints/token_req/struct.AccessTokenRequest.html) and
-[`AccessTokenResponse`](https://docs.rs/dcaf/latest/dcaf/endpoints/token_req/struct.AccessTokenResponse.html)
+[`AccessTokenRequest`](https://docs.rs/dcaf/latest/dcaf/struct.AccessTokenRequest.html) and
+[`AccessTokenResponse`](https://docs.rs/dcaf/latest/dcaf/struct.AccessTokenResponse.html)
 described in [section 5.8 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8).
-In case of an error, an [`ErrorResponse`](https://docs.rs/dcaf/latest/dcaf/endpoints/token_req/struct.ErrorResponse.html)
-should be used.
+In case of an error, an [`ErrorResponse`] should be used.
 
 After an initial Unauthorized Resource Request Message, an
-[`AuthServerRequestCreationHint`](https://docs.rs/dcaf/latest/dcaf/endpoints/creation_hint/struct.AuthServerRequestCreationHint.html)
+[`AuthServerRequestCreationHint`](https://docs.rs/dcaf/latest/dcaf/struct.AuthServerRequestCreationHint.html)
 can be used to provide additional information to the client, as described in
 [section 5.3 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.3).
 
 ### Common Data Types
 Some types used across multiple scenarios include:
-- [`Scope`](https://docs.rs/dcaf/latest/dcaf/common/scope/enum.Scope.html) (as described in
+- [`Scope`](https://docs.rs/dcaf/latest/dcaf/enum.Scope.html) (as described in
   [section 5.8.1 of RFC 9200](https://www.rfc-editor.org/rfc/rfc9200#section-5.8.1)),
-  either as a [`TextEncodedScope`](https://docs.rs/dcaf/latest/dcaf/common/scope/struct.TextEncodedScope.html),
-  a [`BinaryEncodedScope`](https://docs.rs/dcaf/latest/dcaf/common/scope/struct.BinaryEncodedScope.html) or
-  an [`AifEncodedScope`](https://docs.rs/dcaf/latest/dcaf/common/scope/struct.AifEncodedScope.html).
-- [`ProofOfPossessionKey`](https://docs.rs/dcaf/latest/dcaf/common/cbor_values/enum.ProofOfPossessionKey.html) as specified in
-  [section 3.1 of RFC 8747](https://www.rfc-editor.org/rfc/rfc8747#section-3.1).
+  either as a [`TextEncodedScope`](https://docs.rs/dcaf/latest/dcaf/struct.TextEncodedScope.html),
+  a [`BinaryEncodedScope`](https://docs.rs/dcaf/latest/dcaf/struct.BinaryEncodedScope.html) or
+  an [`AifEncodedScope`](https://docs.rs/dcaf/latest/dcaf/struct.AifEncodedScope.html).
+- [`ProofOfPossessionKey`](https://docs.rs/dcaf/latest/dcaf/enum.ProofOfPossessionKey.html) as
+  specified in [section 3.1 of RFC 8747](https://www.rfc-editor.org/rfc/rfc8747#section-3.1).
   For example, this will be used in the access token's `cnf` claim.
 - While not really a data type, various constants representing values used in ACE-OAuth
-  are provided in the [`constants`](https://docs.rs/dcaf/latest/dcaf/common/constants/) module.
+  are provided in the [`constants`](https://docs.rs/dcaf/latest/dcaf/constants/index.html) module.
 
-## Creating Access Tokens
-In order to create access tokens, you can use either [`encrypt_access_token`](https://docs.rs/dcaf/latest/dcaf/token/fn.encrypt_access_token.html)
-or [`sign_access_token`](https://docs.rs/dcaf/latest/dcaf/token/fn.sign_access_token.html),
-depending on whether you want the access token to be wrapped in a
-`COSE_Encrypt0` or `COSE_Sign1` structure. Support for a combination of both is planned for the
-future. In case you want to create a token intended for multiple recipients (each with their
-own key), you can use [`encrypt_access_token_multiple`](https://docs.rs/dcaf/latest/dcaf/token/fn.encrypt_access_token_multiple.html)
-or [`sign_access_token_multiple`](https://docs.rs/dcaf/latest/dcaf/token/fn.sign_access_token_multiple.html).
+## Token handling
 
-Both functions take a [`ClaimsSet`](coset::cwt::ClaimsSet) containing the claims that
-shall be part of the access token, a key used to encrypt or sign the token,
-optional `aad` (additional authenticated data), un-/protected headers and a cipher (explained
-further below) identified by type parameter `T`.
-Note that if the headers you pass in set fields which the cipher wants to set as well,
-the function will fail with a `HeaderAlreadySet` error.
-The function will return a [`Result`](https://doc.rust-lang.org/stable/core/result/enum.Result.html) of the opaque
-[`ByteString`](https://docs.rs/dcaf/latest/dcaf/common/cbor_values/type.ByteString.html) containing the access token.
+This crate also provides some functionality regarding the encoding and decoding of access
+tokens, especially of CBOR Web Tokens (CWTs), which are based on the COSE specification 
+(RFC 9052).
 
-## Verifying and Decrypting Access Tokens
-In order to verify or decrypt existing access tokens represented as [`ByteString`](https://docs.rs/dcaf/latest/dcaf/common/cbor_values/type.ByteString.html)s,
-use [`verify_access_token`](https://docs.rs/dcaf/latest/dcaf/token/fn.verify_access_token.html) or
-[`decrypt_access_token`](https://docs.rs/dcaf/latest/dcaf/token/fn.decrypt_access_token.html) respectively.
-In case the token was created for multiple recipients (each with their own key),
-use [`verify_access_token_multiple`](https://docs.rs/dcaf/latest/dcaf/token/fn.verify_access_token_multiple.html)
-or [`decrypt_access_token_multiple`](https://docs.rs/dcaf/latest/dcaf/token/fn.decrypt_access_token_multiple.html).
+Generation and validation of CWTs is supported for CWTs based on signed and encrypted 
+COSE objects. Additionally, helper methods are provided to more easily create and validate 
+COSE objects that are encrypted, signed or authenticated using MACs.   
 
-Both functions take the access token, a `key` used to decrypt or verify, optional `aad`
-(additional authenticated data) and a cipher implementing cryptographic operations identified
-by type parameter `T`.
-
-[`decrypt_access_token`](https://docs.rs/dcaf/latest/dcaf/token/fn.decrypt_access_token.html) will return a result containing
-the decrypted [`ClaimsSet`](coset::cwt::ClaimsSet).
-[`verify_access_token`](https://docs.rs/dcaf/latest/dcaf/token/fn.verify_access_token.html) will return an empty result which
-indicates that the token was successfully verified---an [`Err`](https://doc.rust-lang.org/stable/core/result/enum.Result.html)
-would indicate failure.
-
-## Extracting Headers from an Access Token
-Regardless of whether a token was signed, encrypted, or MAC-tagged, you can extract its
-headers using [`get_token_headers`](https://docs.rs/dcaf/latest/dcaf/token/fn.get_token_headers.html),
-which will return an option containing both
-unprotected and protected headers (or which will be [`None`](core::option::Option::None) in case
-the token is invalid).
-
-## COSE Cipher
-As mentioned before, cryptographic functions are outside the scope of this crate.
-For this reason, the various COSE cipher traits exist; namely,
-[`CoseEncryptCipher`](token::CoseEncryptCipher), [`CoseSignCipher`](token::CoseSignCipher),
-and [`CoseMacCipher`](token::CoseMacCipher), each implementing
-a corresponding COSE operation as specified in sections 4, 5, and 6 of
-[RFC 8152](https://www.rfc-editor.org/rfc/rfc8152).
-There are also the traits [`MultipleEncryptCipher`](token::MultipleEncryptCipher),
-[`MultipleSignCipher`](token::MultipleSignCipher), and
-[`MultipleMacCipher`](token::MultipleMacCipher),
-which are used for creating tokens intended for multiple recipients.
-
-Note that these ciphers *don't* need to wrap their results in, e.g.,
-a `Cose_Encrypt0` structure, as this part is already handled by this library
-(which uses [`coset`](coset))---only the cryptographic algorithms themselves need to be implemented
-(e.g., step 4 of "how to decrypt a message" in [section 5.3 of RFC 8152](https://www.rfc-editor.org/rfc/rfc8152#section-5.3)).
-
-When implementing any of the specific COSE ciphers, you'll also need to specify the type
-of the key (which must be convertible to a `CoseKey`) and implement a method which sets
-headers for the token, for example, the used algorithm, the key ID, an IV, and so on.
+See the [token](https://docs.rs/dcaf/latest/dcaf/token/index.html) module-level documentation
+for more information.
 
 <!-- cargo-rdme end -->
 

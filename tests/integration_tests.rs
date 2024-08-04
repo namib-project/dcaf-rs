@@ -8,69 +8,24 @@
  *
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
-
-use ciborium::value::Value;
+use base64::Engine;
 use coset::cwt::{ClaimsSetBuilder, Timestamp};
+use coset::iana::CwtClaimName;
 use coset::iana::EllipticCurve::P_256;
-use coset::iana::{Algorithm, CwtClaimName};
-use coset::{iana, CoseKey, CoseKeyBuilder, Header, HeaderBuilder, Label, ProtectedHeader};
-use rand::{CryptoRng, Error, RngCore};
-
+use coset::{iana, CoseKeyBuilder, Header, HeaderBuilder};
 use dcaf::common::cbor_map::ToCborMap;
-use dcaf::common::cbor_values::ProofOfPossessionKey::PlainCoseKey;
-use dcaf::common::scope::TextEncodedScope;
-use dcaf::endpoints::creation_hint::AuthServerRequestCreationHint;
-use dcaf::endpoints::token_req::{
-    AccessTokenRequest, AccessTokenResponse, AceProfile, ErrorCode, ErrorResponse, GrantType,
+use dcaf::token::cose::CryptoBackend;
+use dcaf::token::cose::SignCryptoBackend;
+use dcaf::ProofOfPossessionKey::PlainCoseKey;
+use dcaf::{
+    sign_access_token, verify_access_token, AccessTokenRequest, AccessTokenResponse, AceProfile,
+    AuthServerRequestCreationHint, ErrorCode, ErrorResponse, GrantType, TextEncodedScope,
     TokenType,
 };
-use dcaf::error::CoseCipherError;
-use dcaf::token::CoseCipher;
-use dcaf::{sign_access_token, verify_access_token, CoseSignCipher};
+use rstest::rstest;
 
-fn get_x_y_from_key(key: &CoseKey) -> (Vec<u8>, Vec<u8>) {
-    const X_PARAM: i64 = iana::Ec2KeyParameter::X as i64;
-    const Y_PARAM: i64 = iana::Ec2KeyParameter::Y as i64;
-    let mut x: Option<Vec<u8>> = None;
-    let mut y: Option<Vec<u8>> = None;
-    for (label, value) in key.params.iter() {
-        if let Label::Int(X_PARAM) = label {
-            if let Value::Bytes(x_val) = value {
-                x = Some(x_val.clone());
-            }
-        } else if let Label::Int(Y_PARAM) = label {
-            if let Value::Bytes(y_val) = value {
-                y = Some(y_val.clone());
-            }
-        }
-    }
-    let test = x.and_then(|a| y.map(|b| (a, b)));
-    test.expect("X and Y value must be present in key!")
-}
-
-#[derive(Clone, Copy)]
-pub(crate) struct FakeRng;
-
-impl RngCore for FakeRng {
-    fn next_u32(&mut self) -> u32 {
-        0
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        0
-    }
-
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        dest.fill(0)
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
-        dest.fill(0);
-        Ok(())
-    }
-}
-
-impl CryptoRng for FakeRng {}
+#[cfg(feature = "openssl")]
+use dcaf::token::cose::crypto_impl::openssl::OpensslContext;
 
 fn example_headers() -> (Header, Header) {
     let unprotected_header = HeaderBuilder::new()
@@ -86,77 +41,6 @@ fn example_aad() -> Vec<u8> {
     vec![0x10, 0x12, 0x13, 0x14, 0x15]
 }
 
-#[derive(Copy, Clone)]
-pub(crate) struct FakeCrypto {}
-
-impl CoseCipher for FakeCrypto {
-    type Error = String;
-
-    fn set_headers<RNG: RngCore + CryptoRng>(
-        _key: &CoseKey,
-        unprotected_header: &mut Header,
-        protected_header: &mut Header,
-        _rng: RNG,
-    ) -> Result<(), CoseCipherError<Self::Error>> {
-        // We have to later verify these headers really are used.
-        if let Some(label) = unprotected_header
-            .rest
-            .iter()
-            .find(|x| x.0 == Label::Int(47))
-        {
-            return Err(CoseCipherError::existing_header_label(&label.0));
-        }
-        if protected_header.alg != None {
-            return Err(CoseCipherError::existing_header("alg"));
-        }
-        unprotected_header.rest.push((Label::Int(47), Value::Null));
-        protected_header.alg = Some(coset::Algorithm::Assigned(Algorithm::Direct));
-        Ok(())
-    }
-}
-
-/// Implements basic operations from the [`CoseSign1Cipher`] trait without actually using any
-/// "real" cryptography.
-/// This is purely to be used for testing and obviously offers no security at all.
-impl CoseSignCipher for FakeCrypto {
-    fn sign(
-        key: &CoseKey,
-        target: &[u8],
-        _unprotected_header: &Header,
-        _protected_header: &Header,
-    ) -> Vec<u8> {
-        // We simply append the key behind the data.
-        let mut signature = target.to_vec();
-        let (mut x, mut y) = get_x_y_from_key(key);
-        signature.append(&mut x);
-        signature.append(&mut y);
-        signature
-    }
-
-    fn verify(
-        key: &CoseKey,
-        signature: &[u8],
-        signed_data: &[u8],
-        unprotected_header: &Header,
-        protected_header: &ProtectedHeader,
-        _unprotected_signature_header: Option<&Header>,
-        _protected_signature_header: Option<&ProtectedHeader>,
-    ) -> Result<(), CoseCipherError<Self::Error>> {
-        if signature
-            == Self::sign(
-                key,
-                signed_data,
-                unprotected_header,
-                &protected_header.header,
-            )
-        {
-            Ok(())
-        } else {
-            Err(CoseCipherError::VerificationFailure)
-        }
-    }
-}
-
 /// We assume the following scenario here:
 /// 1. The client tries to access a protected resource. Since it's still unauthorized,
 ///    this is an Unauthorized Resource Request message. The RS replies with an error response
@@ -167,22 +51,32 @@ impl CoseSignCipher for FakeCrypto {
 /// 3. The AS replies with an AccessTokenResponse, containing the signed token_req as well as all
 ///    other necessary fields.
 /// 4. Finally, the client tries to send an invalid request, which is met by an ErrorResponse.
-#[test]
-fn test_scenario() -> Result<(), String> {
+#[cfg(feature = "openssl")]
+#[rstest]
+fn test_scenario<B: CryptoBackend + SignCryptoBackend>(
+    #[values(OpensslContext::new())] mut backend: B,
+) -> Result<(), String> {
     let nonce = vec![0xDC, 0xAF];
     let auth_server = "as.example.org";
     let resource_server = "rs.example.org";
     let client_id = "test client";
     let scope = TextEncodedScope::try_from("first second").map_err(|x| x.to_string())?;
     assert!(scope.elements().eq(["first", "second"]));
-    // Taken from RFC 8747, section 3.2.
-    let key = CoseKeyBuilder::new_ec2_pub_key(
+    // Key taken from the COSE examples repository
+    // (https://github.com/cose-wg/Examples/blob/master/ecdsa-examples/ecdsa-01.json)
+    let key = CoseKeyBuilder::new_ec2_priv_key(
         P_256,
-        hex::decode("d7cc072de2205bdc1537a543d53c60a6acb62eccd890c7fa27c9e354089bbe13")
+        base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode("usWxHK2PmfnHKwXPS54m0kTcGJ90UiglWiGahtagnv8")
             .map_err(|x| x.to_string())?,
-        hex::decode("f95e1d4b851a2cc80fff87d8e23f22afb725d535e515d020731e79a3b4e47120")
+        base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode("IBOL-C3BttVivg-lSreASjpkttcsz-1rb7btKLv8EX4")
+            .map_err(|x| x.to_string())?,
+        base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode("V8kgd2ZBRuh2dgyVINBUqpPDr7BOMGcF22CQMIUHtNM")
             .map_err(|x| x.to_string())?,
     )
+    .algorithm(iana::Algorithm::ES256)
     .build();
 
     let (unprotected_headers, protected_headers) = example_headers();
@@ -211,8 +105,8 @@ fn test_scenario() -> Result<(), String> {
 
     assert_eq!(request, result);
     let expires_in: u32 = 3600;
-    let rng = FakeRng;
-    let token = sign_access_token::<FakeCrypto, FakeRng>(
+    let token = sign_access_token(
+        &mut backend,
         &key,
         ClaimsSetBuilder::new()
             .audience(resource_server.to_string())
@@ -224,10 +118,9 @@ fn test_scenario() -> Result<(), String> {
             )
             .build(),
         // TODO: Proper headers
-        Some(aad.as_slice()),
+        &aad.as_slice(),
         Some(unprotected_headers),
         Some(protected_headers),
-        rng,
     )
     .map_err(|x| x.to_string())?;
     let response = AccessTokenResponse::builder()
@@ -241,7 +134,7 @@ fn test_scenario() -> Result<(), String> {
     let result = pseudo_send_receive(response.clone())?;
     assert_eq!(response, result);
 
-    verify_access_token::<FakeCrypto>(&key, &response.access_token, Some(aad.as_slice()))
+    verify_access_token(&mut backend, &key, &response.access_token, &aad.as_slice())
         .map_err(|x| x.to_string())?;
 
     let error = ErrorResponse::builder()
