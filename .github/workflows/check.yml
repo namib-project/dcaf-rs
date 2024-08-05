@@ -52,6 +52,23 @@ jobs:
         with:
           command: test
 
+  test_all_features:
+    name: Test Suite (all features)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features
+
   test_nostd:
     name: Test Suite (no_std)
     runs-on: ubuntu-latest

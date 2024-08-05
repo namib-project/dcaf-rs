@@ -18,7 +18,6 @@ use coset::{
 };
 use rstest::rstest;
 
-use crate::token::cose::crypto_impl::openssl::OpensslContext;
 use crate::token::cose::header_util::determine_algorithm;
 use crate::token::cose::key::CoseSymmetricKey;
 use crate::token::cose::maced::mac::{CoseMacBuilderExt, CoseMacExt};
@@ -30,6 +29,11 @@ use crate::token::cose::test_helper::{
     CoseStructTestHelper, TestCase,
 };
 use crate::token::cose::{test_helper, CryptoBackend};
+
+#[cfg(feature = "openssl")]
+use crate::token::cose::test_helper::openssl_ctx;
+#[cfg(all(feature = "rustcrypto-hmac", feature = "rustcrypto-aes-kw"))]
+use crate::token::cose::test_helper::rustcrypto_ctx;
 
 impl<B: CryptoBackend + MacCryptoBackend + KeyDistributionCryptoBackend> CoseStructTestHelper<B>
     for CoseMac
@@ -150,25 +154,66 @@ impl<B: CryptoBackend + MacCryptoBackend + KeyDistributionCryptoBackend> CoseStr
 }
 
 #[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-hmac", feature = "rustcrypto-aes-kw"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
 fn cose_examples_mac_reference_output<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/mac-tests/mac-*.json")] test_path: PathBuf,
-    #[values(OpensslContext {})] backend: B,
+    #[case] backend: B,
 ) {
     test_helper::perform_cose_reference_output_test::<CoseMac, B>(test_path, backend);
 }
 
 #[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-hmac", feature = "rustcrypto-aes-kw"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
 fn cose_examples_mac_self_signed<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/mac-tests/mac-*.json")] test_path: PathBuf,
-    #[values(OpensslContext {})] backend: B,
+    #[case] backend: B,
 ) {
     test_helper::perform_cose_self_signed_test::<CoseMac, B>(test_path, backend);
 }
 
 #[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-hmac", feature = "rustcrypto-aes-kw"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_hmac_mac_reference_output<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
+    #[files("tests/cose_examples/hmac-examples/HMac-0[0-4].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    test_helper::perform_cose_reference_output_test::<CoseMac, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-hmac", feature = "rustcrypto-aes-kw"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_hmac_mac_self_signed<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
+    #[files("tests/cose_examples/hmac-examples/HMac-0[0-4].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    test_helper::perform_cose_self_signed_test::<CoseMac, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-hmac", feature = "rustcrypto-aes-kw"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
 fn hmac_tests<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/dcaf_cose_examples/hmac/*.json")] test_path: PathBuf,
-    #[values(OpensslContext {})] backend: B,
+    #[case] backend: B,
 ) {
     test_helper::perform_cose_self_signed_test::<CoseMac, B>(test_path, backend);
 }

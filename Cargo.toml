@@ -16,6 +16,15 @@ exclude = [
 [features]
 default = ["std", "openssl"]
 std = ["serde/std", "ciborium/std", "serde_bytes/std", "erased-serde/std", "derive_builder/std"]
+rustcrypto = ["rustcrypto-aes-gcm", "rustcrypto-aes-kw", "rustcrypto-ecdsa", "rustcrypto-hmac"]
+rustcrypto-encrypt = ["rustcrypto-aes-gcm"]
+rustcrypto-sign = ["rustcrypto-ecdsa"]
+rustcrypto-key-distribution = ["rustcrypto-aes-kw"]
+rustcrypto-mac = ["rustcrypto-hmac"]
+rustcrypto-aes-gcm = ["dep:aes-gcm", "dep:typenum", "dep:aead", "dep:aes"]
+rustcrypto-aes-kw = ["dep:aes-kw", "dep:aes", "dep:typenum", "dep:crypto-common"]
+rustcrypto-ecdsa = ["dep:ecdsa", "dep:p256", "dep:p384", "dep:digest", "dep:sha2", "dep:elliptic-curve"]
+rustcrypto-hmac = ["dep:hmac", "dep:digest", "dep:sha2"]
 
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["derive"] }
@@ -31,10 +40,28 @@ enumflags2 = { version = "^0.7", default-features = false }
 rand = { version = "^0.8", default-features = false }
 openssl = { version = "^0.10", optional = true }
 lazy_static = "1.4.0"
+aes-gcm = { version = "0.10.3", optional = true }
+typenum = { version = "1.17.0", optional = true, features = ["const-generics"] }
+crypto-common = { version = "0.1.6", optional = true }
+aead = { version = "0.5.2", optional = true }
+aes-kw = { version = "0.2.1", optional = true, features = ["alloc"] }
+aes = { version = "0.8.4", optional = true }
+hmac = { version = "0.12.1", optional = true }
+digest = { version = "0.10.7", optional = true }
+sha2 = { version = "0.10.8", optional = true }
+elliptic-curve = { version = "0.13.8", optional = true }
+ecdsa = { version = "0.16.9", optional = true, features = ["sha2"] }
+p256 = { version = "0.13.2", optional = true }
+p384 = { version = "0.13.0", optional = true }
+# P-521 must implement DigestPrimitive in order to be usable in ECDSA, which was only recently added and is not released yet.
+# p521 = { version = "0.14.0-pre.1", optional = true }
 
 [dev-dependencies]
 hex = { version = "^0.4", features = ["serde"] }
 base64 = "0.22.1"
-rstest = "0.21.0"
+rstest = "0.22.0"
 serde_json = "1.0.118"
 rand = { version = "^0.8", default-features = false, features = ["std_rng", "std"] }
+
+[build-dependencies]
+cfg_aliases = "0.2.1"
