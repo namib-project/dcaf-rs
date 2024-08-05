@@ -69,12 +69,17 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
     /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new HMAC variants are ever
     /// defined).
+    #[allow(unused_variables)]
     fn compute_hmac(
         &mut self,
         algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         payload: &[u8],
-    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
 
     /// Verifies the HMAC provided as `tag` for the given `payload` using the given `algorithm` and
     /// `key`.
@@ -122,13 +127,18 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
     /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new HMAC variants are ever
     /// defined).
+    #[allow(unused_variables)]
     fn verify_hmac(
         &mut self,
         algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         tag: &[u8],
         payload: &[u8],
-    ) -> Result<(), CoseCipherError<Self::Error>>;
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
 }
 
 /// Attempts to perform a COSE HMAC computation operation for a [`CoseMac`](coset::CoseMac) or
@@ -156,7 +166,9 @@ fn try_compute<B: MacCryptoBackend, CKP: KeyProvider>(
             let parsed_key = CoseParsedKey::try_from(key)?;
 
             match alg {
-                iana::Algorithm::HMAC_256_256 => {
+                iana::Algorithm::HMAC_256_256
+                | iana::Algorithm::HMAC_384_384
+                | iana::Algorithm::HMAC_512_512 => {
                     let symm_key = key::ensure_valid_hmac_key(alg, parsed_key)?;
                     backend.compute_hmac(alg, symm_key, payload)
                 }
@@ -194,7 +206,9 @@ pub(crate) fn try_verify<B: MacCryptoBackend, CKP: KeyProvider>(
             let parsed_key = CoseParsedKey::try_from(key)?;
 
             match alg {
-                iana::Algorithm::HMAC_256_256 => {
+                iana::Algorithm::HMAC_256_256
+                | iana::Algorithm::HMAC_384_384
+                | iana::Algorithm::HMAC_512_512 => {
                     let symm_key = key::ensure_valid_hmac_key(alg, parsed_key)?;
                     (*backend.borrow_mut()).verify_hmac(alg, symm_key, tag, payload)
                 }

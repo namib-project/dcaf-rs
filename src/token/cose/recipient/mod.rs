@@ -74,13 +74,18 @@ pub trait KeyDistributionCryptoBackend: CryptoBackend {
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
     /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new AES-GCM variants are ever
     /// defined).
+    #[allow(unused_variables)]
     fn aes_key_wrap(
         &mut self,
         algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         plaintext: &[u8],
         iv: &[u8],
-    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
 
     /// Decrypts the given `ciphertext` using the AES key unwrap (RFC 3394) variant provided as
     /// `algorithm` and the given `key`.
@@ -124,13 +129,18 @@ pub trait KeyDistributionCryptoBackend: CryptoBackend {
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
     /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new AES-GCM variants are ever
     /// defined).
+    #[allow(unused_variables)]
     fn aes_key_unwrap(
         &mut self,
         algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
         ciphertext: &[u8],
         iv: &[u8],
-    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
 }
 
 /// Internal structure that implements the key provider trait by creating depth-first search
@@ -724,7 +734,7 @@ pub trait CoseRecipientExt {
     ///
     /// # Errors
     ///
-    /// If the COSE structure, selected [`CoseKey`](coset::CoseKey) or AAD (or any combination of those) are malformed
+    /// If the COSE structure, selected [`CoseKey`](CoseKey) or AAD (or any combination of those) are malformed
     /// or otherwise unsuitable for decryption, this function will return the most fitting
     /// [`CoseCipherError`] for the specific type of error.
     ///
