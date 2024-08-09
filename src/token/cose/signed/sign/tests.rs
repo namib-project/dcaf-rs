@@ -13,7 +13,6 @@ use std::path::PathBuf;
 use coset::{CoseError, CoseKey, CoseSign, CoseSignBuilder, CoseSignatureBuilder, Header};
 use rstest::rstest;
 
-use crate::token::cose::crypto_impl::openssl::OpensslContext;
 use crate::token::cose::recipient::KeyDistributionCryptoBackend;
 use crate::token::cose::signed::{CoseSignBuilderExt, CoseSignExt};
 use crate::token::cose::test_helper::{
@@ -22,6 +21,11 @@ use crate::token::cose::test_helper::{
 };
 use crate::token::cose::CryptoBackend;
 use crate::token::cose::SignCryptoBackend;
+
+#[cfg(feature = "openssl")]
+use crate::token::cose::test_helper::openssl_ctx;
+#[cfg(feature = "rustcrypto-ecdsa")]
+use crate::token::cose::test_helper::rustcrypto_ctx;
 
 impl<B: CryptoBackend + SignCryptoBackend + KeyDistributionCryptoBackend> CoseStructTestHelper<B>
     for CoseSign
@@ -145,43 +149,103 @@ impl<B: CryptoBackend + SignCryptoBackend + KeyDistributionCryptoBackend> CoseSt
 }
 
 #[rstest]
-fn cose_examples_ecdsa_sign_reference_output<
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(feature = "rustcrypto-ecdsa", case::rustcrypto(rustcrypto_ctx()))]
+fn cose_examples_ecdsa_p256_sign_reference_output<
     B: SignCryptoBackend + KeyDistributionCryptoBackend,
 >(
-    #[files("tests/cose_examples/ecdsa-examples/ecdsa-0*.json")] test_path: PathBuf,
-    #[values(OpensslContext {})] backend: B,
+    #[files("tests/cose_examples/ecdsa-examples/ecdsa-0[14].json")] test_path: PathBuf,
+    #[case] backend: B,
 ) {
     perform_cose_reference_output_test::<CoseSign, B>(test_path, backend);
 }
 
 #[rstest]
-fn cose_examples_ecdsa_sign_self_signed<B: SignCryptoBackend + KeyDistributionCryptoBackend>(
-    #[files("tests/cose_examples/ecdsa-examples/ecdsa-0*.json")] test_path: PathBuf,
-    #[values(OpensslContext {})] backend: B,
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(feature = "rustcrypto-ecdsa", case::rustcrypto(rustcrypto_ctx()))]
+fn cose_examples_ecdsa_p256_sign_self_signed<
+    B: SignCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/ecdsa-examples/ecdsa-0[14].json")] test_path: PathBuf,
+    #[case] backend: B,
 ) {
     perform_cose_self_signed_test::<CoseSign, B>(test_path, backend);
 }
 
 #[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(feature = "rustcrypto-ecdsa", case::rustcrypto(rustcrypto_ctx()))]
+fn cose_examples_ecdsa_p384_sign_reference_output<
+    B: SignCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/ecdsa-examples/ecdsa-02.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_reference_output_test::<CoseSign, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(feature = "rustcrypto-ecdsa", case::rustcrypto(rustcrypto_ctx()))]
+fn cose_examples_ecdsa_p384_sign_self_signed<
+    B: SignCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/ecdsa-examples/ecdsa-02.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseSign, B>(test_path, backend);
+}
+
+#[cfg(feature = "openssl")]
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+fn cose_examples_ecdsa_p521_sign_reference_output<
+    B: SignCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/ecdsa-examples/ecdsa-03.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_reference_output_test::<CoseSign, B>(test_path, backend);
+}
+
+#[cfg(feature = "openssl")]
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+fn cose_examples_ecdsa_p521_sign_self_signed<
+    B: SignCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/ecdsa-examples/ecdsa-03.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseSign, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(feature = "rustcrypto-ecdsa", case::rustcrypto(rustcrypto_ctx()))]
 fn cose_examples_sign_reference_output<B: SignCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/sign-tests/sign-*.json")] test_path: PathBuf,
-    #[values(OpensslContext {})] backend: B,
+    #[case] backend: B,
 ) {
     perform_cose_reference_output_test::<CoseSign, B>(test_path, backend);
 }
 
 #[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(feature = "rustcrypto-ecdsa", case::rustcrypto(rustcrypto_ctx()))]
 fn cose_examples_sign_self_signed<B: SignCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/sign-tests/sign-*.json")] test_path: PathBuf,
-    #[values(OpensslContext {})] backend: B,
+    #[case] backend: B,
 ) {
     perform_cose_self_signed_test::<CoseSign, B>(test_path, backend);
 }
 
 #[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(feature = "rustcrypto-ecdsa", case::rustcrypto(rustcrypto_ctx()))]
 fn ecdsa_tests<B: SignCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/dcaf_cose_examples/ecdsa/*.json")] test_path: PathBuf,
-    #[values(OpensslContext {})] backend: B,
+    #[case] backend: B,
 ) {
     perform_cose_self_signed_test::<CoseSign, B>(test_path, backend);
 }
