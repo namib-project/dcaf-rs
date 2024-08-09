@@ -12,29 +12,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
+          components: rustc, cargo, rust-std
+      - run: cargo check
 
   check_nostd:
     name: Check (no_std)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --no-default-features
+          components: rustc, cargo
+      - run: cargo check --no-default-features
 
   test:
     name: Test Suite
@@ -43,14 +34,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
+          components: rustc, cargo, rust-std
+      - run: cargo test
 
   test_all_features:
     name: Test Suite (all features)
@@ -59,82 +46,74 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
+          components: rustc, cargo, rust-std
+      - run: cargo test --all-features
 
   test_nostd:
     name: Test Suite (no_std)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --no-default-features --features openssl
+          components: rustc, cargo
+      - run: cargo test --no-default-features --features openssl
 
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+          components: rustfmt
+      - run: cargo fmt --all -- --check
 
   clippy_check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: rustup component add clippy
-      - uses: actions-rs/clippy-check@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
+          components: clippy
+      - uses: giraffate/clippy-action@main
+        with:
+          reporter: 'github-check'
+          clippy_flags: --no-deps --all-features
+          level: warning
+          fail_on_error: true
 
   test_coverage:
     runs-on: ubuntu-latest
+    env:
+      COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
-          override: true
-      - uses: actions-rs/cargo@v1
+          components: rustc, rust-std, cargo, llvm-tools
+      - uses: baptiste0928/cargo-install@v3
         with:
-          command: clean
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features --no-fail-fast
+          crate: grcov
+          # grcov currently has some compilation issues on newer rust versions due to an outdated dependency.
+          # This pulls in the branch from https://github.com/mozilla/grcov/pull/1191 in order to fix this.
+          git: https://github.com/cemoktra/grcov.git
+          branch: cemoktra/fix-1187
+      - run: cargo clean
+      - run: cargo test --all-features --no-fail-fast
         env:
           CARGO_INCREMENTAL: '0'
-          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
-          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
-      - id: coverage
-        uses: actions-rs/grcov@v0.1
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cllvm-args=--inline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cllvm-args=--inline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+      - run: mkdir ./target/debug/coverage
+      - run: zip ./target/debug/coverage/files.zip ./target/debug/deps/dcaf-*.gcda ./target/debug/deps/dcaf-*.gcno
+      - run: grcov ./target/debug/coverage/files.zip -s . --service-name "Continuous Integration" --commit-sha ${GITHUB_SHA} -t coveralls --branch --ignore-not-existing --ignore "../*" --ignore "/*" --ignore "*/test_helper.rs" -o ./target/debug/coverage/ --token=${COVERALLS_TOKEN}
       - name: Coveralls upload
-        uses: coverallsapp/github-action@master
+        uses: coverallsapp/github-action@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          path-to-lcov: ${{ steps.coverage.outputs.report }}
+          file: ./target/debug/coverage/coveralls
