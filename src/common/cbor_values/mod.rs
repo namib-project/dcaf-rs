@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 The NAMIB Project Developers.
+ * Copyright (c) 2022, 2024 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
