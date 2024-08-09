@@ -163,12 +163,8 @@ impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
             .map_err(CoseCipherError::from)
         } else {
             // x must be Some here due to the previous condition.
-            let pubkey_coord = if key.y.is_some() {
-                EncodedPoint::<CRV>::from_affine_coordinates(
-                    key.x.unwrap().into(),
-                    key.y.unwrap().into(),
-                    false,
-                )
+            let pubkey_coord = if let Some(y) = key.y {
+                EncodedPoint::<CRV>::from_affine_coordinates(key.x.unwrap().into(), y.into(), false)
             } else {
                 EncodedPoint::<CRV>::from_affine_coordinates(
                     key.x.unwrap().into(),

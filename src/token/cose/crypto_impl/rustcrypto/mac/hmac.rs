@@ -9,7 +9,7 @@ use crate::token::cose::crypto_impl::rustcrypto::RustCryptoContext;
 use crate::token::cose::{CoseSymmetricKey, CryptoBackend};
 
 impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
-    /// Compute the HMAC of `payload` using the given `key` and `payload` with the HMAC function
+    /// Compute the HMAC of `payload` using the given `key` with the HMAC function
     /// `MAC`.
     fn compute_hmac_using_mac<MAC: hmac::digest::KeyInit + Update + FixedOutput + MacMarker>(
         key: &CoseSymmetricKey<'_, <Self as CryptoBackend>::Error>,
@@ -23,8 +23,7 @@ impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
         hmac.finalize().into_bytes().to_vec()
     }
 
-    /// Verify the HMAC of `payload` using the given `key` and `payload` with the HMAC function
-    /// `MAC`.
+    /// Verify the HMAC of `payload` using the given `key` with the HMAC function `MAC`.
     fn verify_hmac_using_mac<MAC: hmac::digest::KeyInit + Update + FixedOutput + MacMarker>(
         key: &CoseSymmetricKey<'_, <Self as CryptoBackend>::Error>,
         payload: &[u8],
@@ -38,7 +37,7 @@ impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
         hmac.verify_slice(tag).map_err(CoseCipherError::from)
     }
 
-    /// Compute the HMAC of `payload` using the given `key` and `payload` with the HMAC function
+    /// Compute the HMAC of `payload` using the given `key` with the HMAC function
     /// specified in the `algorithm`.
     pub(super) fn compute_hmac(
         algorithm: iana::Algorithm,
@@ -61,7 +60,7 @@ impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
         }
     }
 
-    /// Verify the HMAC `tag` of `payload` using the given `key` and `payload` with the HMAC
+    /// Verify the HMAC `tag` of `payload` using the given `key` with the HMAC
     /// function specified in the `algorithm`.
     pub(super) fn verify_hmac(
         algorithm: iana::Algorithm,

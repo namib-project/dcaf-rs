@@ -25,7 +25,7 @@ pub enum CoseRustCryptoCipherError {
     /// Error regarding elliptic curve operations.
     #[cfg(feature = "rustcrypto-ecdsa")]
     EcError(elliptic_curve::Error),
-    /// Error in ECDSA operation
+    /// Error in ECDSA operation.
     #[cfg(feature = "rustcrypto-ecdsa")]
     EcdsaError(ecdsa::Error),
     /// Invalid elliptic curve point.
