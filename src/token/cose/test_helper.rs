@@ -12,6 +12,10 @@ use core::fmt::Debug;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+#[cfg(feature = "openssl")]
+use crate::token::cose::crypto_impl::openssl::OpensslContext;
+#[cfg(rustcrypto_base)]
+use crate::token::cose::crypto_impl::rustcrypto::RustCryptoContext;
 use crate::token::cose::CryptoBackend;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -20,6 +24,9 @@ use coset::{
     iana, Algorithm, AsCborValue, CborSerializable, CoseError, CoseKey, CoseKeyBuilder,
     CoseRecipientBuilder, Header, HeaderBuilder, Label, TaggedCborSerializable,
 };
+#[cfg(rustcrypto_base)]
+use rand::rngs::ThreadRng;
+use rstest::fixture;
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
 
@@ -573,3 +580,15 @@ impl<T: CoseEncryptCipher> CoseCipher for RngMockCipher<T> {
         todo!()
     }
 }*/
+
+#[cfg(feature = "openssl")]
+#[fixture]
+pub(crate) fn openssl_ctx() -> OpensslContext {
+    OpensslContext::new()
+}
+
+#[cfg(rustcrypto_base)]
+#[fixture]
+pub(crate) fn rustcrypto_ctx() -> RustCryptoContext<ThreadRng> {
+    RustCryptoContext::new(rand::thread_rng())
+}

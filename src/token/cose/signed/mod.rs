@@ -80,12 +80,17 @@ pub trait SignCryptoBackend: CryptoBackend {
     ///
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
     /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new ECDSA variants are defined).
+    #[allow(unused_variables)]
     fn sign_ecdsa(
         &mut self,
         algorithm: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
         payload: &[u8],
-    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
 
     /// Verifies the `signature` using the given `key` and `payload` (plaintext) using ECDSA.
     ///
@@ -148,13 +153,18 @@ pub trait SignCryptoBackend: CryptoBackend {
     ///
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
     /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new ECDSA variants are defined).
+    #[allow(unused_variables)]
     fn verify_ecdsa(
         &mut self,
         algorithm: iana::Algorithm,
         key: &CoseEc2Key<'_, Self::Error>,
         sig: &[u8],
         payload: &[u8],
-    ) -> Result<(), CoseCipherError<Self::Error>>;
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
 }
 
 /// Attempts to perform a COSE signing operation for a [`CoseSign`](coset::CoseSign) or

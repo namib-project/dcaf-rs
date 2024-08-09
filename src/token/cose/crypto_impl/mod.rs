@@ -18,3 +18,7 @@
 /// Cryptographic backend based on the OpenSSL library (accessed using the `openssl` crate).
 #[cfg(feature = "openssl")]
 pub mod openssl;
+
+/// Cryptographic backend based on the RustCrypto collection of crates.
+#[cfg(rustcrypto_base)]
+pub mod rustcrypto;

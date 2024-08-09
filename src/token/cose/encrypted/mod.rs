@@ -81,6 +81,7 @@ pub trait EncryptCryptoBackend: CryptoBackend {
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
     /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new AES-GCM variants are ever
     /// defined).
+    #[allow(unused_variables)]
     fn encrypt_aes_gcm(
         &mut self,
         algorithm: iana::Algorithm,
@@ -88,7 +89,11 @@ pub trait EncryptCryptoBackend: CryptoBackend {
         plaintext: &[u8],
         aad: &[u8],
         iv: &[u8],
-    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
 
     /// Decrypts the given `payload` using the AES-GCM variant provided as `algorithm` and the given
     /// `key`.
@@ -138,6 +143,7 @@ pub trait EncryptCryptoBackend: CryptoBackend {
     /// For unknown algorithms or key curves, however, the implementation must not panic and return
     /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new AES-GCM variants are ever
     /// defined).
+    #[allow(unused_variables)]
     fn decrypt_aes_gcm(
         &mut self,
         algorithm: iana::Algorithm,
@@ -145,7 +151,11 @@ pub trait EncryptCryptoBackend: CryptoBackend {
         ciphertext_with_tag: &[u8],
         aad: &[u8],
         iv: &[u8],
-    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>>;
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
 }
 
 /// Attempts to perform a COSE encryption operation for a [`CoseEncrypt`](coset::CoseEncrypt) or

@@ -76,6 +76,7 @@ impl From<openssl::aes::KeyError> for CoseCipherError<CoseOpensslCipherError> {
 ///
 /// Generic properties of this backend:
 /// - [ ] Can derive EC public key components if only the private component (d) is present.
+/// - [ ] Can work with compressed EC public keys (EC keys using point compression)
 ///
 /// Algorithm support:
 /// - Signature Algorithms (for COSE_Sign and COSE_Sign1)
