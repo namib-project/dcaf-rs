@@ -108,7 +108,7 @@ impl<B: CryptoBackend + EncryptCryptoBackend + KeyDistributionCryptoBackend> Cos
         if let Some(partial_iv) = determine_header_param(
             encrypt_cfg.protected.as_ref(),
             encrypt_cfg.unprotected.as_ref(),
-            |v| (!v.partial_iv.is_empty()).then(|| &v.partial_iv),
+            |v| (!v.partial_iv.is_empty()).then_some(&v.partial_iv),
         ) {
             enc_key.base_iv = calculate_base_iv(
                 encrypt_cfg
@@ -169,7 +169,7 @@ impl<B: CryptoBackend + EncryptCryptoBackend + KeyDistributionCryptoBackend> Cos
                 if let Some(partial_iv) = determine_header_param(
                     test_case.protected.as_ref(),
                     test_case.unprotected.as_ref(),
-                    |v| (!v.partial_iv.is_empty()).then(|| &v.partial_iv),
+                    |v| (!v.partial_iv.is_empty()).then_some(&v.partial_iv),
                 ) {
                     key_with_alg.base_iv = calculate_base_iv(
                         test_case

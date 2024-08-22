@@ -57,7 +57,7 @@ pub trait CoseSign1BuilderExt: Sized {
     //       the builder pattern, but it is necessary here, as we lack access to the `protected`
     //       and `unprotected` headers that were previously set (the field is private).
     //       This should be fixed when porting all of this to coset.
-    fn try_sign<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_sign<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -102,7 +102,7 @@ pub trait CoseSign1BuilderExt: Sized {
     //       and `unprotected` headers that were previously set (the field is private).
     //       This should be fixed when porting all of this to coset.
     //       This applies to all COSE structures.
-    fn try_sign_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_sign_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -114,7 +114,7 @@ pub trait CoseSign1BuilderExt: Sized {
 }
 
 impl CoseSign1BuilderExt for CoseSign1Builder {
-    fn try_sign<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_sign<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -143,7 +143,7 @@ impl CoseSign1BuilderExt for CoseSign1Builder {
             },
         )
     }
-    fn try_sign_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_sign_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -357,7 +357,7 @@ pub trait CoseSign1Ext {
     ///     )
     /// );
     /// ```
-    fn try_verify<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_verify<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -400,7 +400,7 @@ pub trait CoseSign1Ext {
     /// # Examples
     ///
     /// Refer to the trait-level documentation for examples.
-    fn try_verify_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_verify_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -411,7 +411,7 @@ pub trait CoseSign1Ext {
 }
 
 impl CoseSign1Ext for CoseSign1 {
-    fn try_verify<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_verify<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -435,13 +435,7 @@ impl CoseSign1Ext for CoseSign1 {
         )
     }
 
-    fn try_verify_detached<
-        'a,
-        'b,
-        B: SignCryptoBackend,
-        CKP: KeyProvider,
-        CAP: AadProvider + ?Sized,
-    >(
+    fn try_verify_detached<'a, 'b, B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,

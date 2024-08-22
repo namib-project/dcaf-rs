@@ -72,7 +72,7 @@ pub trait CoseEncryptBuilderExt: Sized {
     /// # Examples
     ///
     /// Refer to [the documentation for the CoseEncrypt extensions](CoseEncryptExt) for examples.
-    fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -84,7 +84,7 @@ pub trait CoseEncryptBuilderExt: Sized {
 }
 
 impl CoseEncryptBuilderExt for CoseEncryptBuilder {
-    fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -342,7 +342,7 @@ pub trait CoseEncryptExt {
     ///     )
     /// );
     /// ```
-    fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -427,7 +427,7 @@ pub trait CoseEncryptExt {
     fn try_decrypt_with_recipients<
         B: KeyDistributionCryptoBackend + EncryptCryptoBackend,
         CKP: KeyProvider,
-        CAP: AadProvider + ?Sized,
+        CAP: AadProvider,
     >(
         &self,
         backend: &mut B,
@@ -437,7 +437,7 @@ pub trait CoseEncryptExt {
 }
 
 impl CoseEncryptExt for CoseEncrypt {
-    fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -468,7 +468,7 @@ impl CoseEncryptExt for CoseEncrypt {
     fn try_decrypt_with_recipients<
         B: KeyDistributionCryptoBackend + EncryptCryptoBackend,
         CKP: KeyProvider,
-        CAP: AadProvider + ?Sized,
+        CAP: AadProvider,
     >(
         &self,
         backend: &mut B,

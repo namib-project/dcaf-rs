@@ -538,7 +538,7 @@ pub trait CoseRecipientBuilderExt: Sized {
     // Integration into coset will allow reducing the number of algorithms, but for now this will
     // have to make do.
     #[allow(clippy::too_many_arguments)]
-    fn try_encrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_encrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -551,7 +551,7 @@ pub trait CoseRecipientBuilderExt: Sized {
 }
 
 impl CoseRecipientBuilderExt for CoseRecipientBuilder {
-    fn try_encrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_encrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -757,7 +757,7 @@ pub trait CoseRecipientExt {
     /// # Examples
     ///
     /// Refer to the trait-level documentation for an example.
-    fn try_decrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_decrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -768,7 +768,7 @@ pub trait CoseRecipientExt {
 }
 
 impl CoseRecipientExt for CoseRecipient {
-    fn try_decrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_decrypt<B: KeyDistributionCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,

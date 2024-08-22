@@ -345,7 +345,7 @@ pub fn aes_ccm_algorithm_tag_len<BE: Display>(
 /// Determines the key and IV for an AES AEAD operation using the provided `protected` and
 /// `unprotected` headers, ensuring that the provided `parsed_key` is a valid AES key in the
 /// process.
-fn determine_and_check_aes_params<'a, 'b, BE: Display>(
+fn determine_and_check_aes_params<'a, BE: Display>(
     alg: iana::Algorithm,
     parsed_key: CoseParsedKey<'a, BE>,
     protected: Option<&Header>,
@@ -354,11 +354,11 @@ fn determine_and_check_aes_params<'a, 'b, BE: Display>(
     let symm_key = key::ensure_valid_aes_key::<BE>(alg, parsed_key)?;
 
     let iv = header_util::determine_header_param(protected, unprotected, |v| {
-        (!v.iv.is_empty()).then(|| &v.iv)
+        (!v.iv.is_empty()).then_some(&v.iv)
     });
 
     let partial_iv = header_util::determine_header_param(protected, unprotected, |v| {
-        (!v.partial_iv.is_empty()).then(|| &v.partial_iv)
+        (!v.partial_iv.is_empty()).then_some(&v.partial_iv)
     });
 
     let expected_iv_len = aes_algorithm_iv_len(alg)?;
@@ -395,7 +395,7 @@ fn determine_and_check_aes_params<'a, 'b, BE: Display>(
             let mut message_iv = vec![0u8; expected_iv_len];
 
             // Left-pad the Partial IV with zeros to the length of IV
-            message_iv[(expected_iv_len - partial_iv.len())..].copy_from_slice(&partial_iv);
+            message_iv[(expected_iv_len - partial_iv.len())..].copy_from_slice(partial_iv);
             // XOR the padded Partial IV with the Context IV.
             message_iv
                 .iter_mut()
