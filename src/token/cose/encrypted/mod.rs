@@ -19,7 +19,7 @@ use coset::{iana, Algorithm, Header, KeyOperation};
 use crate::error::CoseCipherError;
 use crate::token::cose::header_util::HeaderParam;
 use crate::token::cose::key::{CoseParsedKey, CoseSymmetricKey, KeyProvider};
-use crate::token::cose::{header_util, key, CryptoBackend};
+use crate::token::cose::{header_util, key, CryptoBackend, KeyParam};
 
 mod encrypt;
 mod encrypt0;
@@ -348,19 +348,67 @@ pub fn aes_ccm_algorithm_tag_len<BE: Display>(
 fn determine_and_check_aes_params<'a, 'b, BE: Display>(
     alg: iana::Algorithm,
     parsed_key: CoseParsedKey<'a, BE>,
-    protected: Option<&'b Header>,
-    unprotected: Option<&'b Header>,
-) -> Result<(CoseSymmetricKey<'a, BE>, &'b Vec<u8>), CoseCipherError<BE>> {
+    protected: Option<&Header>,
+    unprotected: Option<&Header>,
+) -> Result<(CoseSymmetricKey<'a, BE>, Vec<u8>), CoseCipherError<BE>> {
     let symm_key = key::ensure_valid_aes_key::<BE>(alg, parsed_key)?;
 
     let iv = header_util::determine_header_param(protected, unprotected, |v| {
-        (!v.iv.is_empty()).then_some(&v.iv)
-    })
-    .ok_or(CoseCipherError::MissingHeaderParam(HeaderParam::Generic(
-        iana::HeaderParameter::Iv,
-    )))?;
+        (!v.iv.is_empty()).then(|| &v.iv)
+    });
 
-    if iv.len() != aes_algorithm_iv_len(alg)? {
+    let partial_iv = header_util::determine_header_param(protected, unprotected, |v| {
+        (!v.partial_iv.is_empty()).then(|| &v.partial_iv)
+    });
+
+    let expected_iv_len = aes_algorithm_iv_len(alg)?;
+
+    let iv = match (iv, partial_iv) {
+        // IV and partial IV must not be set at the same time.
+        (Some(_iv), Some(partial_iv)) => Err(CoseCipherError::InvalidHeaderParam(
+            HeaderParam::Generic(iana::HeaderParameter::PartialIv),
+            Value::Bytes(partial_iv.clone()),
+        )),
+        (Some(iv), None) => Ok(iv.clone()),
+        // See https://datatracker.ietf.org/doc/html/rfc9052#section-3.1
+        (None, Some(partial_iv)) => {
+            let context_iv = (!symm_key.as_ref().base_iv.is_empty())
+                .then(|| &symm_key.as_ref().base_iv)
+                .ok_or(CoseCipherError::MissingKeyParam(vec![KeyParam::Common(
+                    iana::KeyParameter::BaseIv,
+                )]))?;
+
+            if partial_iv.len() > expected_iv_len {
+                return Err(CoseCipherError::InvalidHeaderParam(
+                    HeaderParam::Generic(iana::HeaderParameter::PartialIv),
+                    Value::Bytes(partial_iv.clone()),
+                ));
+            }
+
+            if context_iv.len() > expected_iv_len {
+                return Err(CoseCipherError::InvalidKeyParam(
+                    KeyParam::Common(iana::KeyParameter::BaseIv),
+                    Value::Bytes(context_iv.clone()),
+                ));
+            }
+
+            let mut message_iv = vec![0u8; expected_iv_len];
+
+            // Left-pad the Partial IV with zeros to the length of IV
+            message_iv[(expected_iv_len - partial_iv.len())..].copy_from_slice(&partial_iv);
+            // XOR the padded Partial IV with the Context IV.
+            message_iv
+                .iter_mut()
+                .zip(context_iv.iter().chain(core::iter::repeat(&0u8)))
+                .for_each(|(b1, b2)| *b1 ^= *b2);
+            Ok(message_iv)
+        }
+        (None, None) => Err(CoseCipherError::MissingHeaderParam(HeaderParam::Generic(
+            iana::HeaderParameter::Iv,
+        ))),
+    }?;
+
+    if iv.len() != expected_iv_len {
         return Err(CoseCipherError::InvalidHeaderParam(
             HeaderParam::Generic(iana::HeaderParameter::Iv),
             Value::Bytes(iv.clone()),
@@ -402,7 +450,7 @@ fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
                     let (symm_key, iv) =
                         determine_and_check_aes_params(alg, parsed_key, protected, unprotected)?;
 
-                    backend.encrypt_aes_gcm(alg, symm_key, plaintext, enc_structure, iv)
+                    backend.encrypt_aes_gcm(alg, symm_key, plaintext, enc_structure, &iv)
                 }
                 iana::Algorithm::AES_CCM_16_64_128
                 | iana::Algorithm::AES_CCM_64_64_128
@@ -416,7 +464,7 @@ fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
                     let (symm_key, iv) =
                         determine_and_check_aes_params(alg, parsed_key, protected, unprotected)?;
 
-                    backend.encrypt_aes_ccm(alg, symm_key, plaintext, enc_structure, iv)
+                    backend.encrypt_aes_ccm(alg, symm_key, plaintext, enc_structure, &iv)
                 }
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
                     alg,
@@ -469,7 +517,7 @@ pub(crate) fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
                         symm_key,
                         ciphertext,
                         enc_structure,
-                        iv,
+                        &iv,
                     )
                 }
                 iana::Algorithm::AES_CCM_16_64_128
@@ -493,7 +541,7 @@ pub(crate) fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
                         symm_key,
                         ciphertext,
                         enc_structure,
-                        iv,
+                        &iv,
                     )
                 }
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(

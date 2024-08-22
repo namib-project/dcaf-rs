@@ -178,6 +178,13 @@ where
         None => builder,
     };
 
+    if let Some(partial_iv) = hdr_obj.get("partialIV_hex").and_then(Value::as_str) {
+        let partial_iv = hex::decode(partial_iv).map_err(|e| {
+            de::Error::custom(format!("could not parse test case partial IV hex: {e}"))
+        })?;
+        builder = builder.partial_iv(partial_iv);
+    }
+
     Ok(Some(builder.build()))
 }
 
@@ -257,6 +264,14 @@ pub struct TestCaseSign {
     pub signers: Vec<TestCaseRecipient>,
 }
 
+/// Data used for COSE object encryption that is not sent over the wire (e.g. the full IV if only a
+/// partial IV is provided).
+#[derive(Deserialize, Debug, Clone)]
+pub struct TestCaseUnsent {
+    #[serde(rename = "IV_hex", deserialize_with = "hex::deserialize", default)]
+    pub iv: Vec<u8>,
+}
+
 /// Encryption inputs to a JSON-based test case.
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCaseEncrypted {
@@ -264,6 +279,7 @@ pub struct TestCaseEncrypted {
     pub unprotected: Option<Header>,
     #[serde(deserialize_with = "deserialize_header", default)]
     pub protected: Option<Header>,
+    pub unsent: Option<TestCaseUnsent>,
     #[serde(deserialize_with = "hex::deserialize", default)]
     pub external: Vec<u8>,
     pub recipients: Vec<TestCaseRecipient>,
