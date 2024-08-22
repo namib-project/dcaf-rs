@@ -18,6 +18,12 @@ use crate::token::cose::{CoseSymmetricKey, EncryptCryptoBackend};
 #[cfg(feature = "rustcrypto-aes-gcm")]
 mod aes_gcm;
 
+#[cfg(feature = "rustcrypto-aes-ccm")]
+mod aes_ccm;
+
+#[cfg(any(feature = "rustcrypto-aes-gcm", feature = "rustcrypto-aes-ccm"))]
+mod aead;
+
 impl<RNG: RngCore + CryptoRng> EncryptCryptoBackend for RustCryptoContext<RNG> {
     #[cfg(feature = "rustcrypto-aes-gcm")]
     fn encrypt_aes_gcm(
@@ -41,5 +47,29 @@ impl<RNG: RngCore + CryptoRng> EncryptCryptoBackend for RustCryptoContext<RNG> {
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         Self::decrypt_aes_gcm(algorithm, &key, ciphertext_with_tag, aad, iv)
+    }
+
+    #[cfg(feature = "rustcrypto-aes-ccm")]
+    fn encrypt_aes_ccm(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Self::encrypt_aes_ccm(algorithm, &key, plaintext, aad, iv)
+    }
+
+    #[cfg(feature = "rustcrypto-aes-ccm")]
+    fn decrypt_aes_ccm(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext_with_tag: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Self::decrypt_aes_ccm(algorithm, &key, ciphertext_with_tag, aad, iv)
     }
 }

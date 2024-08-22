@@ -30,7 +30,10 @@ use crate::token::cose::CryptoBackend;
 
 #[cfg(feature = "openssl")]
 use crate::token::cose::test_helper::openssl_ctx;
-#[cfg(all(feature = "rustcrypto-aes-gcm", feature = "rustcrypto-aes-kw"))]
+#[cfg(all(
+    any(feature = "rustcrypto-aes-gcm", feature = "rustcrypto-aes-ccm"),
+    feature = "rustcrypto-aes-kw"
+))]
 use crate::token::cose::test_helper::rustcrypto_ctx;
 
 impl<B: CryptoBackend + EncryptCryptoBackend + KeyDistributionCryptoBackend> CoseStructTestHelper<B>
@@ -234,6 +237,62 @@ fn cose_examples_aes_wrap_self_signed<B: EncryptCryptoBackend + KeyDistributionC
     all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-gcm"),
     case::rustcrypto(rustcrypto_ctx())
 )]
+fn cose_examples_aes_gcm_reference_output<
+    B: EncryptCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/aes-gcm-examples/aes-gcm-0[0-9].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_reference_output_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-gcm"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_aes_gcm_self_signed<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
+    #[files("tests/cose_examples/aes-gcm-examples/aes-gcm-0[0-9].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-ccm"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_aes_ccm_reference_output<
+    B: EncryptCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/aes-ccm-examples/aes-ccm-0[0-9].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_reference_output_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-ccm"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_aes_ccm_self_signed<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
+    #[files("tests/cose_examples/aes-ccm-examples/aes-ccm-0[0-9].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-gcm"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
 fn aes_wrap_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/dcaf_cose_examples/aes-kw/*.json")] test_path: PathBuf,
     #[case] backend: B,
@@ -249,6 +308,19 @@ fn aes_wrap_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
 )]
 fn aes_gcm_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/dcaf_cose_examples/aes-gcm/*.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-ccm"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn aes_ccm_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
+    #[files("tests/dcaf_cose_examples/aes-ccm/*.json")] test_path: PathBuf,
     #[case] backend: B,
 ) {
     perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);

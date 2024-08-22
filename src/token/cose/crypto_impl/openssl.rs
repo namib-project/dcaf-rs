@@ -10,11 +10,12 @@
  */
 
 use alloc::vec::Vec;
-
 use ciborium::value::Value;
 use coset::{iana, Algorithm};
 use openssl::aes::{unwrap_key, wrap_key, AesKey};
 use openssl::bn::BigNum;
+use openssl::cipher::CipherRef;
+use openssl::cipher_ctx::CipherCtx;
 use openssl::ec::{EcGroup, EcKey};
 use openssl::ecdsa::EcdsaSig;
 use openssl::error::ErrorStack;
@@ -22,7 +23,6 @@ use openssl::hash::MessageDigest;
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Private, Public};
 use openssl::sign::{Signer, Verifier};
-use openssl::symm::{decrypt_aead, encrypt_aead, Cipher};
 use strum_macros::Display;
 
 use crate::error::CoseCipherError;
@@ -32,7 +32,7 @@ use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
 use crate::token::cose::maced::MacCryptoBackend;
 use crate::token::cose::recipient::KeyDistributionCryptoBackend;
 use crate::token::cose::signed::SignCryptoBackend;
-use crate::token::cose::CryptoBackend;
+use crate::token::cose::{aes_ccm_algorithm_tag_len, CryptoBackend};
 
 /// Represents an error caused by the OpenSSL cryptographic backend.
 #[derive(Debug, Display)]
@@ -102,15 +102,15 @@ impl From<openssl::aes::KeyError> for CoseCipherError<CoseOpensslCipherError> {
 ///         - [x] A128GCM
 ///         - [x] A192GCM
 ///         - [x] A256GCM
-///     - [ ] AES-CCM
-///         - [ ] AES-CCM-16-64-128
-///         - [ ] AES-CCM-16-64-256
-///         - [ ] AES-CCM-64-64-128
-///         - [ ] AES-CCM-64-64-256
-///         - [ ] AES-CCM-16-128-128
-///         - [ ] AES-CCM-16-128-256
-///         - [ ] AES-CCM-64-128-128
-///         - [ ] AES-CCM-64-128-256
+///     - [x] AES-CCM
+///         - [x] AES-CCM-16-64-128
+///         - [x] AES-CCM-16-64-256
+///         - [x] AES-CCM-64-64-128
+///         - [x] AES-CCM-64-64-256
+///         - [x] AES-CCM-16-128-128
+///         - [x] AES-CCM-16-128-256
+///         - [x] AES-CCM-64-128-128
+///         - [x] AES-CCM-64-128-256
 ///     - [ ] ChaCha20/Poly1305
 /// - Content Key Distribution Methods (for COSE_Recipients)
 ///     - Direct Encryption
@@ -371,11 +371,32 @@ impl EncryptCryptoBackend for OpensslContext {
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         let cipher = algorithm_to_cipher(algorithm)?;
-        let mut auth_tag = vec![0; AES_GCM_TAG_LEN];
-        let mut ciphertext = encrypt_aead(cipher, key.k, Some(iv), aad, plaintext, &mut auth_tag)
-            .map_err(CoseCipherError::from)?;
+        let mut ctx = CipherCtx::new()?;
+        // So, apparently OpenSSL requires a very specific order of operations which differs
+        // slightly for AES-GCM and AES-CCM in order to work.
+        // It would have just been too easy if you could just generalize and reuse the code for
+        // AES-CCM and AES-GCM, right?
 
-        ciphertext.append(&mut auth_tag);
+        // Refer to https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption#Authenticated_Encryption_using_GCM_mode
+        // for reference.
+        // 1. First, we set the cipher.
+        ctx.encrypt_init(Some(cipher), None, None)?;
+        // 2. For GCM, we set the IV length _before_ setting key and IV.
+        //    We do not set the tag length, as it is fixed for AES-GCM.
+        ctx.set_iv_length(iv.len())?;
+        // 3. Now we can set key and IV.
+        ctx.encrypt_init(None, Some(key.k), Some(iv))?;
+        let mut ciphertext = vec![];
+        // Unlike for CCM, we *must not* set the data length here, otherwise encryption *will fail*.
+        // 4. Then, we *must* set the AAD _before_ setting the plaintext.
+        ctx.cipher_update(aad, None)?;
+        // 5. Finally, we must provide all plaintext in a single call.
+        ctx.cipher_update_vec(plaintext, &mut ciphertext)?;
+        // 6. Then, we can finish the operation.
+        ctx.cipher_final_vec(&mut ciphertext)?;
+        let ciphertext_len = ciphertext.len();
+        ciphertext.resize(ciphertext_len + AES_GCM_TAG_LEN, 0u8);
+        ctx.tag(&mut ciphertext[ciphertext_len..])?;
         Ok(ciphertext)
     }
 
@@ -388,27 +409,132 @@ impl EncryptCryptoBackend for OpensslContext {
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         let cipher = algorithm_to_cipher(algorithm)?;
-
         let auth_tag = &ciphertext_with_tag[(ciphertext_with_tag.len() - AES_GCM_TAG_LEN)..];
         let ciphertext = &ciphertext_with_tag[..(ciphertext_with_tag.len() - AES_GCM_TAG_LEN)];
 
-        decrypt_aead(cipher, key.k, Some(iv), aad, ciphertext, auth_tag)
-            .map_err(|_e| CoseCipherError::VerificationFailure)
+        let mut ctx = CipherCtx::new()?;
+        // Refer to https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption#Authenticated_Decryption_using_GCM_mode
+        // for reference.
+        // 1. First, we set the cipher.
+        ctx.decrypt_init(Some(cipher), None, None)?;
+        // 2. For GCM, we set the IV length _before_ setting key and IV.
+        //    We do not set the tag length, as it is fixed for AES-GCM.
+        ctx.set_iv_length(iv.len())?;
+        // 3. Now we can set key and IV.
+        ctx.decrypt_init(None, Some(key.k), Some(iv))?;
+        // Unlike for CCM, we *must not* set the data length here, otherwise decryption *will fail*.
+        // 4. Then, we *must* set the AAD _before_ setting the ciphertext.
+        ctx.cipher_update(aad, None)?;
+        // 5. After that, we provide the ciphertext in a single call for decryption.
+        let mut plaintext = vec![0; ciphertext.len()];
+        let mut plaintext_size = ctx.cipher_update(ciphertext, Some(&mut plaintext))?;
+        // 6. For GCM, we must set the tag value right before the finalization call.
+        ctx.set_tag(auth_tag)?;
+        // 7. Now we can finalize decryption.
+        plaintext_size += ctx.cipher_final_vec(&mut plaintext)?;
+
+        plaintext.truncate(plaintext_size);
+
+        Ok(plaintext)
+    }
+
+    fn encrypt_aes_ccm(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let cipher = algorithm_to_cipher(algorithm)?;
+        let tag_len = aes_ccm_algorithm_tag_len(algorithm)?;
+        let mut ctx = CipherCtx::new()?;
+        // Refer to https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption#Authenticated_Encryption_using_CCM_mode
+        // for reference.
+        // 1. First, we set the cipher.
+        ctx.encrypt_init(Some(cipher), None, None)?;
+        // 2. At least for CCM, we *must* set the tag and IV length _before_ setting key and IV.
+        //    (https://github.com/sfackler/rust-openssl/pull/1594#issue-1105067105)
+        ctx.set_iv_length(iv.len())?;
+        ctx.set_tag_length(tag_len)?;
+        // 3. Now we can set key and IV.
+        ctx.encrypt_init(None, Some(key.k), Some(iv))?;
+        let mut ciphertext = vec![];
+        // 4. For CCM, we *must* then inform OpenSSL about the size of the plaintext data _before_
+        //    setting the AAD.
+        ctx.set_data_len(plaintext.len())?;
+        // 5. Then, we *must* set the AAD _before_ setting the plaintext.
+        ctx.cipher_update(aad, None)?;
+        // 6. Finally, we must provide all plaintext in a single call.
+        ctx.cipher_update_vec(plaintext, &mut ciphertext)?;
+        // 7. Then, we can finish the operation.
+        ctx.cipher_final_vec(&mut ciphertext)?;
+        let ciphertext_len = ciphertext.len();
+        ciphertext.resize(ciphertext_len + tag_len, 0u8);
+        ctx.tag(&mut ciphertext[ciphertext_len..])?;
+        Ok(ciphertext)
+    }
+
+    fn decrypt_aes_ccm(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext_with_tag: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let cipher = algorithm_to_cipher(algorithm)?;
+        let tag_len = aes_ccm_algorithm_tag_len(algorithm)?;
+        let auth_tag = &ciphertext_with_tag[(ciphertext_with_tag.len() - tag_len)..];
+        let ciphertext = &ciphertext_with_tag[..(ciphertext_with_tag.len() - tag_len)];
+
+        let mut ctx = CipherCtx::new()?;
+        // Refer to https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption#Authenticated_Decryption_using_CCM_mode
+        // for reference.
+        // 1. First, we set the cipher.
+        ctx.decrypt_init(Some(cipher), None, None)?;
+        // 2. At least for CCM, we *must* set the tag and IV length _before_ setting key and IV.
+        //    (https://github.com/sfackler/rust-openssl/pull/1594#issue-1105067105)
+        ctx.set_iv_length(iv.len())?;
+        ctx.set_tag(auth_tag)?;
+        // 3. Now we can set key and IV.
+        ctx.decrypt_init(None, Some(key.k), Some(iv))?;
+        // 4. For CCM, we *must* then inform OpenSSL about the size of the ciphertext data _before_
+        //    setting the AAD.
+        ctx.set_data_len(ciphertext.len())?;
+        // 5. Then, we *must* set the AAD _before_ setting the ciphertext.
+        ctx.cipher_update(aad, None)?;
+        // 6. Finally, we must provide all ciphertext in a single call for decryption.
+        let mut plaintext = vec![0; ciphertext.len()];
+        let plaintext_len = ctx.cipher_update(ciphertext, Some(&mut plaintext))?;
+        plaintext.truncate(plaintext_len);
+        // No call to cipher_final() here, I guess?
+        // The official examples in the OpenSSL wiki don't finalize, so we won't either.
+
+        Ok(plaintext)
     }
 }
 
 /// Converts the provided [`iana::Algorithm`] to an OpenSSL [`Cipher`] that can be used for a
-/// symmetric [`Crypter`].
+/// symmetric [`CipherCtx`].
 fn algorithm_to_cipher(
     algorithm: iana::Algorithm,
-) -> Result<Cipher, CoseCipherError<CoseOpensslCipherError>> {
+) -> Result<&'static CipherRef, CoseCipherError<CoseOpensslCipherError>> {
     match algorithm {
-        iana::Algorithm::A128GCM => Ok(Cipher::aes_128_gcm()),
-        iana::Algorithm::A192GCM => Ok(Cipher::aes_192_gcm()),
-        iana::Algorithm::A256GCM => Ok(Cipher::aes_256_gcm()),
-        iana::Algorithm::A128KW => Ok(Cipher::aes_128_ecb()),
-        iana::Algorithm::A192KW => Ok(Cipher::aes_192_ecb()),
-        iana::Algorithm::A256KW => Ok(Cipher::aes_256_ecb()),
+        iana::Algorithm::A128GCM => Ok(openssl::cipher::Cipher::aes_128_gcm()),
+        iana::Algorithm::A192GCM => Ok(openssl::cipher::Cipher::aes_192_gcm()),
+        iana::Algorithm::A256GCM => Ok(openssl::cipher::Cipher::aes_256_gcm()),
+        iana::Algorithm::A128KW => Ok(openssl::cipher::Cipher::aes_128_ecb()),
+        iana::Algorithm::A192KW => Ok(openssl::cipher::Cipher::aes_192_ecb()),
+        iana::Algorithm::A256KW => Ok(openssl::cipher::Cipher::aes_256_ecb()),
+        iana::Algorithm::AES_CCM_16_64_128
+        | iana::Algorithm::AES_CCM_64_64_128
+        | iana::Algorithm::AES_CCM_16_128_128
+        | iana::Algorithm::AES_CCM_64_128_128 => Ok(openssl::cipher::Cipher::aes_128_ccm()),
+        iana::Algorithm::AES_CCM_16_64_256
+        | iana::Algorithm::AES_CCM_64_64_256
+        | iana::Algorithm::AES_CCM_16_128_256
+        | iana::Algorithm::AES_CCM_64_128_256 => Ok(openssl::cipher::Cipher::aes_256_ccm()),
         v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
             v,
         ))),

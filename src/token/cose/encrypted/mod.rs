@@ -11,7 +11,9 @@
 use alloc::collections::BTreeSet;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
+use ciborium::Value;
 use core::cell::RefCell;
+use core::fmt::Display;
 use coset::{iana, Algorithm, Header, KeyOperation};
 
 use crate::error::CoseCipherError;
@@ -59,6 +61,8 @@ pub trait EncryptCryptoBackend: CryptoBackend {
     /// * `aad` - additional authenticated data that should be included in the calculation of the
     ///           authentication tag, but not encrypted.
     /// * `iv`  - Initialization vector that should be used for the encryption process.
+    ///           Implementations may assume that `iv` has the correct length for the given AES-GCM
+    ///           variant and panic if this is not the case.
     ///
     /// # Returns
     ///
@@ -95,8 +99,8 @@ pub trait EncryptCryptoBackend: CryptoBackend {
         )))
     }
 
-    /// Decrypts the given `payload` using the AES-GCM variant provided as `algorithm` and the given
-    /// `key`.
+    /// Decrypts the given `payload` using the AES-GCM variant provided as `algorithm`, and the given
+    /// `key` and `iv`.
     ///
     /// Note that for all AES-GCM variants defined in RFC 9053, Section 4.1, the authentication tag
     /// should be 128 bits/16 bytes long.
@@ -120,6 +124,8 @@ pub trait EncryptCryptoBackend: CryptoBackend {
     /// * `aad` - additional authenticated data that should be included in the calculation of the
     ///           authentication tag, but not encrypted.
     /// * `iv`  - Initialization vector that should be used for the encryption process.
+    ///           Implementations may assume that `iv` has the correct length for the given AES-GCM
+    ///           variant and panic if this is not the case.
     ///
     /// # Returns
     ///
@@ -156,6 +162,212 @@ pub trait EncryptCryptoBackend: CryptoBackend {
             algorithm,
         )))
     }
+
+    /// Encrypts the given `payload` using AES-CCM with the parameters L (size of length field)
+    /// and M (size of authentication tag) specified for the given `algorithm` in
+    /// [RFC 9053, section 4.2](https://datatracker.ietf.org/doc/html/rfc9053#section-4.2), the
+    /// given `key`, and the provided `iv`.
+    ///
+    /// # Arguments
+    ///
+    /// * `algorithm` - The AES-CCM variant to use.
+    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`]
+    ///           should be returned.
+    ///           If the given algorithm is an IANA-assigned value that is unknown, the
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
+    ///           additional variants of AES-CCM are ever added).
+    ///           If the algorithm is not an AES-CCM algorithm, the implementation may return
+    ///           [`CoseCipherError::UnsupportedAlgorithm`] or panic.
+    /// * `key` - Symmetric key that should be used.
+    ///           Implementations may assume that the provided key has the right length for the
+    ///           provided algorithm, and panic if this is not the case.
+    /// * `plaintext` - Data that should be encrypted.
+    /// * `aad` - additional authenticated data that should be included in the calculation of the
+    ///           authentication tag, but not encrypted.
+    /// * `iv`  - Initialization vector that should be used for the encryption process.
+    ///           Implementations may assume that `iv` has the correct length for the given AES-CCM
+    ///           variant and panic if this is not the case.
+    ///
+    /// # Returns
+    ///
+    /// It is expected that the return value is the computed output of AES-CCM as specified in
+    /// [RFC 3610, Section 2.4](https://datatracker.ietf.org/doc/html/rfc3610#section-2.4).
+    ///
+    /// # Errors
+    ///
+    /// In case of errors, the implementation may return any valid [`CoseCipherError`].
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
+    /// backend-specific error.
+    ///
+    /// # Panics
+    ///
+    /// Implementations may panic if the provided algorithm is not an AES-CCM algorithm, the
+    /// provided key or IV are not of the right length for the provided algorithm or if an
+    /// unrecoverable backend error occurs that necessitates a panic (at their own discretion).
+    /// In the last of the above cases, additional panics should be documented on the backend level.
+    ///
+    /// For unknown algorithms or key curves, however, the implementation must not panic and return
+    /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new AES-CCM variants are ever
+    /// defined).
+    #[allow(unused_variables)]
+    fn encrypt_aes_ccm(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
+
+    /// Decrypts the given `payload` using AES-CCM with the parameters L (size of length field)
+    /// and M (size of authentication tag) specified for the given `algorithm` in
+    /// [RFC 9053, section 4.2](https://datatracker.ietf.org/doc/html/rfc9053#section-4.2) and the
+    /// given `key`.
+    ///
+    /// # Arguments
+    ///
+    /// * `algorithm` - The AES-CCM variant to use.
+    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
+    ///           should be returned.
+    ///           If the given algorithm is an IANA-assigned value that is unknown, the
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
+    ///           additional variants of AES-CCM are ever added).
+    ///           If the algorithm is not an AES-CCM algorithm, the implementation may return
+    ///           [`CoseCipherError::UnsupportedAlgorithm`] or panic.
+    /// * `key` - Symmetric key that should be used.
+    ///           Implementations may assume that the provided key has the right length for the
+    ///           provided algorithm, and panic if this is not the case.
+    /// * `ciphertext_with_tag` - The ciphertext that should be decrypted concatenated with the
+    ///           authentication tag that should be verified (if valid, should be the output of a
+    ///           previous encryption as specified in
+    ///           [RFC 3610, Section 2.4](https://datatracker.ietf.org/doc/html/rfc3610#section-2.4)).
+    ///           Is guaranteed to be at least as long as the authentication tag should be.
+    /// * `aad` - additional authenticated data that should be included in the calculation of the
+    ///           authentication tag, but not encrypted.
+    /// * `iv`  - Initialization vector that should be used for the encryption process.
+    ///           Implementations may assume that `iv` has the correct length for the given AES-CCM
+    ///           variant and panic if this is not the case.
+    ///
+    /// # Returns
+    ///
+    /// It is expected that the return value is either the computed plaintext if decryption and
+    /// authentication are successful, or a [`CoseCipherError::VerificationFailure`] if one of these
+    /// steps fails even though the input is well-formed.
+    ///
+    /// # Errors
+    ///
+    /// In case of errors, the implementation may return any valid [`CoseCipherError`].
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
+    /// backend-specific error.
+    ///
+    /// # Panics
+    ///
+    /// Implementations may panic if the provided algorithm is not an AES-CCM algorithm, the
+    /// provided key or IV are not of the right length for the provided algorithm or if an
+    /// unrecoverable backend error occurs that necessitates a panic (at their own discretion).
+    /// In the last of the above cases, additional panics should be documented on the backend level.
+    ///
+    /// For unknown algorithms or key curves, however, the implementation must not panic and return
+    /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new AES-CCM variants are ever
+    /// defined).
+    #[allow(unused_variables)]
+    fn decrypt_aes_ccm(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext_with_tag: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
+}
+
+/// Returns the IV length expected for the AES variant given as `alg`.
+///
+/// # Errors
+///
+/// Returns [CoseCipherError::UnsupportedAlgorithm] if the provided algorithm is not a supported
+/// AES algorithm.
+pub fn aes_algorithm_iv_len<BE: Display>(
+    alg: iana::Algorithm,
+) -> Result<usize, CoseCipherError<BE>> {
+    match alg {
+        // AES-GCM: Nonce is fixed at 96 bits (RFC 9053, Section 4.1)
+        iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => {
+            Ok(AES_GCM_NONCE_SIZE)
+        }
+        // AES-CCM: Nonce length is parameterized.
+        iana::Algorithm::AES_CCM_16_64_128
+        | iana::Algorithm::AES_CCM_16_128_128
+        | iana::Algorithm::AES_CCM_16_64_256
+        | iana::Algorithm::AES_CCM_16_128_256 => Ok(13),
+        iana::Algorithm::AES_CCM_64_64_128
+        | iana::Algorithm::AES_CCM_64_128_128
+        | iana::Algorithm::AES_CCM_64_64_256
+        | iana::Algorithm::AES_CCM_64_128_256 => Ok(7),
+        v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            v,
+        ))),
+    }
+}
+
+/// Returns the authentication tag length expected for the AES-CCM variant given as `alg`.
+///
+/// # Errors
+///
+/// Returns [CoseCipherError::UnsupportedAlgorithm] if the provided algorithm is not a supported
+/// variant of AES-CCM.
+pub fn aes_ccm_algorithm_tag_len<BE: Display>(
+    algorithm: iana::Algorithm,
+) -> Result<usize, CoseCipherError<BE>> {
+    match algorithm {
+        iana::Algorithm::AES_CCM_16_64_128
+        | iana::Algorithm::AES_CCM_64_64_128
+        | iana::Algorithm::AES_CCM_16_64_256
+        | iana::Algorithm::AES_CCM_64_64_256 => Ok(8),
+        iana::Algorithm::AES_CCM_16_128_256
+        | iana::Algorithm::AES_CCM_64_128_256
+        | iana::Algorithm::AES_CCM_16_128_128
+        | iana::Algorithm::AES_CCM_64_128_128 => Ok(16),
+        v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            v,
+        ))),
+    }
+}
+
+/// Determines the key and IV for an AES AEAD operation using the provided `protected` and
+/// `unprotected` headers, ensuring that the provided `parsed_key` is a valid AES key in the
+/// process.
+fn determine_and_check_aes_params<'a, 'b, BE: Display>(
+    alg: iana::Algorithm,
+    parsed_key: CoseParsedKey<'a, BE>,
+    protected: Option<&'b Header>,
+    unprotected: Option<&'b Header>,
+) -> Result<(CoseSymmetricKey<'a, BE>, &'b Vec<u8>), CoseCipherError<BE>> {
+    let symm_key = key::ensure_valid_aes_key::<BE>(alg, parsed_key)?;
+
+    let iv = header_util::determine_header_param(protected, unprotected, |v| {
+        (!v.iv.is_empty()).then_some(&v.iv)
+    })
+    .ok_or(CoseCipherError::MissingHeaderParam(HeaderParam::Generic(
+        iana::HeaderParameter::Iv,
+    )))?;
+
+    if iv.len() != aes_algorithm_iv_len(alg)? {
+        return Err(CoseCipherError::InvalidHeaderParam(
+            HeaderParam::Generic(iana::HeaderParameter::Iv),
+            Value::Bytes(iv.clone()),
+        ));
+    }
+
+    Ok((symm_key, iv))
 }
 
 /// Attempts to perform a COSE encryption operation for a [`CoseEncrypt`](coset::CoseEncrypt) or
@@ -186,20 +398,25 @@ fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
             let parsed_key = CoseParsedKey::try_from(key)?;
             match alg {
                 iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => {
-                    // Check if this is a valid AES key.
-                    let symm_key = key::ensure_valid_aes_key::<B::Error>(alg, parsed_key)?;
-
-                    let iv = protected
-                        .into_iter()
-                        .chain(unprotected.into_iter())
-                        .filter(|x| !x.iv.is_empty())
-                        .map(|x| x.iv.as_ref())
-                        .next()
-                        .ok_or(CoseCipherError::MissingHeaderParam(HeaderParam::Generic(
-                            iana::HeaderParameter::Iv,
-                        )))?;
+                    // Check if this is a valid AES key, determine IV.
+                    let (symm_key, iv) =
+                        determine_and_check_aes_params(alg, parsed_key, protected, unprotected)?;
 
                     backend.encrypt_aes_gcm(alg, symm_key, plaintext, enc_structure, iv)
+                }
+                iana::Algorithm::AES_CCM_16_64_128
+                | iana::Algorithm::AES_CCM_64_64_128
+                | iana::Algorithm::AES_CCM_16_128_128
+                | iana::Algorithm::AES_CCM_64_128_128
+                | iana::Algorithm::AES_CCM_16_64_256
+                | iana::Algorithm::AES_CCM_64_64_256
+                | iana::Algorithm::AES_CCM_16_128_256
+                | iana::Algorithm::AES_CCM_64_128_256 => {
+                    // Check if this is a valid AES key, determine IV.
+                    let (symm_key, iv) =
+                        determine_and_check_aes_params(alg, parsed_key, protected, unprotected)?;
+
+                    backend.encrypt_aes_ccm(alg, symm_key, plaintext, enc_structure, iv)
                 }
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
                     alg,
@@ -237,18 +454,9 @@ pub(crate) fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
             let parsed_key = CoseParsedKey::try_from(key)?;
             match alg {
                 iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => {
-                    // Check if this is a valid AES key.
-                    let symm_key = key::ensure_valid_aes_key::<B::Error>(alg, parsed_key)?;
-
-                    let iv = protected
-                        .into_iter()
-                        .chain(unprotected.into_iter())
-                        .filter(|x| !x.iv.is_empty())
-                        .map(|x| x.iv.as_ref())
-                        .next()
-                        .ok_or(CoseCipherError::MissingHeaderParam(HeaderParam::Generic(
-                            iana::HeaderParameter::Iv,
-                        )))?;
+                    // Check if this is a valid AES key, determine IV.
+                    let (symm_key, iv) =
+                        determine_and_check_aes_params(alg, parsed_key, protected, unprotected)?;
 
                     // Authentication tag is 16 bytes long and should be included in the ciphertext.
                     // Empty payloads are allowed, therefore we check for ciphertext.len() < 16, not <= 16.
@@ -257,6 +465,30 @@ pub(crate) fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
                     }
 
                     (*backend.borrow_mut()).decrypt_aes_gcm(
+                        alg,
+                        symm_key,
+                        ciphertext,
+                        enc_structure,
+                        iv,
+                    )
+                }
+                iana::Algorithm::AES_CCM_16_64_128
+                | iana::Algorithm::AES_CCM_64_64_128
+                | iana::Algorithm::AES_CCM_16_128_128
+                | iana::Algorithm::AES_CCM_64_128_128
+                | iana::Algorithm::AES_CCM_16_64_256
+                | iana::Algorithm::AES_CCM_64_64_256
+                | iana::Algorithm::AES_CCM_16_128_256
+                | iana::Algorithm::AES_CCM_64_128_256 => {
+                    // Check if this is a valid AES key, determine IV.
+                    let (symm_key, iv) =
+                        determine_and_check_aes_params(alg, parsed_key, protected, unprotected)?;
+
+                    if ciphertext.len() < aes_ccm_algorithm_tag_len(alg)? {
+                        return Err(CoseCipherError::VerificationFailure);
+                    }
+
+                    (*backend.borrow_mut()).decrypt_aes_ccm(
                         alg,
                         symm_key,
                         ciphertext,
