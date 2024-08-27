@@ -31,10 +31,6 @@ pub use encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
 /// [RFC 9053, section 4.1](https://datatracker.ietf.org/doc/html/rfc9053#section-4.1)).
 pub const AES_GCM_TAG_LEN: usize = 16;
 
-/// Nonce size used for AES-GCM (fixed to 96 bits according to
-/// [RFC 9053, section 4.1](https://datatracker.ietf.org/doc/html/rfc9053#section-4.1)).
-pub const AES_GCM_NONCE_SIZE: usize = 12;
-
 /// Trait for cryptographic backends that can perform encryption and decryption operations for
 /// algorithms used for COSE.
 pub trait EncryptCryptoBackend: CryptoBackend {
@@ -223,7 +219,7 @@ pub trait EncryptCryptoBackend: CryptoBackend {
         )))
     }
 
-    /// Decrypts the given `payload` using AES-CCM with the parameters L (size of length field)
+    /// Decrypts the given `ciphertext_with_tag` using AES-CCM with the parameters L (size of length field)
     /// and M (size of authentication tag) specified for the given `algorithm` in
     /// [RFC 9053, section 4.2](https://datatracker.ietf.org/doc/html/rfc9053#section-4.2) and the
     /// given `key`.
@@ -246,9 +242,9 @@ pub trait EncryptCryptoBackend: CryptoBackend {
     ///           previous encryption as specified in
     ///           [RFC 3610, Section 2.4](https://datatracker.ietf.org/doc/html/rfc3610#section-2.4)).
     ///           Is guaranteed to be at least as long as the authentication tag should be.
-    /// * `aad` - additional authenticated data that should be included in the calculation of the
+    /// * `aad` - Additional authenticated data that should be included in the calculation of the
     ///           authentication tag, but not encrypted.
-    /// * `iv`  - Initialization vector that should be used for the encryption process.
+    /// * `iv`  - Initialization vector that should be used for the decryption process.
     ///           Implementations may assume that `iv` has the correct length for the given AES-CCM
     ///           variant and panic if this is not the case.
     ///
@@ -299,10 +295,8 @@ pub fn aes_algorithm_iv_len<BE: Display>(
     alg: iana::Algorithm,
 ) -> Result<usize, CoseCipherError<BE>> {
     match alg {
-        // AES-GCM: Nonce is fixed at 96 bits (RFC 9053, Section 4.1)
-        iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => {
-            Ok(AES_GCM_NONCE_SIZE)
-        }
+        // AES-GCM: Nonce is fixed at 96 bits (RFC 9053, Section 4.1).
+        iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => Ok(12),
         // AES-CCM: Nonce length is parameterized.
         iana::Algorithm::AES_CCM_16_64_128
         | iana::Algorithm::AES_CCM_16_128_128

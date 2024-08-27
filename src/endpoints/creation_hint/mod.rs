@@ -124,7 +124,7 @@ mod builder {
 ///
 /// One part of this is converting enum types from and to their CBOR abbreviations in
 /// [`cbor_abbreviations`](crate::constants::cbor_abbreviations),
-/// another part is implementing the [`ToCborMap`](ToCborMap) type for the
+/// another part is implementing the [`ToCborMap`](crate::common::cbor_map::ToCborMap) type for the
 /// models which are represented as CBOR maps.
 mod conversion {
     #[cfg(not(feature = "std"))]

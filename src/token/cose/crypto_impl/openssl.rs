@@ -515,7 +515,7 @@ impl EncryptCryptoBackend for OpensslContext {
     }
 }
 
-/// Converts the provided [`iana::Algorithm`] to an OpenSSL [`Cipher`] that can be used for a
+/// Converts the provided [`iana::Algorithm`] to an OpenSSL [`CipherRef`] that can be used for a
 /// symmetric [`CipherCtx`].
 fn algorithm_to_cipher(
     algorithm: iana::Algorithm,

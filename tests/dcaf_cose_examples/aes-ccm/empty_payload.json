@@ -1,5 +1,5 @@
 {
-  "title": "AES-GCM-01: Encryption with empty payload",
+  "title": "AES-CCM-01: Encryption with empty payload",
   "input": {
     "plaintext": "",
     "enveloped": {
