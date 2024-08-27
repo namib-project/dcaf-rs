@@ -15,13 +15,13 @@ use coset::iana::Algorithm;
 use coset::{CoseError, CoseKey, CoseKeyBuilder, CoseMac0, CoseMac0Builder, Header};
 use rstest::rstest;
 
-use crate::token::cose::header::determine_algorithm;
 use crate::token::cose::maced::mac0::{CoseMac0BuilderExt, CoseMac0Ext};
 use crate::token::cose::maced::MacCryptoBackend;
 use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, serialize_cose_with_failures,
     CoseStructTestHelper, TestCase,
 };
+use crate::token::cose::util::determine_algorithm;
 use crate::token::cose::{test_helper, CryptoBackend};
 
 #[cfg(feature = "openssl")]

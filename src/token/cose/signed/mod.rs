@@ -18,7 +18,8 @@ pub use sign1::{CoseSign1BuilderExt, CoseSign1Ext};
 
 use crate::error::CoseCipherError;
 use crate::token::cose::key::{CoseEc2Key, CoseParsedKey, KeyProvider};
-use crate::token::cose::{header, key, CryptoBackend};
+use crate::token::cose::util::{ensure_valid_ecdsa_key, try_cose_crypto_operation};
+use crate::token::cose::CryptoBackend;
 
 mod sign;
 mod sign1;
@@ -183,7 +184,7 @@ fn try_sign<B: SignCryptoBackend, CKP: KeyProvider>(
     unprotected: Option<&Header>,
     payload: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    header::try_cose_crypto_operation(
+    try_cose_crypto_operation(
         key_provider,
         protected,
         unprotected,
@@ -196,7 +197,7 @@ fn try_sign<B: SignCryptoBackend, CKP: KeyProvider>(
                 | iana::Algorithm::ES512
                 | iana::Algorithm::ES256K => {
                     // Check if this is a valid ECDSA key.
-                    let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(alg, parsed_key, true)?;
+                    let ec2_key = ensure_valid_ecdsa_key::<B::Error>(alg, parsed_key, true)?;
 
                     // Perform signing operation using backend.
                     backend.sign_ecdsa(alg, &ec2_key, payload)
@@ -227,7 +228,7 @@ fn try_verify<B: SignCryptoBackend, CKP: KeyProvider>(
     signature: &[u8],
     toverify: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
-    header::try_cose_crypto_operation(
+    try_cose_crypto_operation(
         key_provider,
         Some(protected),
         Some(unprotected),
@@ -240,7 +241,7 @@ fn try_verify<B: SignCryptoBackend, CKP: KeyProvider>(
                 | iana::Algorithm::ES512
                 | iana::Algorithm::ES256K => {
                     // Check if this is a valid ECDSA key.
-                    let ec2_key = key::ensure_valid_ecdsa_key::<B::Error>(alg, parsed_key, false)?;
+                    let ec2_key = ensure_valid_ecdsa_key::<B::Error>(alg, parsed_key, false)?;
 
                     backend.verify_ecdsa(alg, &ec2_key, signature, toverify)
                 }

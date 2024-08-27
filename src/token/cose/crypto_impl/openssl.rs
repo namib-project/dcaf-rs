@@ -26,13 +26,15 @@ use openssl::sign::{Signer, Verifier};
 use strum_macros::Display;
 
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypted::{EncryptCryptoBackend, AES_GCM_TAG_LEN};
-use crate::token::cose::header::HeaderParam;
+use crate::token::cose::encrypted::EncryptCryptoBackend;
 use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
 use crate::token::cose::maced::MacCryptoBackend;
 use crate::token::cose::recipient::KeyDistributionCryptoBackend;
 use crate::token::cose::signed::SignCryptoBackend;
-use crate::token::cose::{aes_ccm_algorithm_tag_len, CryptoBackend};
+use crate::token::cose::util::aes_ccm_algorithm_tag_len;
+use crate::token::cose::util::AES_GCM_TAG_LEN;
+use crate::token::cose::CryptoBackend;
+use crate::token::cose::HeaderParam;
 
 /// Represents an error caused by the OpenSSL cryptographic backend.
 #[derive(Debug, Display)]

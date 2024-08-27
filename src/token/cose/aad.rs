@@ -1,4 +1,4 @@
-use crate::token::cose::util::header::determine_header_param;
+use crate::token::cose::util::determine_header_param;
 use alloc::collections::BTreeMap;
 use coset::{EncryptionContext, Header};
 

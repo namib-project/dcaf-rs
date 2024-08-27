@@ -22,12 +22,12 @@ use coset::{
 
 use crate::error::CoseCipherError;
 use crate::token::cose::aad::{AadProvider, InvertedAadProvider};
-use crate::token::cose::header::{determine_algorithm, determine_key_candidates};
-use crate::token::cose::key::ensure_valid_aes_key;
+use crate::token::cose::header::HeaderParam;
 use crate::token::cose::key::{CoseParsedKey, KeyProvider};
-use crate::token::cose::util::header::{
-    determine_header_param, try_cose_crypto_operation, HeaderParam,
-};
+use crate::token::cose::util::determine_header_param;
+use crate::token::cose::util::ensure_valid_aes_key;
+use crate::token::cose::util::try_cose_crypto_operation;
+use crate::token::cose::util::{determine_algorithm, determine_key_candidates};
 use crate::token::cose::{CoseSymmetricKey, CryptoBackend};
 
 /// Trait for cryptographic backends that can perform key distribution operations for algorithms

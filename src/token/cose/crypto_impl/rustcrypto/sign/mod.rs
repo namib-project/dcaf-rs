@@ -8,12 +8,12 @@
  *
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */
+use crate::token::cose::crypto_impl::rustcrypto::CoseCipherError;
+use crate::token::cose::CoseEc2Key;
 use coset::iana;
 use rand::{CryptoRng, RngCore};
 
-use crate::error::CoseCipherError;
 use crate::token::cose::crypto_impl::rustcrypto::RustCryptoContext;
-use crate::token::cose::CoseEc2Key;
 use crate::token::SignCryptoBackend;
 
 #[cfg(feature = "rustcrypto-ecdsa")]

@@ -11,25 +11,22 @@
 use alloc::collections::BTreeSet;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
-use ciborium::Value;
 use core::cell::RefCell;
-use core::fmt::Display;
 use coset::{iana, Algorithm, Header, KeyOperation};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::header::HeaderParam;
 use crate::token::cose::key::{CoseParsedKey, CoseSymmetricKey, KeyProvider};
-use crate::token::cose::{header, key, CryptoBackend, KeyParam};
+use crate::token::cose::CryptoBackend;
 
 mod encrypt;
 mod encrypt0;
 
+use crate::token::cose::util::{
+    aes_ccm_algorithm_tag_len, determine_and_check_aes_params, try_cose_crypto_operation,
+    AES_GCM_TAG_LEN,
+};
 pub use encrypt::{CoseEncryptBuilderExt, CoseEncryptExt};
 pub use encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
-
-/// Authentication tag length to use for AES-GCM (fixed to 128 bits according to
-/// [RFC 9053, section 4.1](https://datatracker.ietf.org/doc/html/rfc9053#section-4.1)).
-pub const AES_GCM_TAG_LEN: usize = 16;
 
 /// Trait for cryptographic backends that can perform encryption and decryption operations for
 /// algorithms used for COSE.
@@ -285,133 +282,6 @@ pub trait EncryptCryptoBackend: CryptoBackend {
     }
 }
 
-/// Returns the IV length expected for the AES variant given as `alg`.
-///
-/// # Errors
-///
-/// Returns [CoseCipherError::UnsupportedAlgorithm] if the provided algorithm is not a supported
-/// AES algorithm.
-pub fn aes_algorithm_iv_len<BE: Display>(
-    alg: iana::Algorithm,
-) -> Result<usize, CoseCipherError<BE>> {
-    match alg {
-        // AES-GCM: Nonce is fixed at 96 bits (RFC 9053, Section 4.1).
-        iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => Ok(12),
-        // AES-CCM: Nonce length is parameterized.
-        iana::Algorithm::AES_CCM_16_64_128
-        | iana::Algorithm::AES_CCM_16_128_128
-        | iana::Algorithm::AES_CCM_16_64_256
-        | iana::Algorithm::AES_CCM_16_128_256 => Ok(13),
-        iana::Algorithm::AES_CCM_64_64_128
-        | iana::Algorithm::AES_CCM_64_128_128
-        | iana::Algorithm::AES_CCM_64_64_256
-        | iana::Algorithm::AES_CCM_64_128_256 => Ok(7),
-        v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-            v,
-        ))),
-    }
-}
-
-/// Returns the authentication tag length expected for the AES-CCM variant given as `alg`.
-///
-/// # Errors
-///
-/// Returns [CoseCipherError::UnsupportedAlgorithm] if the provided algorithm is not a supported
-/// variant of AES-CCM.
-pub fn aes_ccm_algorithm_tag_len<BE: Display>(
-    algorithm: iana::Algorithm,
-) -> Result<usize, CoseCipherError<BE>> {
-    match algorithm {
-        iana::Algorithm::AES_CCM_16_64_128
-        | iana::Algorithm::AES_CCM_64_64_128
-        | iana::Algorithm::AES_CCM_16_64_256
-        | iana::Algorithm::AES_CCM_64_64_256 => Ok(8),
-        iana::Algorithm::AES_CCM_16_128_256
-        | iana::Algorithm::AES_CCM_64_128_256
-        | iana::Algorithm::AES_CCM_16_128_128
-        | iana::Algorithm::AES_CCM_64_128_128 => Ok(16),
-        v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-            v,
-        ))),
-    }
-}
-
-/// Determines the key and IV for an AES AEAD operation using the provided `protected` and
-/// `unprotected` headers, ensuring that the provided `parsed_key` is a valid AES key in the
-/// process.
-fn determine_and_check_aes_params<'a, BE: Display>(
-    alg: iana::Algorithm,
-    parsed_key: CoseParsedKey<'a, BE>,
-    protected: Option<&Header>,
-    unprotected: Option<&Header>,
-) -> Result<(CoseSymmetricKey<'a, BE>, Vec<u8>), CoseCipherError<BE>> {
-    let symm_key = key::ensure_valid_aes_key::<BE>(alg, parsed_key)?;
-
-    let iv = header::determine_header_param(protected, unprotected, |v| {
-        (!v.iv.is_empty()).then_some(&v.iv)
-    });
-
-    let partial_iv = header::determine_header_param(protected, unprotected, |v| {
-        (!v.partial_iv.is_empty()).then_some(&v.partial_iv)
-    });
-
-    let expected_iv_len = aes_algorithm_iv_len(alg)?;
-
-    let iv = match (iv, partial_iv) {
-        // IV and partial IV must not be set at the same time.
-        (Some(_iv), Some(partial_iv)) => Err(CoseCipherError::InvalidHeaderParam(
-            HeaderParam::Generic(iana::HeaderParameter::PartialIv),
-            Value::Bytes(partial_iv.clone()),
-        )),
-        (Some(iv), None) => Ok(iv.clone()),
-        // See https://datatracker.ietf.org/doc/html/rfc9052#section-3.1
-        (None, Some(partial_iv)) => {
-            let context_iv = (!symm_key.as_ref().base_iv.is_empty())
-                .then(|| &symm_key.as_ref().base_iv)
-                .ok_or(CoseCipherError::MissingKeyParam(vec![KeyParam::Common(
-                    iana::KeyParameter::BaseIv,
-                )]))?;
-
-            if partial_iv.len() > expected_iv_len {
-                return Err(CoseCipherError::InvalidHeaderParam(
-                    HeaderParam::Generic(iana::HeaderParameter::PartialIv),
-                    Value::Bytes(partial_iv.clone()),
-                ));
-            }
-
-            if context_iv.len() > expected_iv_len {
-                return Err(CoseCipherError::InvalidKeyParam(
-                    KeyParam::Common(iana::KeyParameter::BaseIv),
-                    Value::Bytes(context_iv.clone()),
-                ));
-            }
-
-            let mut message_iv = vec![0u8; expected_iv_len];
-
-            // Left-pad the Partial IV with zeros to the length of IV
-            message_iv[(expected_iv_len - partial_iv.len())..].copy_from_slice(partial_iv);
-            // XOR the padded Partial IV with the Context IV.
-            message_iv
-                .iter_mut()
-                .zip(context_iv.iter().chain(core::iter::repeat(&0u8)))
-                .for_each(|(b1, b2)| *b1 ^= *b2);
-            Ok(message_iv)
-        }
-        (None, None) => Err(CoseCipherError::MissingHeaderParam(HeaderParam::Generic(
-            iana::HeaderParameter::Iv,
-        ))),
-    }?;
-
-    if iv.len() != expected_iv_len {
-        return Err(CoseCipherError::InvalidHeaderParam(
-            HeaderParam::Generic(iana::HeaderParameter::Iv),
-            Value::Bytes(iv.clone()),
-        ));
-    }
-
-    Ok((symm_key, iv))
-}
-
 /// Attempts to perform a COSE encryption operation for a [`CoseEncrypt`](coset::CoseEncrypt) or
 /// [`CoseEncrypt0`](coset::CoseEncrypt0) structure with the given `protected` and `unprotected`
 /// headers, `plaintext` and `enc_structure` using the given `backend` and `key_provider`.
@@ -431,7 +301,7 @@ fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
     // (RFC 9052, Section 5.3).
     enc_structure: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    header::try_cose_crypto_operation(
+    try_cose_crypto_operation(
         key_provider,
         protected,
         unprotected,
@@ -487,7 +357,7 @@ pub(crate) fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
     // (RFC 9052, Section 5.3).
     enc_structure: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    header::try_cose_crypto_operation(
+    try_cose_crypto_operation(
         key_provider,
         Some(protected),
         Some(unprotected),

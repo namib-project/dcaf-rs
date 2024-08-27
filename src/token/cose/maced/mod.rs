@@ -20,7 +20,8 @@ pub use mac0::{CoseMac0BuilderExt, CoseMac0Ext};
 
 use crate::error::CoseCipherError;
 use crate::token::cose::key::{CoseParsedKey, CoseSymmetricKey, KeyProvider};
-use crate::token::cose::{header, key, CryptoBackend};
+use crate::token::cose::util::{ensure_valid_hmac_key, try_cose_crypto_operation};
+use crate::token::cose::CryptoBackend;
 
 mod mac;
 mod mac0;
@@ -157,7 +158,7 @@ fn try_compute<B: MacCryptoBackend, CKP: KeyProvider>(
     unprotected: Option<&Header>,
     payload: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    header::try_cose_crypto_operation(
+    try_cose_crypto_operation(
         key_provider,
         protected,
         unprotected,
@@ -169,7 +170,7 @@ fn try_compute<B: MacCryptoBackend, CKP: KeyProvider>(
                 iana::Algorithm::HMAC_256_256
                 | iana::Algorithm::HMAC_384_384
                 | iana::Algorithm::HMAC_512_512 => {
-                    let symm_key = key::ensure_valid_hmac_key(alg, parsed_key)?;
+                    let symm_key = ensure_valid_hmac_key(alg, parsed_key)?;
                     backend.compute_hmac(alg, symm_key, payload)
                 }
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
@@ -197,7 +198,7 @@ pub(crate) fn try_verify<B: MacCryptoBackend, CKP: KeyProvider>(
     tag: &[u8],
     payload: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
-    header::try_cose_crypto_operation(
+    try_cose_crypto_operation(
         key_provider,
         Some(protected),
         Some(unprotected),
@@ -209,7 +210,7 @@ pub(crate) fn try_verify<B: MacCryptoBackend, CKP: KeyProvider>(
                 iana::Algorithm::HMAC_256_256
                 | iana::Algorithm::HMAC_384_384
                 | iana::Algorithm::HMAC_512_512 => {
-                    let symm_key = key::ensure_valid_hmac_key(alg, parsed_key)?;
+                    let symm_key = ensure_valid_hmac_key(alg, parsed_key)?;
                     (*backend.borrow_mut()).verify_hmac(alg, symm_key, tag, payload)
                 }
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(

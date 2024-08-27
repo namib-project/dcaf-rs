@@ -24,7 +24,7 @@ use strum_macros::IntoStaticStr;
 
 use {alloc::format, alloc::string::String, alloc::string::ToString};
 
-use crate::token::cose::header::HeaderParam;
+use crate::token::cose::HeaderParam;
 use crate::token::cose::{EllipticCurve, KeyParam};
 use core::{marker::PhantomData, num::TryFromIntError};
 
