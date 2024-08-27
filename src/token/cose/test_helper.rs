@@ -117,6 +117,14 @@ fn string_to_algorithm<'de, D: Deserializer<'de>>(
         Some("A128GCM") => Ok(Some(iana::Algorithm::A128GCM)),
         Some("A192GCM") => Ok(Some(iana::Algorithm::A192GCM)),
         Some("A256GCM") => Ok(Some(iana::Algorithm::A256GCM)),
+        Some("AES-CCM-16-128/64") => Ok(Some(iana::Algorithm::AES_CCM_16_64_128)),
+        Some("AES-CCM-16-256/64") => Ok(Some(iana::Algorithm::AES_CCM_16_64_256)),
+        Some("AES-CCM-64-128/64") => Ok(Some(iana::Algorithm::AES_CCM_64_64_128)),
+        Some("AES-CCM-64-256/64") => Ok(Some(iana::Algorithm::AES_CCM_64_64_256)),
+        Some("AES-CCM-16-128/128") => Ok(Some(iana::Algorithm::AES_CCM_16_128_128)),
+        Some("AES-CCM-16-256/128") => Ok(Some(iana::Algorithm::AES_CCM_16_128_256)),
+        Some("AES-CCM-64-128/128") => Ok(Some(iana::Algorithm::AES_CCM_64_128_128)),
+        Some("AES-CCM-64-256/128") => Ok(Some(iana::Algorithm::AES_CCM_64_128_256)),
         Some("A128KW") => Ok(Some(iana::Algorithm::A128KW)),
         Some("A192KW") => Ok(Some(iana::Algorithm::A192KW)),
         Some("A256KW") => Ok(Some(iana::Algorithm::A256KW)),
@@ -169,6 +177,13 @@ where
         }
         None => builder,
     };
+
+    if let Some(partial_iv) = hdr_obj.get("partialIV_hex").and_then(Value::as_str) {
+        let partial_iv = hex::decode(partial_iv).map_err(|e| {
+            de::Error::custom(format!("could not parse test case partial IV hex: {e}"))
+        })?;
+        builder = builder.partial_iv(partial_iv);
+    }
 
     Ok(Some(builder.build()))
 }
@@ -249,6 +264,14 @@ pub struct TestCaseSign {
     pub signers: Vec<TestCaseRecipient>,
 }
 
+/// Data used for COSE object encryption that is not sent over the wire (e.g. the full IV if only a
+/// partial IV is provided).
+#[derive(Deserialize, Debug, Clone)]
+pub struct TestCaseUnsent {
+    #[serde(rename = "IV_hex", deserialize_with = "hex::deserialize", default)]
+    pub iv: Vec<u8>,
+}
+
 /// Encryption inputs to a JSON-based test case.
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestCaseEncrypted {
@@ -256,6 +279,7 @@ pub struct TestCaseEncrypted {
     pub unprotected: Option<Header>,
     #[serde(deserialize_with = "deserialize_header", default)]
     pub protected: Option<Header>,
+    pub unsent: Option<TestCaseUnsent>,
     #[serde(deserialize_with = "hex::deserialize", default)]
     pub external: Vec<u8>,
     pub recipients: Vec<TestCaseRecipient>,
@@ -567,6 +591,21 @@ pub(crate) fn apply_attribute_failures(
     } else {
         Ok(())
     }
+}
+
+/// Determines the Base IV field for a test case based on the full IV provided as an unsent test
+/// input and the partial IV provided in the key itself.
+// Nobody knows why the people who wrote the test cases in the cose-wg/Examples thought that this
+// would be better than just providing partial IV and base IV directly.
+pub(crate) fn calculate_base_iv(unsent: &TestCaseUnsent, partial_iv: &Vec<u8>) -> Vec<u8> {
+    let full_iv = &unsent.iv;
+    let mut base_iv = vec![0u8; full_iv.len()];
+    base_iv[full_iv.len() - partial_iv.len()..].clone_from_slice(partial_iv.as_slice());
+    base_iv
+        .iter_mut()
+        .zip(full_iv)
+        .for_each(|(b1, b2)| *b1 ^= b2);
+    base_iv
 }
 
 /*pub struct RngMockCipher<T: CoseEncryptCipher> {

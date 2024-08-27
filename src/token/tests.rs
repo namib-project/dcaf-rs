@@ -12,6 +12,7 @@
 use super::*;
 use crate::common::test_helper::MockCipher;
 use crate::error::CoseCipherError;
+use crate::token::cose::aes_algorithm_iv_len;
 use alloc::vec::Vec;
 use alloc::{string::ToString, vec};
 use base64::Engine;
@@ -81,14 +82,16 @@ fn example_ec_key_two(alg: Algorithm) -> CoseKey {
     .build()
 }
 
-fn example_headers(alg: Algorithm) -> (Header, Header) {
-    let unprotected_header = HeaderBuilder::new()
-        .iv(vec![
+fn example_headers(alg: Algorithm, generate_iv: bool) -> (Header, Header) {
+    let mut unprotected_header_builder = HeaderBuilder::new().algorithm(alg).value(47, Value::Null);
+    if generate_iv {
+        let mut iv = vec![
             0x63, 0x68, 0x98, 0x99, 0x4F, 0xF0, 0xEC, 0x7B, 0xFC, 0xF6, 0xD3, 0xF9, 0x5B,
-        ])
-        .algorithm(alg)
-        .value(47, Value::Null)
-        .build();
+        ];
+        iv.truncate(aes_algorithm_iv_len::<Infallible>(alg).expect("invalid algorithm"));
+        unprotected_header_builder = unprotected_header_builder.iv(iv);
+    }
+    let unprotected_header = unprotected_header_builder.build();
     let protected_header = HeaderBuilder::new()
         .content_format(CoapContentFormat::Cbor)
         .build();
@@ -157,7 +160,7 @@ fn assert_header_is_part_of(subset: &Header, superset: &Header) {
 #[test]
 fn test_get_headers_enc(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
-    let (unprotected_header, protected_header) = example_headers(A128GCM);
+    let (unprotected_header, protected_header) = example_headers(A128GCM, true);
     let enc_test = CoseEncrypt0Builder::new()
         .unprotected(unprotected_header.clone())
         .protected(protected_header.clone())
@@ -175,7 +178,7 @@ fn test_get_headers_enc(
 #[test]
 fn test_get_headers_sign(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
-    let (unprotected_header, protected_header) = example_headers(ES256);
+    let (unprotected_header, protected_header) = example_headers(ES256, false);
     let sign_test = CoseSign1Builder::new()
         .unprotected(unprotected_header.clone())
         .protected(protected_header.clone())
@@ -193,7 +196,7 @@ fn test_get_headers_sign(
 #[test]
 fn test_get_headers_mac(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
-    let (unprotected_header, protected_header) = example_headers(HMAC_256_256);
+    let (unprotected_header, protected_header) = example_headers(HMAC_256_256, false);
     let mac_test = CoseMac0Builder::new()
         .unprotected(unprotected_header.clone())
         .protected(protected_header.clone())
@@ -227,7 +230,7 @@ fn test_encrypt_decrypt(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
     let key = example_key_one(A128GCM);
-    let (unprotected_header, protected_header) = example_headers(A128GCM);
+    let (unprotected_header, protected_header) = example_headers(A128GCM, true);
     let claims = example_claims(&key)?;
     let aad = example_aad();
     let encrypted = encrypt_access_token(
@@ -253,7 +256,7 @@ fn test_encrypt_decrypt_multiple(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     const AUDIENCE: &str = "example_aud";
     let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
-    let (unprotected_header, protected_header) = example_headers(A128GCM);
+    let (unprotected_header, protected_header) = example_headers(A128GCM, true);
     let key1 = example_key_one(A128KW);
     let key2 = example_key_two(A128KW);
     let invalid_key1 = CoseKeyBuilder::new_symmetric_key(vec![0; 5])
@@ -308,7 +311,7 @@ fn test_encrypt_decrypt_multiple(
 fn test_encrypt_decrypt_match_multiple(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
-    let (unprotected_header, protected_header) = example_headers(A128GCM);
+    let (unprotected_header, protected_header) = example_headers(A128GCM, true);
     let key1 = example_key_one(A128KW);
     let aad = example_aad();
     let claims = ClaimsSetBuilder::new().build();
@@ -334,7 +337,7 @@ fn test_encrypt_decrypt_invalid_header(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
     let key = example_key_one(A128GCM);
-    let (unprotected_header, protected_header) = example_headers(A128GCM);
+    let (unprotected_header, protected_header) = example_headers(A128GCM, true);
     let (unprotected_invalid, protected_invalid) = example_invalid_headers();
     let claims = example_claims(&key)?;
     let aad = example_aad();
@@ -387,7 +390,7 @@ fn test_sign_verify(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
     let key = example_ec_key_one(ES256);
-    let (unprotected_header, protected_header) = example_headers(ES256);
+    let (unprotected_header, protected_header) = example_headers(ES256, false);
     let claims = example_claims(&key)?;
     let aad = example_aad();
     let signed = sign_access_token(
@@ -422,7 +425,7 @@ fn test_sign_verify_multiple(
     let invalid_key2 = CoseKeyBuilder::new_symmetric_key(vec![0; 5])
         .key_id(vec![0xDC, 0xAF])
         .build();
-    let (unprotected_header, protected_header) = example_headers(A128GCM);
+    let (unprotected_header, protected_header) = example_headers(A128GCM, true);
     let claims = ClaimsSetBuilder::new()
         .audience(AUDIENCE.to_string())
         .build();

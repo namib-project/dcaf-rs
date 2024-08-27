@@ -18,9 +18,8 @@ use coset::iana::EnumI64;
 use coset::{iana, Algorithm, CoseKey, Header, HeaderBuilder, KeyOperation, Label};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::encrypted::AES_GCM_NONCE_SIZE;
 use crate::token::cose::key::KeyProvider;
-use crate::token::cose::{CryptoBackend, EncryptCryptoBackend};
+use crate::token::cose::{aes_algorithm_iv_len, CryptoBackend, EncryptCryptoBackend};
 
 /// A header parameter that can be used in a COSE header.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,9 +96,9 @@ pub(crate) fn check_for_duplicate_headers<E: Display>(
 /// Determines the value of a header param based on the provided `protected` and `unprotected`
 /// header buckets and the `accessor` function that determines the header parameter from a header
 /// reference.
-pub(crate) fn determine_header_param<F: Fn(&Header) -> Option<T>, T>(
-    protected_header: Option<&Header>,
-    unprotected_header: Option<&Header>,
+pub(crate) fn determine_header_param<'a, F: Fn(&'a Header) -> Option<T>, T: 'a>(
+    protected_header: Option<&'a Header>,
+    unprotected_header: Option<&'a Header>,
     accessor: F,
 ) -> Option<T> {
     protected_header
@@ -199,17 +198,7 @@ impl HeaderBuilderExt for HeaderBuilder {
         backend: &mut B,
         alg: iana::Algorithm,
     ) -> Result<Self, CoseCipherError<B::Error>> {
-        let iv_size = match alg {
-            // AES-GCM: Nonce is fixed at 96 bits (RFC 9053, Section 4.1)
-            iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => {
-                AES_GCM_NONCE_SIZE
-            }
-            v => {
-                return Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
-                    v,
-                )))
-            }
-        };
+        let iv_size = aes_algorithm_iv_len(alg)?;
         let mut iv = vec![0; iv_size];
         backend.generate_rand(&mut iv)?;
         Ok(self.iv(iv))

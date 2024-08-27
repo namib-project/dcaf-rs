@@ -138,15 +138,15 @@ impl From<ecdsa::Error> for CoseCipherError<CoseRustCryptoCipherError> {
 ///         - [x] A128GCM
 ///         - [x] A192GCM
 ///         - [x] A256GCM
-///     - [ ] AES-CCM
-///         - [ ] AES-CCM-16-64-128
-///         - [ ] AES-CCM-16-64-256
-///         - [ ] AES-CCM-64-64-128
-///         - [ ] AES-CCM-64-64-256
-///         - [ ] AES-CCM-16-128-128
-///         - [ ] AES-CCM-16-128-256
-///         - [ ] AES-CCM-64-128-128
-///         - [ ] AES-CCM-64-128-256
+///     - [x] AES-CCM
+///         - [x] AES-CCM-16-64-128
+///         - [x] AES-CCM-16-64-256
+///         - [x] AES-CCM-64-64-128
+///         - [x] AES-CCM-64-64-256
+///         - [x] AES-CCM-16-128-128
+///         - [x] AES-CCM-16-128-256
+///         - [x] AES-CCM-64-128-128
+///         - [x] AES-CCM-64-128-256
 ///     - [ ] ChaCha20/Poly1305
 /// - Content Key Distribution Methods (for COSE_Recipients)
 ///     - Direct Encryption

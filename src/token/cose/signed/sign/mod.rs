@@ -53,7 +53,7 @@ pub trait CoseSignBuilderExt: Sized {
     /// # Examples
     ///
     /// Refer to [the documentation for the CoseSign extensions](CoseSignExt) for examples.
-    fn try_add_sign<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_add_sign<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -91,7 +91,7 @@ pub trait CoseSignBuilderExt: Sized {
     /// # Examples
     ///
     /// Refer to [the documentation for the CoseSign extensions](CoseSignExt) for examples.
-    fn try_add_sign_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_add_sign_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -102,7 +102,7 @@ pub trait CoseSignBuilderExt: Sized {
 }
 
 impl CoseSignBuilderExt for CoseSignBuilder {
-    fn try_add_sign<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_add_sign<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -125,7 +125,7 @@ impl CoseSignBuilderExt for CoseSignBuilder {
             },
         )
     }
-    fn try_add_sign_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_add_sign_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -301,7 +301,7 @@ pub trait CoseSignExt {
     ///     )
     /// );
     /// ```
-    fn try_verify<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_verify<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -346,7 +346,7 @@ pub trait CoseSignExt {
     /// # Examples
     ///
     /// Refer to the trait-level documentation for examples.
-    fn try_verify_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_verify_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -357,7 +357,7 @@ pub trait CoseSignExt {
 }
 
 impl CoseSignExt for CoseSign {
-    fn try_verify<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_verify<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -399,7 +399,7 @@ impl CoseSignExt for CoseSign {
                 .collect(),
         ))
     }
-    fn try_verify_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_verify_detached<B: SignCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,

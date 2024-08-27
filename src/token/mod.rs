@@ -138,7 +138,7 @@ mod tests;
 /// # Example
 ///
 /// see the [module-level documentation](self) for an example
-pub fn encrypt_access_token<T, AAD: AadProvider + ?Sized>(
+pub fn encrypt_access_token<T, AAD: AadProvider>(
     backend: &mut T,
     key: &CoseKey,
     claims: ClaimsSet,
@@ -213,7 +213,7 @@ where
 /// # Ok::<(), AccessTokenError<<OpensslContext as CryptoBackend>::Error>>(())
 /// ```
 #[allow(clippy::missing_panics_doc)]
-pub fn encrypt_access_token_multiple<'a, T, I, AAD: AadProvider + ?Sized>(
+pub fn encrypt_access_token_multiple<'a, T, I, AAD: AadProvider>(
     backend: &mut T,
     keys: I,
     claims: ClaimsSet,
@@ -333,7 +333,7 @@ where
 /// assert!(verify_access_token(&mut backend, &key, &token, &None).is_ok());
 /// # Ok::<(), AccessTokenError<<OpensslContext as CryptoBackend>::Error>>(())
 /// ```
-pub fn sign_access_token<T, AAD: AadProvider + ?Sized>(
+pub fn sign_access_token<T, AAD: AadProvider>(
     backend: &mut T,
     key: &CoseKey,
     claims: ClaimsSet,
@@ -425,7 +425,7 @@ where
 /// assert!(verify_access_token_multiple(&mut backend, &key2, &token, &None).is_ok());
 /// # Ok::<(), AccessTokenError<<OpensslContext as CryptoBackend>::Error>>(())
 /// ```
-pub fn sign_access_token_multiple<'a, T, I, AAD: AadProvider + ?Sized>(
+pub fn sign_access_token_multiple<'a, T, I, AAD: AadProvider>(
     backend: &mut T,
     keys: I,
     claims: ClaimsSet,
@@ -518,7 +518,7 @@ pub fn get_token_headers(token: &ByteString) -> Option<(Header, ProtectedHeader)
 /// # Example
 ///
 /// For an example, see the documentation of [`sign_access_token`].
-pub fn verify_access_token<T, CKP, AAD: AadProvider + ?Sized>(
+pub fn verify_access_token<T, CKP, AAD: AadProvider>(
     backend: &mut T,
     key_provider: &CKP,
     token: &ByteString,
@@ -544,7 +544,7 @@ where
 /// Returns an error if the [`CoseSign`] structure could not be parsed, an error during verification
 /// occurs (see [`CoseSignExt::try_verify`] for possible errors) or the contained payload is not a
 /// valid [`ClaimsSet`].
-pub fn verify_access_token_multiple<T, CKP, AAD: AadProvider + ?Sized>(
+pub fn verify_access_token_multiple<T, CKP, AAD: AadProvider>(
     backend: &mut T,
     key_provider: &CKP,
     token: &ByteString,
@@ -574,7 +574,7 @@ where
 /// # Example
 ///
 /// For an example, see the documentation of [`encrypt_access_token`].
-pub fn decrypt_access_token<T, CKP, AAD: AadProvider + ?Sized>(
+pub fn decrypt_access_token<T, CKP, AAD: AadProvider>(
     backend: &mut T,
     key_provider: &CKP,
     token: &ByteString,
@@ -603,7 +603,7 @@ where
 /// Returns an error if the [`CoseEncrypt`] structure could not be parsed, an error during decryption
 /// occurs (see [`CoseEncryptExt::try_decrypt_with_recipients`] for possible errors) or the decrypted
 /// payload is not a valid [`ClaimsSet`].
-pub fn decrypt_access_token_multiple<T, CKP, AAD: AadProvider + ?Sized>(
+pub fn decrypt_access_token_multiple<T, CKP, AAD: AadProvider>(
     backend: &mut T,
     key_provider: &CKP,
     token: &ByteString,

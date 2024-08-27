@@ -23,14 +23,18 @@ use crate::token::cose::header_util::{determine_algorithm, HeaderBuilderExt};
 use crate::token::cose::key::CoseSymmetricKey;
 use crate::token::cose::recipient::{CoseRecipientBuilderExt, KeyDistributionCryptoBackend};
 use crate::token::cose::test_helper::{
-    apply_attribute_failures, apply_header_failures, perform_cose_reference_output_test,
-    perform_cose_self_signed_test, serialize_cose_with_failures, CoseStructTestHelper, TestCase,
+    apply_attribute_failures, apply_header_failures, calculate_base_iv,
+    perform_cose_reference_output_test, perform_cose_self_signed_test,
+    serialize_cose_with_failures, CoseStructTestHelper, TestCase,
 };
-use crate::token::cose::CryptoBackend;
+use crate::token::cose::{determine_header_param, CryptoBackend};
 
 #[cfg(feature = "openssl")]
 use crate::token::cose::test_helper::openssl_ctx;
-#[cfg(all(feature = "rustcrypto-aes-gcm", feature = "rustcrypto-aes-kw"))]
+#[cfg(all(
+    any(feature = "rustcrypto-aes-gcm", feature = "rustcrypto-aes-ccm"),
+    feature = "rustcrypto-aes-kw"
+))]
 use crate::token::cose::test_helper::rustcrypto_ctx;
 
 impl<B: CryptoBackend + EncryptCryptoBackend + KeyDistributionCryptoBackend> CoseStructTestHelper<B>
@@ -50,30 +54,8 @@ impl<B: CryptoBackend + EncryptCryptoBackend + KeyDistributionCryptoBackend> Cos
             .first()
             .expect("test case has no recipient");
 
-        // Need to generate an IV. Have to do this quite uglily, because we have implemented our IV
-        // generation on the header builder only.
-        let alg = if let Algorithm::Assigned(alg) = encrypt_cfg
-            .protected
-            .as_ref()
-            .or(encrypt_cfg.unprotected.as_ref())
-            .unwrap()
-            .alg
-            .as_ref()
-            .unwrap()
-        {
-            alg
-        } else {
-            panic!("unknown/invalid algorithm in test case")
-        };
-        let iv_generator = HeaderBuilder::new()
-            .gen_iv(backend, *alg)
-            .expect("unable to generate IV")
-            .build();
-        let mut unprotected = encrypt_cfg.unprotected.clone().unwrap_or_default();
-        unprotected.iv = iv_generator.iv;
-
         let mut recipient_struct_builder = CoseRecipientBuilder::from(recipient.clone());
-        let enc_key: CoseKey;
+        let mut enc_key: CoseKey;
         if recipient.alg == Some(Algorithm::Assigned(iana::Algorithm::Direct))
             || determine_algorithm::<Infallible>(
                 None,
@@ -104,6 +86,43 @@ impl<B: CryptoBackend + EncryptCryptoBackend + KeyDistributionCryptoBackend> Cos
                     &[] as &[u8],
                 )
                 .expect("unable to create CoseRecipient structure");
+        }
+
+        // Need to generate an IV. Have to do this quite uglily, because we have implemented our IV
+        // generation on the header builder only.
+        let alg = if let Algorithm::Assigned(alg) = encrypt_cfg
+            .protected
+            .as_ref()
+            .or(encrypt_cfg.unprotected.as_ref())
+            .unwrap()
+            .alg
+            .as_ref()
+            .unwrap()
+        {
+            alg
+        } else {
+            panic!("unknown/invalid algorithm in test case")
+        };
+
+        let mut unprotected = encrypt_cfg.unprotected.clone().unwrap_or_default();
+        if let Some(partial_iv) = determine_header_param(
+            encrypt_cfg.protected.as_ref(),
+            encrypt_cfg.unprotected.as_ref(),
+            |v| (!v.partial_iv.is_empty()).then_some(&v.partial_iv),
+        ) {
+            enc_key.base_iv = calculate_base_iv(
+                encrypt_cfg
+                    .unsent
+                    .as_ref()
+                    .expect("test case has partial IV but no full IV defined"),
+                partial_iv,
+            );
+        } else {
+            let iv_generator = HeaderBuilder::new()
+                .gen_iv(backend, *alg)
+                .expect("unable to generate IV")
+                .build();
+            unprotected.iv = iv_generator.iv;
         }
 
         encrypt
@@ -146,6 +165,19 @@ impl<B: CryptoBackend + EncryptCryptoBackend + KeyDistributionCryptoBackend> Cos
                 let mut key_with_alg = v.key.clone();
                 if key_with_alg.alg.is_none() {
                     key_with_alg.alg.clone_from(&v.alg);
+                }
+                if let Some(partial_iv) = determine_header_param(
+                    test_case.protected.as_ref(),
+                    test_case.unprotected.as_ref(),
+                    |v| (!v.partial_iv.is_empty()).then_some(&v.partial_iv),
+                ) {
+                    key_with_alg.base_iv = calculate_base_iv(
+                        test_case
+                            .unsent
+                            .as_ref()
+                            .expect("test case has partial IV but no full IV defined"),
+                        partial_iv,
+                    );
                 }
                 key_with_alg
             })
@@ -234,6 +266,62 @@ fn cose_examples_aes_wrap_self_signed<B: EncryptCryptoBackend + KeyDistributionC
     all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-gcm"),
     case::rustcrypto(rustcrypto_ctx())
 )]
+fn cose_examples_aes_gcm_reference_output<
+    B: EncryptCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/aes-gcm-examples/aes-gcm-0[0-9].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_reference_output_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-gcm"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_aes_gcm_self_signed<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
+    #[files("tests/cose_examples/aes-gcm-examples/aes-gcm-0[0-9].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-ccm"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_aes_ccm_reference_output<
+    B: EncryptCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/aes-ccm-examples/aes-ccm-0[0-9].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_reference_output_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-ccm"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_aes_ccm_self_signed<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
+    #[files("tests/cose_examples/aes-ccm-examples/aes-ccm-0[0-9].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-gcm"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
 fn aes_wrap_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/dcaf_cose_examples/aes-kw/*.json")] test_path: PathBuf,
     #[case] backend: B,
@@ -249,6 +337,19 @@ fn aes_wrap_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
 )]
 fn aes_gcm_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/dcaf_cose_examples/aes-gcm/*.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-ccm"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn aes_ccm_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
+    #[files("tests/dcaf_cose_examples/aes-ccm/*.json")] test_path: PathBuf,
     #[case] backend: B,
 ) {
     perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);

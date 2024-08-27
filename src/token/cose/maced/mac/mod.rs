@@ -62,7 +62,7 @@ pub trait CoseMacBuilderExt: Sized {
     /// # Examples
     ///
     /// Refer to [the documentation for the CoseMac extensions](CoseMacExt) for examples.
-    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -73,7 +73,7 @@ pub trait CoseMacBuilderExt: Sized {
 }
 
 impl CoseMacBuilderExt for CoseMacBuilder {
-    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -303,7 +303,7 @@ pub trait CoseMacExt {
     ///     )
     /// );
     /// ```
-    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -384,7 +384,7 @@ pub trait CoseMacExt {
     fn try_verify_with_recipients<
         B: KeyDistributionCryptoBackend + MacCryptoBackend,
         CKP: KeyProvider,
-        CAP: AadProvider + ?Sized,
+        CAP: AadProvider,
     >(
         &self,
         backend: &mut B,
@@ -395,7 +395,7 @@ pub trait CoseMacExt {
 }
 
 impl CoseMacExt for CoseMac {
-    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -423,7 +423,7 @@ impl CoseMacExt for CoseMac {
     fn try_verify_with_recipients<
         B: KeyDistributionCryptoBackend + MacCryptoBackend,
         CKP: KeyProvider,
-        CAP: AadProvider + ?Sized,
+        CAP: AadProvider,
     >(
         &self,
         backend: &mut B,

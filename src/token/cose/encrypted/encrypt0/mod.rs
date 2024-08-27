@@ -61,7 +61,7 @@ pub trait CoseEncrypt0BuilderExt: Sized {
     /// # Examples
     ///
     /// Refer to [the documentation for the CoseEncrypt0 extensions](CoseEncrypt0Ext) for examples.
-    fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -74,7 +74,7 @@ pub trait CoseEncrypt0BuilderExt: Sized {
 }
 
 impl CoseEncrypt0BuilderExt for CoseEncrypt0Builder {
-    fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -256,7 +256,7 @@ pub trait CoseEncrypt0Ext {
     ///     )
     /// );
     /// ```
-    fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -266,7 +266,7 @@ pub trait CoseEncrypt0Ext {
 }
 
 impl CoseEncrypt0Ext for CoseEncrypt0 {
-    fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,

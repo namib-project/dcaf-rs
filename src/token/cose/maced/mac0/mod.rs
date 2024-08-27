@@ -58,7 +58,7 @@ pub trait CoseMac0BuilderExt: Sized {
     /// # Examples
     ///
     /// Refer to [the documentation for the CoseMac0 extensions](CoseMac0Ext) for examples.
-    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -69,7 +69,7 @@ pub trait CoseMac0BuilderExt: Sized {
 }
 
 impl CoseMac0BuilderExt for CoseMac0Builder {
-    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_compute<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         self,
         backend: &mut B,
         key_provider: &CKP,
@@ -228,7 +228,7 @@ pub trait CoseMac0Ext {
     ///     )
     /// );
     /// ```
-    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
@@ -237,7 +237,7 @@ pub trait CoseMac0Ext {
 }
 
 impl CoseMac0Ext for CoseMac0 {
-    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider + ?Sized>(
+    fn try_verify<B: MacCryptoBackend, CKP: KeyProvider, CAP: AadProvider>(
         &self,
         backend: &mut B,
         key_provider: &CKP,
