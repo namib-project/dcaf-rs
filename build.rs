@@ -15,7 +15,9 @@ fn main() {
     cfg_aliases! {
         rustcrypto_encrypt_base: {
             any(
-                feature = "rustcrypto-aes-gcm"
+                feature = "rustcrypto-aes-gcm",
+                feature = "rustcrypto-aes-ccm",
+                feature = "rustcrypto-chacha20-poly1305"
             )
         },
         rustcrypto_sign_base: {

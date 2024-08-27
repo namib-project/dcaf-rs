@@ -59,7 +59,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustc, cargo
-      - run: cargo test --no-default-features --features openssl
+      - run: cargo test --no-default-features --features openssl,rustcrypto
 
   fmt:
     name: Rustfmt

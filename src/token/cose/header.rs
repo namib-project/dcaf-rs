@@ -1,5 +1,5 @@
 use crate::error::CoseCipherError;
-use crate::token::cose::util::aes_algorithm_iv_len;
+use crate::token::cose::util::symmetric_algorithm_iv_len;
 use crate::token::cose::{CryptoBackend, EncryptCryptoBackend};
 use coset::{iana, HeaderBuilder};
 
@@ -25,7 +25,7 @@ impl HeaderBuilderExt for HeaderBuilder {
         backend: &mut B,
         alg: iana::Algorithm,
     ) -> Result<Self, CoseCipherError<B::Error>> {
-        let iv_size = aes_algorithm_iv_len(alg)?;
+        let iv_size = symmetric_algorithm_iv_len(alg)?;
         let mut iv = vec![0; iv_size];
         backend.generate_rand(&mut iv)?;
         Ok(self.iv(iv))

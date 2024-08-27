@@ -14,6 +14,7 @@ use rand::{CryptoRng, RngCore};
 use crate::error::CoseCipherError;
 use crate::token::cose::crypto_impl::rustcrypto::RustCryptoContext;
 use crate::token::cose::{CoseSymmetricKey, KeyDistributionCryptoBackend};
+use alloc::vec::Vec;
 
 #[cfg(feature = "rustcrypto-aes-kw")]
 mod aes_key_wrap;
