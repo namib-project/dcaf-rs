@@ -16,6 +16,7 @@ use crate::error::CoseCipherError;
 use crate::token::cose::{CoseSymmetricKey, CryptoBackend};
 
 use super::RustCryptoContext;
+use alloc::vec::Vec;
 
 impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
     /// Perform an AEAD encryption operation on `plaintext` and the additional authenticated

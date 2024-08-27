@@ -27,11 +27,11 @@ pub(crate) fn generate_cek_for_alg<B: CryptoBackend>(
     Ok(key)
 }
 
-/// Attempts to parse the given `parsed_key` as an AES symmetric key.
+/// Attempts to parse the given `parsed_key` as a symmetric key.
 ///
-/// Performs the checks required for symmetric keys suitable for AES according to
+/// Performs the checks required for symmetric keys suitable for the algorithms specified in
 /// [RFC 9053, Section 4](https://datatracker.ietf.org/doc/html/rfc9053#section-4).
-pub(crate) fn ensure_valid_aes_key<BE: Display>(
+pub(crate) fn ensure_valid_symmetric_key<BE: Display>(
     algorithm: iana::Algorithm,
     parsed_key: CoseParsedKey<BE>,
 ) -> Result<CoseSymmetricKey<BE>, CoseCipherError<BE>> {
@@ -86,26 +86,31 @@ fn symmetric_key_size<BE: Display>(
         | iana::Algorithm::AES_CCM_64_64_256
         | iana::Algorithm::AES_CCM_16_128_256
         | iana::Algorithm::AES_CCM_64_128_256
-        | iana::Algorithm::A256KW => Ok(32),
+        | iana::Algorithm::A256KW
+        | iana::Algorithm::ChaCha20Poly1305 => Ok(32),
         _ => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
             algorithm,
         ))),
     }
 }
 
-/// Returns the IV length expected for the AES variant given as `alg`.
+/// Returns the IV length expected for the symmetric algorithm given as `alg`.
 ///
 /// # Errors
 ///
 /// Returns [CoseCipherError::UnsupportedAlgorithm] if the provided algorithm is not a supported
-/// AES algorithm.
-pub fn aes_algorithm_iv_len<BE: Display>(
+/// symmetric algorithm.
+pub const fn symmetric_algorithm_iv_len<BE: Display>(
     alg: iana::Algorithm,
 ) -> Result<usize, CoseCipherError<BE>> {
     match alg {
         // AES-GCM: Nonce is fixed at 96 bits (RFC 9053, Section 4.1).
-        iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => Ok(12),
-        // AES-CCM: Nonce length is parameterized.
+        // ChaCha20/Poly1305: Nonce is fixed at 96 bits (RFC 9053, Section 4.3).
+        iana::Algorithm::A128GCM
+        | iana::Algorithm::A192GCM
+        | iana::Algorithm::A256GCM
+        | iana::Algorithm::ChaCha20Poly1305 => Ok(12),
+        // AES-CCM: Nonce length is parameterized (RFC 9053, Section 4.2).
         iana::Algorithm::AES_CCM_16_64_128
         | iana::Algorithm::AES_CCM_16_128_128
         | iana::Algorithm::AES_CCM_16_64_256
@@ -120,16 +125,17 @@ pub fn aes_algorithm_iv_len<BE: Display>(
     }
 }
 
-/// Returns the authentication tag length expected for the AES-CCM variant given as `alg`.
+/// Returns the authentication tag length expected for the symmetric algorithm given as `alg`.
 ///
 /// # Errors
 ///
 /// Returns [CoseCipherError::UnsupportedAlgorithm] if the provided algorithm is not a supported
-/// variant of AES-CCM.
-pub fn aes_ccm_algorithm_tag_len<BE: Display>(
+/// symmetric algorithm.
+pub const fn symmetric_algorithm_tag_len<BE: Display>(
     algorithm: iana::Algorithm,
 ) -> Result<usize, CoseCipherError<BE>> {
     match algorithm {
+        // AES-CCM: Tag length is parameterized (RFC 9053, Section 4.2).
         iana::Algorithm::AES_CCM_16_64_128
         | iana::Algorithm::AES_CCM_64_64_128
         | iana::Algorithm::AES_CCM_16_64_256
@@ -137,23 +143,29 @@ pub fn aes_ccm_algorithm_tag_len<BE: Display>(
         iana::Algorithm::AES_CCM_16_128_256
         | iana::Algorithm::AES_CCM_64_128_256
         | iana::Algorithm::AES_CCM_16_128_128
-        | iana::Algorithm::AES_CCM_64_128_128 => Ok(16),
+        | iana::Algorithm::AES_CCM_64_128_128
+        // AES-GCM: Tag length is fixed to 128 bits (RFC 9053, Section 4.1).
+        | iana::Algorithm::A128GCM
+        | iana::Algorithm::A192GCM
+        | iana::Algorithm::A256GCM
+        // ChaCha20/Poly1305: Tag length is fixed to 128 bits (RFC 9053, Section 4.3).
+        | iana::Algorithm::ChaCha20Poly1305 => Ok(16),
         v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
             v,
         ))),
     }
 }
 
-/// Determines the key and IV for an AES AEAD operation using the provided `protected` and
-/// `unprotected` headers, ensuring that the provided `parsed_key` is a valid AES key in the
+/// Determines the key and IV for an AEAD operation using the provided `protected` and
+/// `unprotected` headers, ensuring that the provided `parsed_key` is a valid symmetric key in the
 /// process.
-pub(crate) fn determine_and_check_aes_params<'a, BE: Display>(
+pub(crate) fn determine_and_check_symmetric_params<'a, BE: Display>(
     alg: iana::Algorithm,
     parsed_key: CoseParsedKey<'a, BE>,
     protected: Option<&Header>,
     unprotected: Option<&Header>,
 ) -> Result<(CoseSymmetricKey<'a, BE>, Vec<u8>), CoseCipherError<BE>> {
-    let symm_key = ensure_valid_aes_key::<BE>(alg, parsed_key)?;
+    let symm_key = ensure_valid_symmetric_key::<BE>(alg, parsed_key)?;
 
     let iv = determine_header_param(protected, unprotected, |v| {
         (!v.iv.is_empty()).then_some(&v.iv)
@@ -163,7 +175,7 @@ pub(crate) fn determine_and_check_aes_params<'a, BE: Display>(
         (!v.partial_iv.is_empty()).then_some(&v.partial_iv)
     });
 
-    let expected_iv_len = aes_algorithm_iv_len(alg)?;
+    let expected_iv_len = symmetric_algorithm_iv_len(alg)?;
 
     let iv = match (iv, partial_iv) {
         // IV and partial IV must not be set at the same time.
@@ -219,7 +231,3 @@ pub(crate) fn determine_and_check_aes_params<'a, BE: Display>(
 
     Ok((symm_key, iv))
 }
-
-/// Authentication tag length to use for AES-GCM (fixed to 128 bits according to
-/// [RFC 9053, section 4.1](https://datatracker.ietf.org/doc/html/rfc9053#section-4.1)).
-pub const AES_GCM_TAG_LEN: usize = 16;

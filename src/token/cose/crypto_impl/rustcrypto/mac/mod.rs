@@ -13,6 +13,7 @@ use crate::token::cose::crypto_impl::rustcrypto::CoseCipherError;
 use crate::token::cose::crypto_impl::rustcrypto::RustCryptoContext;
 use crate::token::cose::CoseSymmetricKey;
 use crate::token::cose::MacCryptoBackend;
+use alloc::vec::Vec;
 use coset::iana;
 use rand::{CryptoRng, RngCore};
 

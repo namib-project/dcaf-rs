@@ -17,12 +17,13 @@ exclude = [
 default = ["std", "openssl"]
 std = ["serde/std", "ciborium/std", "serde_bytes/std", "erased-serde/std", "derive_builder/std"]
 rustcrypto = ["rustcrypto-aes-gcm", "rustcrypto-aes-kw", "rustcrypto-ecdsa", "rustcrypto-hmac"]
-rustcrypto-encrypt = ["rustcrypto-aes-gcm", "rustcrypto-aes-ccm"]
+rustcrypto-encrypt = ["rustcrypto-aes-gcm", "rustcrypto-aes-ccm", "rustcrypto-chacha20-poly1305"]
 rustcrypto-sign = ["rustcrypto-ecdsa"]
 rustcrypto-key-distribution = ["rustcrypto-aes-kw"]
 rustcrypto-mac = ["rustcrypto-hmac"]
 rustcrypto-aes-gcm = ["dep:aes-gcm", "dep:typenum", "dep:aead", "dep:aes"]
 rustcrypto-aes-ccm = ["dep:ccm", "dep:typenum", "dep:aead", "dep:aes"]
+rustcrypto-chacha20-poly1305 = ["dep:chacha20poly1305", "dep:typenum", "dep:aead"]
 rustcrypto-aes-kw = ["dep:aes-kw", "dep:aes", "dep:typenum", "dep:crypto-common"]
 rustcrypto-ecdsa = ["dep:ecdsa", "dep:p256", "dep:p384", "dep:digest", "dep:sha2", "dep:elliptic-curve"]
 rustcrypto-hmac = ["dep:hmac", "dep:digest", "dep:sha2"]
@@ -43,6 +44,7 @@ openssl = { version = "^0.10", optional = true }
 lazy_static = "1.4.0"
 aes-gcm = { version = "0.10.3", optional = true, default-features = false, features = ["alloc", "aes"] }
 ccm = { version = "0.5.0", optional = true, default-features = false, features = ["alloc"] }
+chacha20poly1305 = { version = "0.10.1", optional = true, default-features = false, features = ["alloc"] }
 typenum = { version = "1.17.0", optional = true, default-features = false, features = ["const-generics"] }
 crypto-common = { version = "0.1.6", optional = true, default-features = false }
 aead = { version = "0.5.2", optional = true, default-features = false }

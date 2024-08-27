@@ -12,7 +12,7 @@
 use super::*;
 use crate::common::test_helper::MockCipher;
 use crate::error::CoseCipherError;
-use crate::token::cose::util::aes_algorithm_iv_len;
+use crate::token::cose::util::symmetric_algorithm_iv_len;
 use alloc::vec::Vec;
 use alloc::{string::ToString, vec};
 use base64::Engine;
@@ -88,7 +88,7 @@ fn example_headers(alg: Algorithm, generate_iv: bool) -> (Header, Header) {
         let mut iv = vec![
             0x63, 0x68, 0x98, 0x99, 0x4F, 0xF0, 0xEC, 0x7B, 0xFC, 0xF6, 0xD3, 0xF9, 0x5B,
         ];
-        iv.truncate(aes_algorithm_iv_len::<Infallible>(alg).expect("invalid algorithm"));
+        iv.truncate(symmetric_algorithm_iv_len::<Infallible>(alg).expect("invalid algorithm"));
         unprotected_header_builder = unprotected_header_builder.iv(iv);
     }
     let unprotected_header = unprotected_header_builder.build();

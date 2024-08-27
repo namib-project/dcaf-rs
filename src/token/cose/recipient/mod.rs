@@ -25,7 +25,7 @@ use crate::token::cose::aad::{AadProvider, InvertedAadProvider};
 use crate::token::cose::header::HeaderParam;
 use crate::token::cose::key::{CoseParsedKey, KeyProvider};
 use crate::token::cose::util::determine_header_param;
-use crate::token::cose::util::ensure_valid_aes_key;
+use crate::token::cose::util::ensure_valid_symmetric_key;
 use crate::token::cose::util::try_cose_crypto_operation;
 use crate::token::cose::util::{determine_algorithm, determine_key_candidates};
 use crate::token::cose::{CoseSymmetricKey, CryptoBackend};
@@ -612,7 +612,7 @@ impl CoseRecipientBuilderExt for CoseRecipientBuilder {
                             iana::Algorithm::A128KW
                             | iana::Algorithm::A192KW
                             | iana::Algorithm::A256KW => {
-                                let symm_key = ensure_valid_aes_key(alg, parsed_key)?;
+                                let symm_key = ensure_valid_symmetric_key(alg, parsed_key)?;
 
                                 if protected.is_some() && !protected.as_ref().unwrap().is_empty() {
                                     return Err(CoseCipherError::AadUnsupported);
@@ -842,7 +842,7 @@ impl CoseRecipientExt for CoseRecipient {
                         iana::Algorithm::A128KW
                         | iana::Algorithm::A192KW
                         | iana::Algorithm::A256KW => {
-                            let symm_key = ensure_valid_aes_key(alg, parsed_key)?;
+                            let symm_key = ensure_valid_symmetric_key(alg, parsed_key)?;
                             if !self.protected.is_empty() {
                                 return Err(CoseCipherError::AadUnsupported);
                             }

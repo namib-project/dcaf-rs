@@ -22,8 +22,7 @@ mod encrypt;
 mod encrypt0;
 
 use crate::token::cose::util::{
-    aes_ccm_algorithm_tag_len, determine_and_check_aes_params, try_cose_crypto_operation,
-    AES_GCM_TAG_LEN,
+    determine_and_check_symmetric_params, symmetric_algorithm_tag_len, try_cose_crypto_operation,
 };
 pub use encrypt::{CoseEncryptBuilderExt, CoseEncryptExt};
 pub use encrypt0::{CoseEncrypt0BuilderExt, CoseEncrypt0Ext};
@@ -218,8 +217,8 @@ pub trait EncryptCryptoBackend: CryptoBackend {
 
     /// Decrypts the given `ciphertext_with_tag` using AES-CCM with the parameters L (size of length field)
     /// and M (size of authentication tag) specified for the given `algorithm` in
-    /// [RFC 9053, section 4.2](https://datatracker.ietf.org/doc/html/rfc9053#section-4.2) and the
-    /// given `key`.
+    /// [RFC 9053, section 4.2](https://datatracker.ietf.org/doc/html/rfc9053#section-4.2), the
+    /// given `key`, and the provided `iv`.
     ///
     /// # Arguments
     ///
@@ -280,6 +279,103 @@ pub trait EncryptCryptoBackend: CryptoBackend {
             algorithm,
         )))
     }
+
+    /// Encrypts the given `payload` using ChaCha20/Poly1305 using the parameters specified for it
+    /// in [RFC 9053, section 4.3](https://datatracker.ietf.org/doc/html/rfc9053#section-4.3), the
+    /// given `key`, and the provided `iv`.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Symmetric key that should be used.
+    ///           Implementations may assume that the provided key has the right length for
+    ///           ChaCha20/Poly1305 and panic if this is not the case.
+    /// * `plaintext` - Data that should be encrypted.
+    /// * `aad` - Additional authenticated data that should be included in the calculation of the
+    ///           authentication tag, but not encrypted.
+    /// * `iv`  - Initialization vector that should be used for the encryption process.
+    ///           Implementations may assume that `iv` has the correct length for ChaCha20/Poly1305
+    ///           and panic if this is not the case.
+    ///
+    /// # Returns
+    ///
+    /// It is expected that the return value is the computed output of ChaCha20/Poly1305 as
+    /// specified in [RFC 8439, Section 2.8](https://datatracker.ietf.org/doc/html/rfc8439#section-2.8).
+    ///
+    /// # Errors
+    ///
+    /// In case of errors, the implementation may return any valid [`CoseCipherError`].
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
+    /// backend-specific error.
+    ///
+    /// # Panics
+    ///
+    /// Implementations may panic if the provided key or IV are not of the right length for
+    /// ChaCha20/Poly1305 or if an unrecoverable backend error occurs that necessitates a panic (at
+    /// their own discretion).
+    /// In the last of the above cases, additional panics should be documented on the backend level.
+    #[allow(unused_variables)]
+    fn encrypt_chacha20_poly1305(
+        &mut self,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            iana::Algorithm::ChaCha20Poly1305,
+        )))
+    }
+
+    /// Decrypts the given `ciphertext_with_tag` using ChaCha20/Poly1305 using the parameters specified for it
+    /// in [RFC 9053, section 4.3](https://datatracker.ietf.org/doc/html/rfc9053#section-4.3), the
+    /// given `key`, and the provided `iv`.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Symmetric key that should be used.
+    ///           Implementations may assume that the provided key has the right length for
+    ///           ChaCha20/Poly1305 and panic if this is not the case.
+    /// * `ciphertext_with_tag` - The ciphertext that should be decrypted concatenated with the
+    ///           authentication tag that should be verified (if valid, should be the output of a
+    ///           previous encryption as specified in
+    ///           [RFC 8439, Section 2.8](https://datatracker.ietf.org/doc/html/rfc8439#section-2.8)).
+    ///           Is guaranteed to be at least as long as the authentication tag should be.
+    /// * `aad` - Additional authenticated data that should be included in the calculation of the
+    ///           authentication tag, but not encrypted.
+    /// * `iv`  - Initialization vector that should be used for the decryption process.
+    ///           Implementations may assume that `iv` has the correct length for ChaCha20/Poly1305
+    ///           and panic if this is not the case.
+    ///
+    /// # Returns
+    ///
+    /// It is expected that the return value is either the computed plaintext if decryption and
+    /// authentication are successful, or a [`CoseCipherError::VerificationFailure`] if one of these
+    /// steps fails even though the input is well-formed.
+    ///
+    /// # Errors
+    ///
+    /// In case of errors, the implementation may return any valid [`CoseCipherError`].
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
+    /// backend-specific error.
+    ///
+    /// # Panics
+    ///
+    /// Implementations may panic if the provided key or IV are not of the right length for
+    /// ChaCha20/Poly1305 or if an unrecoverable backend error occurs that necessitates a panic (at
+    /// their own discretion).
+    /// In the last of the above cases, additional panics should be documented on the backend level.
+    #[allow(unused_variables)]
+    fn decrypt_chacha20_poly1305(
+        &mut self,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext_with_tag: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            iana::Algorithm::ChaCha20Poly1305,
+        )))
+    }
 }
 
 /// Attempts to perform a COSE encryption operation for a [`CoseEncrypt`](coset::CoseEncrypt) or
@@ -308,12 +404,11 @@ fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Encrypt)]),
         |key, alg, protected, unprotected| {
             let parsed_key = CoseParsedKey::try_from(key)?;
+            // Check if this is a valid symmetric key, determine IV.
+            let (symm_key, iv) =
+                determine_and_check_symmetric_params(alg, parsed_key, protected, unprotected)?;
             match alg {
                 iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => {
-                    // Check if this is a valid AES key, determine IV.
-                    let (symm_key, iv) =
-                        determine_and_check_aes_params(alg, parsed_key, protected, unprotected)?;
-
                     backend.encrypt_aes_gcm(alg, symm_key, plaintext, enc_structure, &iv)
                 }
                 iana::Algorithm::AES_CCM_16_64_128
@@ -324,11 +419,10 @@ fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
                 | iana::Algorithm::AES_CCM_64_64_256
                 | iana::Algorithm::AES_CCM_16_128_256
                 | iana::Algorithm::AES_CCM_64_128_256 => {
-                    // Check if this is a valid AES key, determine IV.
-                    let (symm_key, iv) =
-                        determine_and_check_aes_params(alg, parsed_key, protected, unprotected)?;
-
                     backend.encrypt_aes_ccm(alg, symm_key, plaintext, enc_structure, &iv)
+                }
+                iana::Algorithm::ChaCha20Poly1305 => {
+                    backend.encrypt_chacha20_poly1305(symm_key, plaintext, enc_structure, &iv)
                 }
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
                     alg,
@@ -364,18 +458,18 @@ pub(crate) fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
         BTreeSet::from_iter(vec![KeyOperation::Assigned(iana::KeyOperation::Decrypt)]),
         |key, alg, protected, unprotected| {
             let parsed_key = CoseParsedKey::try_from(key)?;
+            // Check if this is a valid symmetric key, determine IV.
+            let (symm_key, iv) =
+                determine_and_check_symmetric_params(alg, parsed_key, protected, unprotected)?;
+
+            // Authentication tag is 16 bytes long and should be included in the ciphertext.
+            // Empty payloads are allowed, therefore we check for ciphertext.len() < 16, not <= 16.
+            if ciphertext.len() < symmetric_algorithm_tag_len(alg)? {
+                return Err(CoseCipherError::VerificationFailure);
+            }
+
             match alg {
                 iana::Algorithm::A128GCM | iana::Algorithm::A192GCM | iana::Algorithm::A256GCM => {
-                    // Check if this is a valid AES key, determine IV.
-                    let (symm_key, iv) =
-                        determine_and_check_aes_params(alg, parsed_key, protected, unprotected)?;
-
-                    // Authentication tag is 16 bytes long and should be included in the ciphertext.
-                    // Empty payloads are allowed, therefore we check for ciphertext.len() < 16, not <= 16.
-                    if ciphertext.len() < AES_GCM_TAG_LEN {
-                        return Err(CoseCipherError::VerificationFailure);
-                    }
-
                     (*backend.borrow_mut()).decrypt_aes_gcm(
                         alg,
                         symm_key,
@@ -391,23 +485,15 @@ pub(crate) fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
                 | iana::Algorithm::AES_CCM_16_64_256
                 | iana::Algorithm::AES_CCM_64_64_256
                 | iana::Algorithm::AES_CCM_16_128_256
-                | iana::Algorithm::AES_CCM_64_128_256 => {
-                    // Check if this is a valid AES key, determine IV.
-                    let (symm_key, iv) =
-                        determine_and_check_aes_params(alg, parsed_key, protected, unprotected)?;
-
-                    if ciphertext.len() < aes_ccm_algorithm_tag_len(alg)? {
-                        return Err(CoseCipherError::VerificationFailure);
-                    }
-
-                    (*backend.borrow_mut()).decrypt_aes_ccm(
-                        alg,
-                        symm_key,
-                        ciphertext,
-                        enc_structure,
-                        &iv,
-                    )
-                }
+                | iana::Algorithm::AES_CCM_64_128_256 => (*backend.borrow_mut()).decrypt_aes_ccm(
+                    alg,
+                    symm_key,
+                    ciphertext,
+                    enc_structure,
+                    &iv,
+                ),
+                iana::Algorithm::ChaCha20Poly1305 => (*backend.borrow_mut())
+                    .decrypt_chacha20_poly1305(symm_key, ciphertext, enc_structure, &iv),
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
                     alg,
                 ))),

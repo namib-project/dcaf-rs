@@ -17,6 +17,7 @@ use sha2::{Sha256, Sha384, Sha512};
 use crate::error::CoseCipherError;
 use crate::token::cose::crypto_impl::rustcrypto::RustCryptoContext;
 use crate::token::cose::{CoseSymmetricKey, CryptoBackend};
+use alloc::vec::Vec;
 
 impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
     /// Compute the HMAC of `payload` using the given `key` with the HMAC function

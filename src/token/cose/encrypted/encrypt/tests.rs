@@ -32,7 +32,11 @@ use crate::token::cose::{util::determine_header_param, CryptoBackend};
 #[cfg(feature = "openssl")]
 use crate::token::cose::test_helper::openssl_ctx;
 #[cfg(all(
-    any(feature = "rustcrypto-aes-gcm", feature = "rustcrypto-aes-ccm"),
+    any(
+        feature = "rustcrypto-aes-gcm",
+        feature = "rustcrypto-aes-ccm",
+        feature = "rustcrypto-chacha20-poly1305"
+    ),
     feature = "rustcrypto-aes-kw"
 ))]
 use crate::token::cose::test_helper::rustcrypto_ctx;
@@ -320,6 +324,42 @@ fn cose_examples_aes_ccm_self_signed<B: EncryptCryptoBackend + KeyDistributionCr
 #[rstest]
 #[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
 #[cfg_attr(
+    all(
+        feature = "rustcrypto-aes-kw",
+        feature = "rustcrypto-chacha20-poly1305"
+    ),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_chacha20_poly1305_reference_output<
+    B: EncryptCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/chacha-poly-examples/chacha-poly-0[0-9].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_reference_output_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(
+        feature = "rustcrypto-aes-kw",
+        feature = "rustcrypto-chacha20-poly1305"
+    ),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_chacha20_poly1305_self_signed<
+    B: EncryptCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/chacha-poly-examples/chacha-poly-0[0-9].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
     all(feature = "rustcrypto-aes-kw", feature = "rustcrypto-aes-gcm"),
     case::rustcrypto(rustcrypto_ctx())
 )]
@@ -351,6 +391,22 @@ fn aes_gcm_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
 )]
 fn aes_ccm_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/dcaf_cose_examples/aes-ccm/*.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);
+}
+
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+#[cfg_attr(
+    all(
+        feature = "rustcrypto-aes-kw",
+        feature = "rustcrypto-chacha20-poly1305"
+    ),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn chacha20_poly1305_tests<B: EncryptCryptoBackend + KeyDistributionCryptoBackend>(
+    #[files("tests/dcaf_cose_examples/chacha-poly/*.json")] test_path: PathBuf,
     #[case] backend: B,
 ) {
     perform_cose_self_signed_test::<CoseEncrypt, B>(test_path, backend);

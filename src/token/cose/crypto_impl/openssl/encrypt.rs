@@ -11,7 +11,7 @@
 
 use crate::error::CoseCipherError;
 use crate::token::cose::crypto_impl::openssl::OpensslContext;
-use crate::token::cose::util::{aes_ccm_algorithm_tag_len, AES_GCM_TAG_LEN};
+use crate::token::cose::util::symmetric_algorithm_tag_len;
 use crate::token::cose::{crypto_impl, CoseSymmetricKey, EncryptCryptoBackend};
 use alloc::vec::Vec;
 use coset::iana;
@@ -27,6 +27,7 @@ impl EncryptCryptoBackend for OpensslContext {
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         let cipher = crypto_impl::openssl::algorithm_to_cipher(algorithm)?;
+        let tag_len = symmetric_algorithm_tag_len(algorithm)?;
         let mut ctx = CipherCtx::new()?;
         // So, apparently OpenSSL requires a very specific order of operations which differs
         // slightly for AES-GCM and AES-CCM in order to work.
@@ -51,7 +52,7 @@ impl EncryptCryptoBackend for OpensslContext {
         // 6. Then, we can finish the operation.
         ctx.cipher_final_vec(&mut ciphertext)?;
         let ciphertext_len = ciphertext.len();
-        ciphertext.resize(ciphertext_len + AES_GCM_TAG_LEN, 0u8);
+        ciphertext.resize(ciphertext_len + tag_len, 0u8);
         ctx.tag(&mut ciphertext[ciphertext_len..])?;
         Ok(ciphertext)
     }
@@ -65,8 +66,9 @@ impl EncryptCryptoBackend for OpensslContext {
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         let cipher = crypto_impl::openssl::algorithm_to_cipher(algorithm)?;
-        let auth_tag = &ciphertext_with_tag[(ciphertext_with_tag.len() - AES_GCM_TAG_LEN)..];
-        let ciphertext = &ciphertext_with_tag[..(ciphertext_with_tag.len() - AES_GCM_TAG_LEN)];
+        let tag_len = symmetric_algorithm_tag_len(algorithm)?;
+        let auth_tag = &ciphertext_with_tag[(ciphertext_with_tag.len() - tag_len)..];
+        let ciphertext = &ciphertext_with_tag[..(ciphertext_with_tag.len() - tag_len)];
 
         let mut ctx = CipherCtx::new()?;
         // Refer to https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption#Authenticated_Decryption_using_GCM_mode
@@ -103,7 +105,7 @@ impl EncryptCryptoBackend for OpensslContext {
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         let cipher = crypto_impl::openssl::algorithm_to_cipher(algorithm)?;
-        let tag_len = aes_ccm_algorithm_tag_len(algorithm)?;
+        let tag_len = symmetric_algorithm_tag_len(algorithm)?;
         let mut ctx = CipherCtx::new()?;
         // Refer to https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption#Authenticated_Encryption_using_CCM_mode
         // for reference.
@@ -140,7 +142,7 @@ impl EncryptCryptoBackend for OpensslContext {
         iv: &[u8],
     ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
         let cipher = crypto_impl::openssl::algorithm_to_cipher(algorithm)?;
-        let tag_len = aes_ccm_algorithm_tag_len(algorithm)?;
+        let tag_len = symmetric_algorithm_tag_len(algorithm)?;
         let auth_tag = &ciphertext_with_tag[(ciphertext_with_tag.len() - tag_len)..];
         let ciphertext = &ciphertext_with_tag[..(ciphertext_with_tag.len() - tag_len)];
 
@@ -161,6 +163,71 @@ impl EncryptCryptoBackend for OpensslContext {
         // 5. Then, we *must* set the AAD _before_ setting the ciphertext.
         ctx.cipher_update(aad, None)?;
         // 6. Finally, we must provide all ciphertext in a single call for decryption.
+        let mut plaintext = vec![0; ciphertext.len()];
+        let plaintext_len = ctx.cipher_update(ciphertext, Some(&mut plaintext))?;
+        plaintext.truncate(plaintext_len);
+        // No call to cipher_final() here, I guess?
+        // The official examples in the OpenSSL wiki don't finalize, so we won't either.
+
+        Ok(plaintext)
+    }
+
+    fn encrypt_chacha20_poly1305(
+        &mut self,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        plaintext: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let cipher = openssl::cipher::Cipher::chacha20_poly1305();
+        let tag_len = symmetric_algorithm_tag_len(iana::Algorithm::ChaCha20Poly1305)?;
+        let mut ctx = CipherCtx::new()?;
+        // Refer to https://docs.openssl.org/1.1.1/man3/EVP_EncryptInit/#chacha20-poly1305 for
+        // reference.
+        // 1. First, we set the cipher.
+        ctx.encrypt_init(Some(cipher), None, None)?;
+        // 2. We *must* set the IV length _before_ setting the IV.
+        ctx.set_iv_length(iv.len())?;
+        // 3. Now we can set key and IV.
+        ctx.encrypt_init(None, Some(key.k), Some(iv))?;
+        let mut ciphertext = vec![];
+        // 4. Then, we set the AAD before setting the plaintext.
+        ctx.cipher_update(aad, None)?;
+        // 5. Finally, we provide the plaintext.
+        ctx.cipher_update_vec(plaintext, &mut ciphertext)?;
+        // 6. Then, we can finish the operation.
+        ctx.cipher_final_vec(&mut ciphertext)?;
+        let ciphertext_len = ciphertext.len();
+        ciphertext.resize(ciphertext_len + tag_len, 0u8);
+        ctx.tag(&mut ciphertext[ciphertext_len..])?;
+        Ok(ciphertext)
+    }
+
+    fn decrypt_chacha20_poly1305(
+        &mut self,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        ciphertext_with_tag: &[u8],
+        aad: &[u8],
+        iv: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        let cipher = openssl::cipher::Cipher::chacha20_poly1305();
+        let tag_len = symmetric_algorithm_tag_len(iana::Algorithm::ChaCha20Poly1305)?;
+        let auth_tag = &ciphertext_with_tag[(ciphertext_with_tag.len() - tag_len)..];
+        let ciphertext = &ciphertext_with_tag[..(ciphertext_with_tag.len() - tag_len)];
+
+        let mut ctx = CipherCtx::new()?;
+        // Refer to https://docs.openssl.org/1.1.1/man3/EVP_EncryptInit/#chacha20-poly1305 for
+        // reference.
+        // 1. First, we set the cipher.
+        ctx.decrypt_init(Some(cipher), None, None)?;
+        // 2. We *must* set the tag and IV length _before_ setting key and IV.
+        ctx.set_iv_length(iv.len())?;
+        ctx.set_tag(auth_tag)?;
+        // 3. Now we can set key and IV.
+        ctx.decrypt_init(None, Some(key.k), Some(iv))?;
+        // 4. Then, we set the AAD before setting the ciphertext.
+        ctx.cipher_update(aad, None)?;
+        // 5. Finally, we provide the ciphertext for decryption.
         let mut plaintext = vec![0; ciphertext.len()];
         let plaintext_len = ctx.cipher_update(ciphertext, Some(&mut plaintext))?;
         plaintext.truncate(plaintext_len);

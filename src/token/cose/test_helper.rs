@@ -117,6 +117,7 @@ fn string_to_algorithm<'de, D: Deserializer<'de>>(
         Some("A128GCM") => Ok(Some(iana::Algorithm::A128GCM)),
         Some("A192GCM") => Ok(Some(iana::Algorithm::A192GCM)),
         Some("A256GCM") => Ok(Some(iana::Algorithm::A256GCM)),
+        Some("ChaCha-Poly1305") => Ok(Some(iana::Algorithm::ChaCha20Poly1305)),
         Some("AES-CCM-16-128/64") => Ok(Some(iana::Algorithm::AES_CCM_16_64_128)),
         Some("AES-CCM-16-256/64") => Ok(Some(iana::Algorithm::AES_CCM_16_64_256)),
         Some("AES-CCM-64-128/64") => Ok(Some(iana::Algorithm::AES_CCM_64_64_128)),
