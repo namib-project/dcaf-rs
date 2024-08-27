@@ -27,7 +27,7 @@ use strum_macros::Display;
 
 use crate::error::CoseCipherError;
 use crate::token::cose::encrypted::{EncryptCryptoBackend, AES_GCM_TAG_LEN};
-use crate::token::cose::header_util::HeaderParam;
+use crate::token::cose::header::HeaderParam;
 use crate::token::cose::key::{CoseEc2Key, CoseSymmetricKey, EllipticCurve};
 use crate::token::cose::maced::MacCryptoBackend;
 use crate::token::cose::recipient::KeyDistributionCryptoBackend;

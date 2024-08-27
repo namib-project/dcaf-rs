@@ -208,7 +208,6 @@ use core::fmt::{Debug, Display};
 
 pub mod crypto_impl;
 mod encrypted;
-mod header_util;
 mod key;
 mod signed;
 
@@ -220,14 +219,15 @@ pub mod aad;
 
 pub use aad::AadProvider;
 pub use encrypted::*;
-pub use header_util::*;
 pub use key::*;
 pub use maced::*;
 pub use recipient::*;
 pub use signed::*;
+pub use util::*;
 
 #[cfg(all(test, feature = "std"))]
 pub(crate) mod test_helper;
+pub mod util;
 
 /// Trait for implementations of cryptographic functions that can be used for COSE structures.
 pub trait CryptoBackend {

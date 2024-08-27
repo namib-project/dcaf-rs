@@ -103,8 +103,8 @@ pub use crate::token::cose::SignCryptoBackend;
 use ciborium::value::Value;
 use cose::AadProvider;
 use cose::CoseRecipientBuilderExt;
-use cose::{determine_algorithm, KeyDistributionCryptoBackend};
 use cose::{generate_cek_for_alg, KeyProvider};
+use cose::{util::header::determine_algorithm, KeyDistributionCryptoBackend};
 use cose::{
     CoseEncrypt0BuilderExt, CoseEncrypt0Ext, CoseEncryptBuilderExt, CoseEncryptExt,
     EncryptCryptoBackend,

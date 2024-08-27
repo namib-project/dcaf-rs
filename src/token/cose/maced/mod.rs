@@ -20,7 +20,7 @@ pub use mac0::{CoseMac0BuilderExt, CoseMac0Ext};
 
 use crate::error::CoseCipherError;
 use crate::token::cose::key::{CoseParsedKey, CoseSymmetricKey, KeyProvider};
-use crate::token::cose::{header_util, key, CryptoBackend};
+use crate::token::cose::{header, key, CryptoBackend};
 
 mod mac;
 mod mac0;
@@ -157,7 +157,7 @@ fn try_compute<B: MacCryptoBackend, CKP: KeyProvider>(
     unprotected: Option<&Header>,
     payload: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    header_util::try_cose_crypto_operation(
+    header::try_cose_crypto_operation(
         key_provider,
         protected,
         unprotected,
@@ -197,7 +197,7 @@ pub(crate) fn try_verify<B: MacCryptoBackend, CKP: KeyProvider>(
     tag: &[u8],
     payload: &[u8],
 ) -> Result<(), CoseCipherError<B::Error>> {
-    header_util::try_cose_crypto_operation(
+    header::try_cose_crypto_operation(
         key_provider,
         Some(protected),
         Some(unprotected),

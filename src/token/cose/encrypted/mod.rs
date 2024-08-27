@@ -17,9 +17,9 @@ use core::fmt::Display;
 use coset::{iana, Algorithm, Header, KeyOperation};
 
 use crate::error::CoseCipherError;
-use crate::token::cose::header_util::HeaderParam;
+use crate::token::cose::header::HeaderParam;
 use crate::token::cose::key::{CoseParsedKey, CoseSymmetricKey, KeyProvider};
-use crate::token::cose::{header_util, key, CryptoBackend, KeyParam};
+use crate::token::cose::{header, key, CryptoBackend, KeyParam};
 
 mod encrypt;
 mod encrypt0;
@@ -347,11 +347,11 @@ fn determine_and_check_aes_params<'a, BE: Display>(
 ) -> Result<(CoseSymmetricKey<'a, BE>, Vec<u8>), CoseCipherError<BE>> {
     let symm_key = key::ensure_valid_aes_key::<BE>(alg, parsed_key)?;
 
-    let iv = header_util::determine_header_param(protected, unprotected, |v| {
+    let iv = header::determine_header_param(protected, unprotected, |v| {
         (!v.iv.is_empty()).then_some(&v.iv)
     });
 
-    let partial_iv = header_util::determine_header_param(protected, unprotected, |v| {
+    let partial_iv = header::determine_header_param(protected, unprotected, |v| {
         (!v.partial_iv.is_empty()).then_some(&v.partial_iv)
     });
 
@@ -431,7 +431,7 @@ fn try_encrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
     // (RFC 9052, Section 5.3).
     enc_structure: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    header_util::try_cose_crypto_operation(
+    header::try_cose_crypto_operation(
         key_provider,
         protected,
         unprotected,
@@ -487,7 +487,7 @@ pub(crate) fn try_decrypt<B: EncryptCryptoBackend, CKP: KeyProvider>(
     // (RFC 9052, Section 5.3).
     enc_structure: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<B::Error>> {
-    header_util::try_cose_crypto_operation(
+    header::try_cose_crypto_operation(
         key_provider,
         Some(protected),
         Some(unprotected),

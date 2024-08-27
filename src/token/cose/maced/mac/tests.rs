@@ -18,7 +18,7 @@ use coset::{
 };
 use rstest::rstest;
 
-use crate::token::cose::header_util::determine_algorithm;
+use crate::token::cose::header::determine_algorithm;
 use crate::token::cose::key::CoseSymmetricKey;
 use crate::token::cose::maced::mac::{CoseMacBuilderExt, CoseMacExt};
 use crate::token::cose::maced::MacCryptoBackend;
