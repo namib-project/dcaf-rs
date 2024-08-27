@@ -19,7 +19,7 @@ use rstest::rstest;
 
 use crate::token::cose::encrypted::encrypt::{CoseEncryptBuilderExt, CoseEncryptExt};
 use crate::token::cose::encrypted::EncryptCryptoBackend;
-use crate::token::cose::header_util::{determine_algorithm, HeaderBuilderExt};
+use crate::token::cose::header::HeaderBuilderExt;
 use crate::token::cose::key::CoseSymmetricKey;
 use crate::token::cose::recipient::{CoseRecipientBuilderExt, KeyDistributionCryptoBackend};
 use crate::token::cose::test_helper::{
@@ -27,7 +27,7 @@ use crate::token::cose::test_helper::{
     perform_cose_reference_output_test, perform_cose_self_signed_test,
     serialize_cose_with_failures, CoseStructTestHelper, TestCase,
 };
-use crate::token::cose::{determine_header_param, CryptoBackend};
+use crate::token::cose::{util::determine_header_param, CryptoBackend};
 
 #[cfg(feature = "openssl")]
 use crate::token::cose::test_helper::openssl_ctx;
@@ -36,6 +36,7 @@ use crate::token::cose::test_helper::openssl_ctx;
     feature = "rustcrypto-aes-kw"
 ))]
 use crate::token::cose::test_helper::rustcrypto_ctx;
+use crate::token::cose::util::determine_algorithm;
 
 impl<B: CryptoBackend + EncryptCryptoBackend + KeyDistributionCryptoBackend> CoseStructTestHelper<B>
     for CoseEncrypt

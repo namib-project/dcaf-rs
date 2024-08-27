@@ -101,10 +101,11 @@ use crate::error::AccessTokenError;
 use crate::token::cose::CryptoBackend;
 pub use crate::token::cose::SignCryptoBackend;
 use ciborium::value::Value;
+use cose::util::generate_cek_for_alg;
 use cose::AadProvider;
 use cose::CoseRecipientBuilderExt;
-use cose::{determine_algorithm, KeyDistributionCryptoBackend};
-use cose::{generate_cek_for_alg, KeyProvider};
+use cose::KeyProvider;
+use cose::{util::determine_algorithm, KeyDistributionCryptoBackend};
 use cose::{
     CoseEncrypt0BuilderExt, CoseEncrypt0Ext, CoseEncryptBuilderExt, CoseEncryptExt,
     EncryptCryptoBackend,

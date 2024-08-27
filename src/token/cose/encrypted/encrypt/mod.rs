@@ -46,7 +46,7 @@ pub trait CoseEncryptBuilderExt: Sized {
     ///                    override headers previously set using
     ///                    [`CoseEncryptBuilder::unprotected`](CoseEncryptBuilder).
     /// - `payload`      - payload which should be added to the resulting
-    ///                    [`CoseEncrypt`](coset::CoseEncrypt) instance in encrypted form.
+    ///                    [`CoseEncrypt`](CoseEncrypt) instance in encrypted form.
     ///                    Will override a payload previously set using
     ///                    [`CoseEncryptBuilder::payload`](CoseEncryptBuilder).
     /// - `external_aad` - provider of additional authenticated data that should be included in the

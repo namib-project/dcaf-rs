@@ -208,19 +208,20 @@ use core::fmt::{Debug, Display};
 
 pub mod crypto_impl;
 mod encrypted;
-mod header_util;
 mod key;
 mod signed;
 
 mod maced;
 mod recipient;
 
+mod header;
+
 /// AAD providers and operations for those.
 pub mod aad;
 
 pub use aad::AadProvider;
 pub use encrypted::*;
-pub use header_util::*;
+pub use header::*;
 pub use key::*;
 pub use maced::*;
 pub use recipient::*;
@@ -228,6 +229,8 @@ pub use signed::*;
 
 #[cfg(all(test, feature = "std"))]
 pub(crate) mod test_helper;
+/// Utility functions for the cose module itself and for cryptographic backend implementors.
+pub mod util;
 
 /// Trait for implementations of cryptographic functions that can be used for COSE structures.
 pub trait CryptoBackend {

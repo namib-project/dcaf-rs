@@ -12,7 +12,7 @@
 use super::*;
 use crate::common::test_helper::MockCipher;
 use crate::error::CoseCipherError;
-use crate::token::cose::aes_algorithm_iv_len;
+use crate::token::cose::util::aes_algorithm_iv_len;
 use alloc::vec::Vec;
 use alloc::{string::ToString, vec};
 use base64::Engine;

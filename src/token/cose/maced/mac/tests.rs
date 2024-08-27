@@ -18,7 +18,6 @@ use coset::{
 };
 use rstest::rstest;
 
-use crate::token::cose::header_util::determine_algorithm;
 use crate::token::cose::key::CoseSymmetricKey;
 use crate::token::cose::maced::mac::{CoseMacBuilderExt, CoseMacExt};
 use crate::token::cose::maced::MacCryptoBackend;
@@ -28,6 +27,7 @@ use crate::token::cose::test_helper::{
     apply_attribute_failures, apply_header_failures, serialize_cose_with_failures,
     CoseStructTestHelper, TestCase,
 };
+use crate::token::cose::util::determine_algorithm;
 use crate::token::cose::{test_helper, CryptoBackend};
 
 #[cfg(feature = "openssl")]
