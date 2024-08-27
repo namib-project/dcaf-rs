@@ -92,7 +92,11 @@ impl From<digest::MacError> for CoseCipherError<CoseRustCryptoCipherError> {
     }
 }
 
-#[cfg(feature = "rustcrypto-aes-gcm")]
+#[cfg(any(
+    feature = "rustcrypto-aes-gcm",
+    feature = "rustcrypto-aes-ccm",
+    feature = "rustcrypto-chacha20-poly1305"
+))]
 impl From<aead::Error> for CoseCipherError<CoseRustCryptoCipherError> {
     fn from(_value: aead::Error) -> Self {
         CoseCipherError::VerificationFailure

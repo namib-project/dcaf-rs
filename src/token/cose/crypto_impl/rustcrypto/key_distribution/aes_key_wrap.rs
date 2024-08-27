@@ -20,6 +20,7 @@ use crate::error::CoseCipherError;
 use crate::token::cose::{CoseSymmetricKey, CryptoBackend};
 
 use super::RustCryptoContext;
+use alloc::vec::Vec;
 
 impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
     /// Perform an AES key wrap operation on the key contained in `plaintext` which is wrapped

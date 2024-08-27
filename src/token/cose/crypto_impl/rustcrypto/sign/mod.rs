@@ -15,6 +15,7 @@ use rand::{CryptoRng, RngCore};
 
 use crate::token::cose::crypto_impl::rustcrypto::RustCryptoContext;
 use crate::token::SignCryptoBackend;
+use alloc::vec::Vec;
 
 #[cfg(feature = "rustcrypto-ecdsa")]
 mod ecdsa;

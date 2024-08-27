@@ -33,6 +33,7 @@ use crate::error::CoseCipherError;
 use crate::token::cose::crypto_impl::rustcrypto::CoseRustCryptoCipherError;
 use crate::token::cose::crypto_impl::rustcrypto::RustCryptoContext;
 use crate::token::cose::{CoseEc2Key, CryptoBackend, EllipticCurve};
+use alloc::vec::Vec;
 
 impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
     /// Perform an ECDSA signature operation with the ECDSA variant given in `algorithm` for the
