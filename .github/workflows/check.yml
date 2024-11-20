@@ -99,10 +99,6 @@ jobs:
       - uses: baptiste0928/cargo-install@v3
         with:
           crate: grcov
-          # grcov currently has some compilation issues on newer rust versions due to an outdated dependency.
-          # This pulls in the branch from https://github.com/mozilla/grcov/pull/1191 in order to fix this.
-          git: https://github.com/cemoktra/grcov.git
-          branch: cemoktra/fix-1187
       - run: cargo clean
       - run: cargo test --all-features --no-fail-fast
         env:
