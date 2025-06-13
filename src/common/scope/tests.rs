@@ -214,6 +214,84 @@ mod aif {
             );
         }
     }
+    #[test]
+    fn test_scope_element() -> Result<(), String> {
+        // This tests the encoding of a singular scope element using part of the example given in
+        // Figure 5 of the AIF RFC.
+        let cbor = hex::decode("82672F732F74656D7001").map_err(|x| x.to_string())?;
+        let expected = AifEncodedScopeElement::new("/s/temp", make_bitflags!(AifRestMethod::{Get}));
+        assert_eq!(
+            expected,
+            from_reader::<AifEncodedScopeElement, &[u8]>(cbor.as_slice())
+                .map_err(|x| x.to_string())?
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_element_array_too_long() -> Result<(), String> {
+        // This test ensures that if an array representing a single AifEncodedScopeElement contains
+        // more than 2 elements (violating the CDDL definition in RFC 9237, Section 2), an error is
+        // returned.
+
+        // CBOR value in diagnostic notation: [["/s/temp", 1, "invalid"]]
+        let cbor =
+            hex::decode("83672F732F74656D700167696E76616C6964").map_err(|x| x.to_string())?;
+        from_reader::<AifEncodedScopeElement, &[u8]>(cbor.as_slice()).expect_err("must be error");
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_element_array_missing_toid() -> Result<(), String> {
+        // This test ensures that if an array representing a single AifEncodedScopeElement does not
+        // contain the Toid value (violating the CDDL definition in RFC 9237, Section 2), an error
+        // is returned.
+
+        // CBOR value in diagnostic notation: [1]
+        let cbor = hex::decode("8101").map_err(|x| x.to_string())?;
+        from_reader::<AifEncodedScopeElement, &[u8]>(cbor.as_slice()).expect_err("must be error");
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_element_array_missing_tperm() -> Result<(), String> {
+        // This test ensures that if an array representing a single AifEncodedScopeElement does not
+        // contain the Tperm value (violating the CDDL definition in RFC 9237, Section 2), an error
+        // is returned.
+
+        // CBOR value in diagnostic notation: ["/s/temp"]
+        let cbor = hex::decode("81672F732F74656D70").map_err(|x| x.to_string())?;
+        from_reader::<AifEncodedScopeElement, &[u8]>(cbor.as_slice()).expect_err("must be error");
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_element_array_bad_toid_type() -> Result<(), String> {
+        // This test ensures that if an array representing a single AifEncodedScopeElement has a
+        // Toid value that is not a text string, an error is returned.
+        // The AIF-Generic model does allow Toid values that are not text strings, but (for now) we
+        // only support the AIF-specific model, which requires Toid to be of type tstr
+        // (RFC 9237, Section 2).
+
+        // CBOR value in diagnostic notation: [false, 1]
+        let cbor = hex::decode("82F401").map_err(|x| x.to_string())?;
+        from_reader::<AifEncodedScopeElement, &[u8]>(cbor.as_slice()).expect_err("must be error");
+        Ok(())
+    }
+
+    #[test]
+    fn test_scope_element_array_bad_tperm_type() -> Result<(), String> {
+        // This test ensures that if an array representing a single AifEncodedScopeElement has a
+        // Tperm value that is not an unsigned integer, an error is returned.
+        // The AIF-Generic model does allow Tperm values that are not unsigned integers, but (for
+        // now) we only support the AIF-specific model, which requires Tperm to be of type uint
+        // (RFC 9237, Section 2).
+
+        // CBOR value in diagnostic notation: ["/s/temp", false]
+        let cbor = hex::decode("82672F732F74656D70F4").map_err(|x| x.to_string())?;
+        from_reader::<AifEncodedScopeElement, &[u8]>(cbor.as_slice()).expect_err("must be error");
+        Ok(())
+    }
 
     #[test]
     fn test_scope_elements_normal() {
