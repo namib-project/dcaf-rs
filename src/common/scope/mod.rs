@@ -395,7 +395,7 @@ pub struct AifEncodedScopeElement {
 /// [`AifRestMethod`] does the work on this (including encoding and decoding bitmasks given as
 /// numbers), clients do not need to handle this themselves and can simply use its methods together
 /// with the methods provided by [`AifRestMethodSet`].
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub struct AifEncodedScope(Vec<AifEncodedScopeElement>);
 
 /// A scope encoded using the [Authorization Information Format (AIF) for ACE](https://www.rfc-editor.org/rfc/rfc9237)
@@ -840,6 +840,49 @@ mod conversion {
         }
     }
 
+    impl<'de> Deserialize<'de> for AifEncodedScopeElement {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            AifEncodedScopeElement::try_from(Value::deserialize(deserializer)?)
+                .map_err(|x| Error::custom(x.to_string()))
+        }
+    }
+
+    impl TryFrom<Value> for AifEncodedScopeElement {
+        type Error = InvalidAifEncodedScopeError;
+
+        fn try_from(value: Value) -> Result<Self, Self::Error> {
+            let mut values = value
+                .into_array()
+                .map_err(|_e| InvalidAifEncodedScopeError::MalformedArray)?;
+            if values.len() != 2 {
+                return Err(InvalidAifEncodedScopeError::MalformedArray);
+            }
+            let permissions = values
+                .pop()
+                // We checked the length of the array, so we can unwrap here.
+                .unwrap()
+                .as_integer()
+                .and_then(|x| {
+                    u64::try_from(x)
+                        .map(BitFlags::<AifRestMethod>::from_bits)
+                        .map(Result::ok)
+                        .ok()
+                })
+                .flatten() // better than ???, I guess
+                .ok_or(InvalidAifEncodedScopeError::MalformedArray)?;
+            let path = values
+                .pop()
+                // We checked the length of the array, so we can unwrap here.
+                .unwrap()
+                .into_text()
+                .map_err(|_e| InvalidAifEncodedScopeError::MalformedArray)?;
+            Ok(AifEncodedScopeElement::new(path, permissions))
+        }
+    }
+
     impl<T> From<Vec<(T, BitFlags<AifRestMethod>)>> for AifEncodedScope
     where
         T: Into<String>,
@@ -1052,34 +1095,6 @@ mod conversion {
         type Error = ScopeFromValueError;
 
         fn try_from(value: Value) -> Result<Self, Self::Error> {
-            #[allow(clippy::needless_pass_by_value)] // makes it easier to use later on
-            fn value_to_aif_element(
-                value: Value,
-            ) -> Result<AifEncodedScopeElement, InvalidAifEncodedScopeError> {
-                let values = value
-                    .as_array()
-                    .ok_or(InvalidAifEncodedScopeError::MalformedArray)?;
-                let path = values
-                    .first()
-                    .and_then(Value::as_text)
-                    .ok_or(InvalidAifEncodedScopeError::MalformedArray)?
-                    .to_string();
-                let permissions = values
-                    .get(1)
-                    .and_then(|x| {
-                        x.as_integer().map(|x| {
-                            u64::try_from(x)
-                                .map(BitFlags::<AifRestMethod>::from_bits)
-                                .map(Result::ok)
-                                .ok()
-                        })
-                    })
-                    .flatten()
-                    .flatten() // better than ???, I guess
-                    .ok_or(InvalidAifEncodedScopeError::MalformedArray)?;
-                Ok(AifEncodedScopeElement::new(path, permissions))
-            }
-
             match value {
                 Value::Bytes(b) => Ok(Scope::BinaryEncoded(BinaryEncodedScope::try_from(
                     b.as_slice(),
@@ -1089,11 +1104,11 @@ mod conversion {
                     if a.first().filter(|x| x.is_text()).is_some() {
                         // Special handling for libdcaf
                         Ok(Scope::LibdcafEncoded(LibdcafEncodedScope(
-                            value_to_aif_element(Value::Array(a))?,
+                            AifEncodedScopeElement::try_from(Value::Array(a))?,
                         )))
                     } else {
                         a.into_iter()
-                            .map(value_to_aif_element)
+                            .map(AifEncodedScopeElement::try_from)
                             .collect::<Result<Vec<AifEncodedScopeElement>, InvalidAifEncodedScopeError>>()
                             .map(|x| Scope::AifEncoded(AifEncodedScope::new(x)))
                             .map_err(ScopeFromValueError::InvalidAifEncodedScope)
