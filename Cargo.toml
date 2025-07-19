@@ -20,13 +20,14 @@ rustcrypto = ["rustcrypto-aes-gcm", "rustcrypto-aes-kw", "rustcrypto-ecdsa", "ru
 rustcrypto-encrypt = ["rustcrypto-aes-gcm", "rustcrypto-aes-ccm", "rustcrypto-chacha20-poly1305"]
 rustcrypto-sign = ["rustcrypto-ecdsa"]
 rustcrypto-key-distribution = ["rustcrypto-aes-kw"]
-rustcrypto-mac = ["rustcrypto-hmac"]
+rustcrypto-mac = ["rustcrypto-hmac", "rustcrypto-aes-cbc-mac"]
 rustcrypto-aes-gcm = ["dep:aes-gcm", "dep:typenum", "dep:aead", "dep:aes"]
 rustcrypto-aes-ccm = ["dep:ccm", "dep:typenum", "dep:aead", "dep:aes"]
 rustcrypto-chacha20-poly1305 = ["dep:chacha20poly1305", "dep:typenum", "dep:aead"]
 rustcrypto-aes-kw = ["dep:aes-kw", "dep:aes", "dep:typenum", "dep:crypto-common"]
 rustcrypto-ecdsa = ["dep:ecdsa", "dep:p256", "dep:p384", "dep:digest", "dep:sha2", "dep:elliptic-curve"]
 rustcrypto-hmac = ["dep:hmac", "dep:digest", "dep:sha2"]
+rustcrypto-aes-cbc-mac = ["dep:cbc-mac", "dep:aes", "dep:crypto-common", "dep:digest", "dep:typenum"]
 
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["derive"] }
@@ -52,6 +53,7 @@ aes-kw = { version = "0.2.1", optional = true, default-features = false, feature
 aes = { version = "0.8.4", optional = true, default-features = false }
 hmac = { version = "0.12.1", optional = true, default-features = false }
 digest = { version = "0.10.7", optional = true, default-features = false }
+cbc-mac = { version = "0.1.1", optional = true, default-features = false }
 sha2 = { version = "0.10.8", optional = true, default-features = false }
 elliptic-curve = { version = "0.13.8", default-features = false, optional = true }
 ecdsa = { version = "0.16.9", optional = true, default-features = false, features = ["sha2"] }

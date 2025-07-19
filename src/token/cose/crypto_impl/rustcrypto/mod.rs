@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -85,7 +85,7 @@ impl From<ecdsa::elliptic_curve::Error> for CoseCipherError<CoseRustCryptoCipher
     }
 }
 
-#[cfg(feature = "rustcrypto-hmac")]
+#[cfg(any(feature = "rustcrypto-hmac", feature = "rustcrypto-aes-cbc-mac"))]
 impl From<digest::MacError> for CoseCipherError<CoseRustCryptoCipherError> {
     fn from(_value: digest::MacError) -> Self {
         CoseCipherError::VerificationFailure
@@ -132,11 +132,11 @@ impl From<ecdsa::Error> for CoseCipherError<CoseRustCryptoCipherError> {
 ///         - [x] HMAC 256/256
 ///         - [x] HMAC 384/384
 ///         - [x] HMAC 512/512
-///     - [ ] AES-CBC-MAC
-///         - [ ] AES-MAC 128/64
-///         - [ ] AES-MAC 256/64
-///         - [ ] AES-MAC 128/128
-///         - [ ] AES-MAC 256/128
+///     - [x] AES-CBC-MAC
+///         - [x] AES-MAC 128/64
+///         - [x] AES-MAC 256/64
+///         - [x] AES-MAC 128/128
+///         - [x] AES-MAC 256/128
 /// - Content Encryption Algorithms (for COSE_Encrypt and COSE_Encrypt0)
 ///     - [x] AES-GCM
 ///         - [x] A128GCM
@@ -151,7 +151,7 @@ impl From<ecdsa::Error> for CoseCipherError<CoseRustCryptoCipherError> {
 ///         - [x] AES-CCM-16-128-256
 ///         - [x] AES-CCM-64-128-128
 ///         - [x] AES-CCM-64-128-256
-///     - [ ] ChaCha20/Poly1305
+///     - [x] ChaCha20/Poly1305
 /// - Content Key Distribution Methods (for COSE_Recipients)
 ///     - Direct Encryption
 ///         - [ ] Direct Key with KDF
