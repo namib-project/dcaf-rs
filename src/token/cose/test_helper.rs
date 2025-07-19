@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -132,6 +132,10 @@ fn string_to_algorithm<'de, D: Deserializer<'de>>(
         Some("HS256") => Ok(Some(iana::Algorithm::HMAC_256_256)),
         Some("HS384") => Ok(Some(iana::Algorithm::HMAC_384_384)),
         Some("HS512") => Ok(Some(iana::Algorithm::HMAC_512_512)),
+        Some("AES-MAC-128/64") => Ok(Some(iana::Algorithm::AES_MAC_128_64)),
+        Some("AES-MAC-128/128") => Ok(Some(iana::Algorithm::AES_MAC_128_128)),
+        Some("AES-MAC-256/64") => Ok(Some(iana::Algorithm::AES_MAC_256_64)),
+        Some("AES-MAC-256/128") => Ok(Some(iana::Algorithm::AES_MAC_256_128)),
         Some("direct") => Ok(Some(iana::Algorithm::Direct)),
         None => Ok(None),
         _ => Err(de::Error::custom("could not parse test case algorithm")),

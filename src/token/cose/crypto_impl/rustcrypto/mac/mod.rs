@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -17,6 +17,8 @@ use alloc::vec::Vec;
 use coset::iana;
 use rand::{CryptoRng, RngCore};
 
+#[cfg(feature = "rustcrypto-aes-cbc-mac")]
+mod aes_cbc_mac;
 #[cfg(feature = "rustcrypto-hmac")]
 mod hmac;
 
@@ -40,5 +42,26 @@ impl<RNG: RngCore + CryptoRng> MacCryptoBackend for RustCryptoContext<RNG> {
         payload: &[u8],
     ) -> Result<(), CoseCipherError<Self::Error>> {
         Self::verify_hmac(algorithm, &key, tag, payload)
+    }
+
+    #[cfg(feature = "rustcrypto-aes-cbc-mac")]
+    fn compute_cbc_mac(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        payload: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Self::compute_cbc_mac(algorithm, &key, payload)
+    }
+
+    #[cfg(feature = "rustcrypto-aes-cbc-mac")]
+    fn verify_cbc_mac(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        tag: &[u8],
+        payload: &[u8],
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        Self::verify_cbc_mac(algorithm, &key, tag, payload)
     }
 }
