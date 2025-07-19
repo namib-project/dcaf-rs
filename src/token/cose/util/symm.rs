@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -30,12 +30,15 @@ pub(crate) fn generate_cek_for_alg<B: CryptoBackend>(
 /// Attempts to parse the given `parsed_key` as a symmetric key.
 ///
 /// Performs the checks required for symmetric keys suitable for the algorithms specified in
-/// [RFC 9053, Section 4](https://datatracker.ietf.org/doc/html/rfc9053#section-4).
+/// [RFC 9053, Section 4](https://datatracker.ietf.org/doc/html/rfc9053#section-4) and
+/// [RFC 9053, Section 3.2](https://datatracker.ietf.org/doc/html/rfc9053#section-3.2), *except for
+/// the key_ops check, which must be performed by the caller based on the operation it intends to
+/// perform with the key*.
 pub(crate) fn ensure_valid_symmetric_key<BE: Display>(
     algorithm: iana::Algorithm,
     parsed_key: CoseParsedKey<BE>,
 ) -> Result<CoseSymmetricKey<BE>, CoseCipherError<BE>> {
-    // Checks according to RFC 9053, Section 4.1 and 4.2.
+    // Checks according to RFC 9053, Sections 3.2, 4.1 and 4.2.
 
     // Key type must be symmetric.
     let symm_key = if let CoseParsedKey::Symmetric(symm_key) = parsed_key {
@@ -69,7 +72,7 @@ pub(crate) fn ensure_valid_symmetric_key<BE: Display>(
     Ok(symm_key)
 }
 
-/// Determines the key size that a key for the given `algorithm` should have.
+/// Determines the key size that a symmetric key for the given `algorithm` should have.
 fn symmetric_key_size<BE: Display>(
     algorithm: iana::Algorithm,
 ) -> Result<usize, CoseCipherError<BE>> {
@@ -79,6 +82,8 @@ fn symmetric_key_size<BE: Display>(
         | iana::Algorithm::AES_CCM_64_64_128
         | iana::Algorithm::AES_CCM_16_128_128
         | iana::Algorithm::AES_CCM_64_128_128
+        | iana::Algorithm::AES_MAC_128_64
+        | iana::Algorithm::AES_MAC_128_128
         | iana::Algorithm::A128KW => Ok(16),
         iana::Algorithm::A192GCM | iana::Algorithm::A192KW => Ok(24),
         iana::Algorithm::A256GCM
@@ -86,8 +91,14 @@ fn symmetric_key_size<BE: Display>(
         | iana::Algorithm::AES_CCM_64_64_256
         | iana::Algorithm::AES_CCM_16_128_256
         | iana::Algorithm::AES_CCM_64_128_256
+        | iana::Algorithm::AES_MAC_256_64
+        | iana::Algorithm::AES_MAC_256_128
         | iana::Algorithm::A256KW
-        | iana::Algorithm::ChaCha20Poly1305 => Ok(32),
+        | iana::Algorithm::ChaCha20Poly1305
+        | iana::Algorithm::HMAC_256_256
+        | iana::Algorithm::HMAC_256_64 => Ok(32),
+        iana::Algorithm::HMAC_384_384 => Ok(48),
+        iana::Algorithm::HMAC_512_512 => Ok(64),
         _ => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
             algorithm,
         ))),
