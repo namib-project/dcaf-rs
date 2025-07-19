@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024 The NAMIB Project Developers.
+ * Copyright (c) 2022-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -74,7 +74,7 @@ impl From<openssl::aes::KeyError> for CoseCipherError<CoseOpensslCipherError> {
 ///     - [ ] EdDSA
 /// - Message Authentication Code Algorithms (for COSE_Mac and COSE_Mac0)
 ///     - [x] HMAC
-///         - [ ] HMAC 256/64
+///         - [x] HMAC 256/64
 ///         - [x] HMAC 256/256
 ///         - [x] HMAC 384/384
 ///         - [x] HMAC 512/512
@@ -192,9 +192,32 @@ fn get_algorithm_hash_function(
     alg: iana::Algorithm,
 ) -> Result<MessageDigest, CoseCipherError<CoseOpensslCipherError>> {
     match alg {
-        iana::Algorithm::ES256 | iana::Algorithm::HMAC_256_256 => Ok(MessageDigest::sha256()),
+        iana::Algorithm::ES256 | iana::Algorithm::HMAC_256_256 | iana::Algorithm::HMAC_256_64 => {
+            Ok(MessageDigest::sha256())
+        }
         iana::Algorithm::ES384 | iana::Algorithm::HMAC_384_384 => Ok(MessageDigest::sha384()),
         iana::Algorithm::ES512 | iana::Algorithm::HMAC_512_512 => Ok(MessageDigest::sha512()),
+        v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            v,
+        ))),
+    }
+}
+
+/// Determine the length that an output hash should be truncated to and return it.
+///
+/// Returns `Ok(None)` if no truncation should take place, or
+/// `Err(CoseCipherError::UnsupportedAlgorithm)` if the algorithm is not a supported hash algorithm.
+const fn get_algorithm_hash_truncation(
+    alg: iana::Algorithm,
+) -> Result<Option<usize>, CoseCipherError<CoseOpensslCipherError>> {
+    match alg {
+        iana::Algorithm::ES256
+        | iana::Algorithm::HMAC_256_256
+        | iana::Algorithm::ES384
+        | iana::Algorithm::HMAC_384_384
+        | iana::Algorithm::ES512
+        | iana::Algorithm::HMAC_512_512 => Ok(None),
+        iana::Algorithm::HMAC_256_64 => Ok(Some(8)),
         v => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
             v,
         ))),

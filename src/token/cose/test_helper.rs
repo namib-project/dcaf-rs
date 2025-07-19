@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -129,6 +129,7 @@ fn string_to_algorithm<'de, D: Deserializer<'de>>(
         Some("A128KW") => Ok(Some(iana::Algorithm::A128KW)),
         Some("A192KW") => Ok(Some(iana::Algorithm::A192KW)),
         Some("A256KW") => Ok(Some(iana::Algorithm::A256KW)),
+        Some("HS256/64") => Ok(Some(iana::Algorithm::HMAC_256_64)),
         Some("HS256") => Ok(Some(iana::Algorithm::HMAC_256_256)),
         Some("HS384") => Ok(Some(iana::Algorithm::HMAC_384_384)),
         Some("HS512") => Ok(Some(iana::Algorithm::HMAC_512_512)),

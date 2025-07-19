@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -200,6 +200,36 @@ fn cose_examples_hmac_mac_reference_output<B: MacCryptoBackend + KeyDistribution
 )]
 fn cose_examples_hmac_mac_self_signed<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/hmac-examples/HMac-0[0-4].json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    test_helper::perform_cose_self_signed_test::<CoseMac, B>(test_path, backend);
+}
+
+// As of now, RustCrypto does not support HMAC 256/64, so we must only perform this test with
+// OpenSSL.
+//
+// Once RustCrypto supports this algorithm, we can merge this test with
+// cose_examples_hmac_mac_reference_output.
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+fn cose_examples_hmac256_64_mac_reference_output<
+    B: MacCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/hmac-examples/HMac-05.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    test_helper::perform_cose_reference_output_test::<CoseMac, B>(test_path, backend);
+}
+
+// As of now, RustCrypto does not support HMAC 256/64, so we must only perform this test with
+// OpenSSL.
+//
+// Once RustCrypto supports this algorithm, we can merge this test with
+// cose_examples_hmac_mac_self_signed.
+#[rstest]
+#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
+fn cose_examples_hmac256_64_mac_self_signed<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
+    #[files("tests/cose_examples/hmac-examples/HMac-05.json")] test_path: PathBuf,
     #[case] backend: B,
 ) {
     test_helper::perform_cose_self_signed_test::<CoseMac, B>(test_path, backend);
