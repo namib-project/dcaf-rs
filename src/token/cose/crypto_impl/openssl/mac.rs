@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024 The NAMIB Project Developers.
+ * Copyright (c) 2022-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -24,10 +24,17 @@ fn compute_hmac(
     input: &[u8],
 ) -> Result<Vec<u8>, CoseCipherError<CoseOpensslCipherError>> {
     let hash = super::get_algorithm_hash_function(algorithm)?;
+    let truncation_len = super::get_algorithm_hash_truncation(algorithm)?;
     let hmac_key = PKey::hmac(key.k)?;
     let mut signer = Signer::new(hash, &hmac_key)?;
     signer
         .sign_oneshot_to_vec(input)
+        .map(|mut v| {
+            if let Some(truncation_len) = truncation_len {
+                v.truncate(truncation_len);
+            }
+            v
+        })
         .map_err(CoseCipherError::from)
 }
 

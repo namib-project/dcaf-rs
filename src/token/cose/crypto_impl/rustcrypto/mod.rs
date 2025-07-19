@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -128,7 +128,7 @@ impl From<ecdsa::Error> for CoseCipherError<CoseRustCryptoCipherError> {
 ///     - [ ] EdDSA
 /// - Message Authentication Code Algorithms (for COSE_Mac and COSE_Mac0)
 ///     - [x] HMAC
-///         - [ ] HMAC 256/64
+///         - [x] HMAC 256/64
 ///         - [x] HMAC 256/256
 ///         - [x] HMAC 384/384
 ///         - [x] HMAC 512/512

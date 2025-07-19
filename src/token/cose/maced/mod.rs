@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -167,7 +167,8 @@ fn try_compute<B: MacCryptoBackend, CKP: KeyProvider>(
             let parsed_key = CoseParsedKey::try_from(key)?;
 
             match alg {
-                iana::Algorithm::HMAC_256_256
+                iana::Algorithm::HMAC_256_64
+                | iana::Algorithm::HMAC_256_256
                 | iana::Algorithm::HMAC_384_384
                 | iana::Algorithm::HMAC_512_512 => {
                     let symm_key = ensure_valid_hmac_key(alg, parsed_key)?;
@@ -207,7 +208,8 @@ pub(crate) fn try_verify<B: MacCryptoBackend, CKP: KeyProvider>(
             let parsed_key = CoseParsedKey::try_from(key)?;
 
             match alg {
-                iana::Algorithm::HMAC_256_256
+                iana::Algorithm::HMAC_256_64
+                | iana::Algorithm::HMAC_256_256
                 | iana::Algorithm::HMAC_384_384
                 | iana::Algorithm::HMAC_512_512 => {
                     let symm_key = ensure_valid_hmac_key(alg, parsed_key)?;

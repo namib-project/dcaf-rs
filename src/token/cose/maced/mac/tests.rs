@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -186,7 +186,7 @@ fn cose_examples_mac_self_signed<B: MacCryptoBackend + KeyDistributionCryptoBack
     case::rustcrypto(rustcrypto_ctx())
 )]
 fn cose_examples_hmac_mac_reference_output<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
-    #[files("tests/cose_examples/hmac-examples/HMac-0[0-4].json")] test_path: PathBuf,
+    #[files("tests/cose_examples/hmac-examples/HMac-0[0-5].json")] test_path: PathBuf,
     #[case] backend: B,
 ) {
     test_helper::perform_cose_reference_output_test::<CoseMac, B>(test_path, backend);
@@ -199,7 +199,7 @@ fn cose_examples_hmac_mac_reference_output<B: MacCryptoBackend + KeyDistribution
     case::rustcrypto(rustcrypto_ctx())
 )]
 fn cose_examples_hmac_mac_self_signed<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
-    #[files("tests/cose_examples/hmac-examples/HMac-0[0-4].json")] test_path: PathBuf,
+    #[files("tests/cose_examples/hmac-examples/HMac-0[0-5].json")] test_path: PathBuf,
     #[case] backend: B,
 ) {
     test_helper::perform_cose_self_signed_test::<CoseMac, B>(test_path, backend);
