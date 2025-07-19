@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -32,7 +32,10 @@ use crate::token::cose::{test_helper, CryptoBackend};
 
 #[cfg(feature = "openssl")]
 use crate::token::cose::test_helper::openssl_ctx;
-#[cfg(all(feature = "rustcrypto-hmac", feature = "rustcrypto-aes-kw"))]
+#[cfg(all(
+    any(feature = "rustcrypto-hmac", feature = "rustcrypto-aes-cbc-mac"),
+    feature = "rustcrypto-aes-kw"
+))]
 use crate::token::cose::test_helper::rustcrypto_ctx;
 
 impl<B: CryptoBackend + MacCryptoBackend + KeyDistributionCryptoBackend> CoseStructTestHelper<B>
@@ -174,6 +177,36 @@ fn cose_examples_mac_reference_output<B: MacCryptoBackend + KeyDistributionCrypt
 )]
 fn cose_examples_mac_self_signed<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
     #[files("tests/cose_examples/mac-tests/mac-*.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    test_helper::perform_cose_self_signed_test::<CoseMac, B>(test_path, backend);
+}
+
+// As of now, we don't support CBC-MAC with the OpenSSL backend.
+#[cfg(all(feature = "rustcrypto-aes-cbc-mac", feature = "rustcrypto-aes-kw"))]
+#[rstest]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-cbc-mac", feature = "rustcrypto-aes-kw"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_cbc_mac_mac_reference_output<
+    B: MacCryptoBackend + KeyDistributionCryptoBackend,
+>(
+    #[files("tests/cose_examples/cbc-mac-examples/cbc-mac-0*.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    test_helper::perform_cose_reference_output_test::<CoseMac, B>(test_path, backend);
+}
+
+// As of now, we don't support CBC-MAC with the OpenSSL backend.
+#[cfg(all(feature = "rustcrypto-aes-cbc-mac", feature = "rustcrypto-aes-kw"))]
+#[rstest]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-cbc-mac", feature = "rustcrypto-aes-kw"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_cbc_mac_mac_self_signed<B: MacCryptoBackend + KeyDistributionCryptoBackend>(
+    #[files("tests/cose_examples/cbc-mac-examples/cbc-mac-0*.json")] test_path: PathBuf,
     #[case] backend: B,
 ) {
     test_helper::perform_cose_self_signed_test::<CoseMac, B>(test_path, backend);
