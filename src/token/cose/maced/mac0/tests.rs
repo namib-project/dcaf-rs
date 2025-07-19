@@ -164,7 +164,7 @@ fn cose_examples_mac0_self_signed<B: MacCryptoBackend>(
 #[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
 #[cfg_attr(feature = "rustcrypto-hmac", case::rustcrypto(rustcrypto_ctx()))]
 fn cose_examples_hmac_mac0_reference_output<B: MacCryptoBackend>(
-    #[files("tests/cose_examples/hmac-examples/HMac-enc-0[0-4].json")] test_path: PathBuf,
+    #[files("tests/cose_examples/hmac-examples/HMac-enc-0[0-5].json")] test_path: PathBuf,
     #[case] backend: B,
 ) {
     test_helper::perform_cose_reference_output_test::<CoseMac0, B>(test_path, backend);
@@ -174,35 +174,7 @@ fn cose_examples_hmac_mac0_reference_output<B: MacCryptoBackend>(
 #[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
 #[cfg_attr(feature = "rustcrypto-hmac", case::rustcrypto(rustcrypto_ctx()))]
 fn cose_examples_hmac_mac0_self_signed<B: MacCryptoBackend>(
-    #[files("tests/cose_examples/hmac-examples/HMac-enc-0[0-4].json")] test_path: PathBuf,
-    #[case] backend: B,
-) {
-    test_helper::perform_cose_self_signed_test::<CoseMac0, B>(test_path, backend);
-}
-
-// As of now, RustCrypto does not support HMAC 256/64, so we must only perform this test with
-// OpenSSL.
-//
-// Once RustCrypto supports this algorithm, we can merge this test with
-// cose_examples_hmac_mac0_reference_output.
-#[rstest]
-#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
-fn cose_examples_hmac256_64_mac0_reference_output<B: MacCryptoBackend>(
-    #[files("tests/cose_examples/hmac-examples/HMac-enc-05.json")] test_path: PathBuf,
-    #[case] backend: B,
-) {
-    test_helper::perform_cose_reference_output_test::<CoseMac0, B>(test_path, backend);
-}
-
-// As of now, RustCrypto does not support HMAC 256/64, so we must only perform this test with
-// OpenSSL.
-//
-// Once RustCrypto supports this algorithm, we can merge this test with
-// cose_examples_hmac_mac0_self_signed.
-#[rstest]
-#[cfg_attr(feature = "openssl", case::openssl(openssl_ctx()))]
-fn cose_examples_hmac256_64_mac0_self_signed<B: MacCryptoBackend>(
-    #[files("tests/cose_examples/hmac-examples/HMac-enc-05.json")] test_path: PathBuf,
+    #[files("tests/cose_examples/hmac-examples/HMac-enc-0[0-5].json")] test_path: PathBuf,
     #[case] backend: B,
 ) {
     test_helper::perform_cose_self_signed_test::<CoseMac0, B>(test_path, backend);
