@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -20,7 +20,7 @@ pub use mac0::{CoseMac0BuilderExt, CoseMac0Ext};
 
 use crate::error::CoseCipherError;
 use crate::token::cose::key::{CoseParsedKey, CoseSymmetricKey, KeyProvider};
-use crate::token::cose::util::{ensure_valid_hmac_key, try_cose_crypto_operation};
+use crate::token::cose::util::{ensure_valid_symmetric_key, try_cose_crypto_operation};
 use crate::token::cose::CryptoBackend;
 
 mod mac;
@@ -104,6 +104,8 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// * `key` - Symmetric key that should be used.
     ///           Implementations may assume that the provided key has the right length for the
     ///           provided algorithm, and panic if this is not the case.
+    /// * `tag` - Computed MAC that should be validated. Note that you *must* check that the length
+    ///           of the computed tag matches the one specified in the algorithm.
     /// * `payload` - Data for which the MAC should be calculated.
     ///
     /// # Returns
@@ -130,6 +132,121 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// defined).
     #[allow(unused_variables)]
     fn verify_hmac(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        tag: &[u8],
+        payload: &[u8],
+    ) -> Result<(), CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
+
+    /// Computes a CBC-MAC for the given `payload` using the given `algorithm` and `key`.
+    ///
+    /// As specified in RFC 9053, Section 3.2, the initialization vector should be fixed to all
+    /// zeros.
+    ///
+    /// # Arguments
+    ///
+    /// * `algorithm` - The CBC-MAC variant to use (determines the block cipher to use).
+    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
+    ///           should be returned.
+    ///           If the given algorithm is an IANA-assigned value that is unknown, the
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
+    ///           additional variants of CBC-MAC are ever added).
+    ///           If the algorithm is not a CBC-MAC algorithm, the implementation may return
+    ///           [`CoseCipherError::UnsupportedAlgorithm`] or panic.
+    /// * `key` - Symmetric key that should be used.
+    ///           Implementations may assume that the provided key has the right length for the
+    ///           provided algorithm, and panic if this is not the case.
+    /// * `payload` - Data for which the MAC should be calculated.
+    ///
+    /// # Returns
+    ///
+    /// It is expected that the return value is a MAC conforming to RFC 9053, Section 3.2, i.e. the
+    /// return value should be the computed MAC bytes as a `Vec`.
+    ///
+    /// # Errors
+    ///
+    /// In case of errors, the implementation may return any valid [`CoseCipherError`].
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
+    /// backend-specific error.
+    ///
+    /// # Panics
+    ///
+    /// Implementations may panic if the provided algorithm is not a variant of CBC-MAC (as of now,
+    /// only AES-CBC-MAC is specified), the provided key is not of the right length for the provided
+    /// algorithm or if an unrecoverable backend error occurs that necessitates a panic (at their
+    /// own discretion).
+    /// In the last of the above cases, additional panics should be documented on the backend level.
+    ///
+    /// For unknown algorithms or key curves, however, the implementation must not panic and return
+    /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new CBC-MAC variants are ever
+    /// defined).
+    #[allow(unused_variables)]
+    fn compute_cbc_mac(
+        &mut self,
+        algorithm: iana::Algorithm,
+        key: CoseSymmetricKey<'_, Self::Error>,
+        payload: &[u8],
+    ) -> Result<Vec<u8>, CoseCipherError<Self::Error>> {
+        Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
+            algorithm,
+        )))
+    }
+
+    /// Verifies the CBC-MAC provided as `tag` for the given `payload` using the given `algorithm`
+    /// and `key`.
+    ///
+    /// As specified in RFC 9053, Section 3.2, the initialization vector should be fixed to all
+    /// zeros.
+    ///
+    /// The CBC-MAC comparison must be performed using a comparison function that is resistant to
+    /// timing attacks.
+    ///
+    /// # Arguments
+    ///
+    /// * `algorithm` - The CBC-MAC variant to use (determines the block cipher).
+    ///           If unsupported by the backend, a [`CoseCipherError::UnsupportedAlgorithm`] error
+    ///           should be returned.
+    ///           If the given algorithm is an IANA-assigned value that is unknown, the
+    ///           implementation should return [`CoseCipherError::UnsupportedAlgorithm`] (in case
+    ///           additional variants of CBC-MAC are ever added).
+    ///           If the algorithm is not a CBC-MAC algorithm, the implementation may return
+    ///           [`CoseCipherError::UnsupportedAlgorithm`] or panic.
+    /// * `key` - Symmetric key that should be used.
+    ///           Implementations may assume that the provided key has the right length for the
+    ///           provided algorithm, and panic if this is not the case.
+    /// * `tag` - Computed MAC that should be validated. Note that you *must* check that the length
+    ///           of the computed tag matches the one specified in the algorithm.
+    /// * `payload` - Data for which the MAC should be calculated.
+    ///
+    /// # Returns
+    ///
+    /// It is expected that the return value is `Ok(())` if the computed MAC matches the one
+    /// provided, or a [`CoseCipherError::VerificationFailure`] if it doesn't even though MAC
+    /// computation was successful.
+    ///
+    /// # Errors
+    ///
+    /// In case of errors, the implementation may return any valid [`CoseCipherError`].
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
+    /// backend-specific error.
+    ///
+    /// # Panics
+    ///
+    /// Implementations may panic if the provided algorithm is not a CBC-MAC algorithm, the
+    /// provided key is not of the right length for the provided algorithm or if an unrecoverable
+    /// backend error occurs that necessitates a panic (at their own discretion).
+    /// In the last of the above cases, additional panics should be documented on the backend level.
+    ///
+    /// For unknown algorithms or key curves, however, the implementation must not panic and return
+    /// [`CoseCipherError::UnsupportedAlgorithm`] instead (in case new CBC-MAC variants are ever
+    /// defined).
+    #[allow(unused_variables)]
+    fn verify_cbc_mac(
         &mut self,
         algorithm: iana::Algorithm,
         key: CoseSymmetricKey<'_, Self::Error>,
@@ -167,10 +284,17 @@ fn try_compute<B: MacCryptoBackend, CKP: KeyProvider>(
             let parsed_key = CoseParsedKey::try_from(key)?;
 
             match alg {
+                iana::Algorithm::AES_MAC_128_64
+                | iana::Algorithm::AES_MAC_128_128
+                | iana::Algorithm::AES_MAC_256_64
+                | iana::Algorithm::AES_MAC_256_128 => {
+                    let symm_key = ensure_valid_symmetric_key(alg, parsed_key)?;
+                    backend.compute_cbc_mac(alg, symm_key, payload)
+                }
                 iana::Algorithm::HMAC_256_256
                 | iana::Algorithm::HMAC_384_384
                 | iana::Algorithm::HMAC_512_512 => {
-                    let symm_key = ensure_valid_hmac_key(alg, parsed_key)?;
+                    let symm_key = ensure_valid_symmetric_key(alg, parsed_key)?;
                     backend.compute_hmac(alg, symm_key, payload)
                 }
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
@@ -207,10 +331,17 @@ pub(crate) fn try_verify<B: MacCryptoBackend, CKP: KeyProvider>(
             let parsed_key = CoseParsedKey::try_from(key)?;
 
             match alg {
+                iana::Algorithm::AES_MAC_128_64
+                | iana::Algorithm::AES_MAC_128_128
+                | iana::Algorithm::AES_MAC_256_64
+                | iana::Algorithm::AES_MAC_256_128 => {
+                    let symm_key = ensure_valid_symmetric_key(alg, parsed_key)?;
+                    (*backend.borrow_mut()).verify_cbc_mac(alg, symm_key, tag, payload)
+                }
                 iana::Algorithm::HMAC_256_256
                 | iana::Algorithm::HMAC_384_384
                 | iana::Algorithm::HMAC_512_512 => {
-                    let symm_key = ensure_valid_hmac_key(alg, parsed_key)?;
+                    let symm_key = ensure_valid_symmetric_key(alg, parsed_key)?;
                     (*backend.borrow_mut()).verify_hmac(alg, symm_key, tag, payload)
                 }
                 alg => Err(CoseCipherError::UnsupportedAlgorithm(Algorithm::Assigned(
