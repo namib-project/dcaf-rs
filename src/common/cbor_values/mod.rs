@@ -29,7 +29,7 @@
 use core::fmt::{Debug, Display, Formatter};
 use core::ops::Deref;
 
-use coset::{CoseEncrypt0, CoseKey};
+use coset::{CoseEncrypt0, CoseKey, OscoreInputMaterial};
 use strum_macros::IntoStaticStr;
 
 use {alloc::boxed::Box, alloc::format, alloc::vec, alloc::vec::Vec};
@@ -90,6 +90,10 @@ pub enum ProofOfPossessionKey {
     ///
     /// For details, see [section 3.4 of RFC 8747](https://datatracker.ietf.org/doc/html/rfc8747#section-3.4).
     KeyId(KeyId),
+
+    /// OSCORE input material that is used in the ACE OSCORE profile (RFC 9203), in which
+    /// parameters for OSCORE communication are established.
+    OscoreInputMaterial(OscoreInputMaterial),
 }
 
 impl ProofOfPossessionKey {
@@ -116,6 +120,7 @@ impl ProofOfPossessionKey {
                     &k.protected.header.key_id
                 }
             }
+            ProofOfPossessionKey::OscoreInputMaterial(_) => todo!(),
         }
     }
 }
@@ -211,6 +216,7 @@ mod conversion {
                     let x: i128 = 3;
                     vec![(x, Some(Box::new(Value::Bytes(kid.clone()))))]
                 }
+                Self::OscoreInputMaterial(_) => todo!(),
             }
         }
 
@@ -239,6 +245,13 @@ mod conversion {
                             ))
                         }),
                     (3, Value::Bytes(x)) => Ok(ProofOfPossessionKey::KeyId(x)),
+                    (4, m @ Value::Map(_)) => OscoreInputMaterial::from_cbor_value(m)
+                        .map(ProofOfPossessionKey::OscoreInputMaterial)
+                        .map_err(|x| {
+                            TryFromCborMapError::from_message(format!(
+                                "couldn't create OscoreInputMaterial from CBOR value: {x}"
+                            ))
+                        }),
                     (x, _) => Err(TryFromCborMapError::unknown_field(u8::try_from(x)?)),
                 }
             } else {
