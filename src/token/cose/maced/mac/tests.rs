@@ -183,6 +183,9 @@ fn cose_examples_mac_self_signed<B: MacCryptoBackend + KeyDistributionCryptoBack
 }
 
 // As of now, we don't support CBC-MAC with the OpenSSL backend.
+// OpenSSL does not provide a ready-made function for performing CBC-MAC, 
+// which means that we would need to build the missing functionality from the 
+// existing CBC functions ourselves (which is probably not worth the effort).
 #[cfg(all(feature = "rustcrypto-aes-cbc-mac", feature = "rustcrypto-aes-kw"))]
 #[rstest]
 #[cfg_attr(

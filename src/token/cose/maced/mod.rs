@@ -232,8 +232,7 @@ pub trait MacCryptoBackend: CryptoBackend {
     /// # Errors
     ///
     /// In case of errors, the implementation may return any valid [`CoseCipherError`].
-    /// For backend-specific errors, [`CoseCipherError::Other`] may be used to convey a
-    /// backend-specific error.
+    /// For backend-specific errors, [`CoseCipherError::Other`] may be used.
     ///
     /// # Panics
     ///

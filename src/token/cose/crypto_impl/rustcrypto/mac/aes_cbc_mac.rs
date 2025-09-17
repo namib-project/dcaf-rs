@@ -24,8 +24,8 @@ use cbc_mac::CbcMac;
 use crypto_common::KeyInit;
 
 impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
-    /// Compute the CBC-MAC of `payload` using the given `key` with the HMAC function
-    /// `MAC`.
+    /// Compute the CBC-MAC of `payload` using the given `key` with the block cipher
+    /// `C`.
     fn compute_cbc_mac_using_block_cipher<
         C: BlockCipher + BlockEncryptMut + Clone,
         const TAG_LEN: usize,
@@ -38,7 +38,9 @@ impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
         <C as BlockSizeUser>::BlockSize: typenum::IsLess<U256>,
         <<C as BlockSizeUser>::BlockSize as IsLess<U256>>::Output: typenum::NonZero,
     {
-        let mut cbc_mac = <CbcMac<C> as Mac>::new_from_slice(&key.k).unwrap();
+        // Key length must have been validated by caller as per the API contract of 
+        // `MacCryptoBackend`.
+        let mut cbc_mac = <CbcMac<C> as Mac>::new_from_slice(&key.k).expect("key length invalid");
         cbc_mac.update(payload);
         let mut result = cbc_mac.finalize().into_bytes().to_vec();
         result.truncate(TAG_LEN);
