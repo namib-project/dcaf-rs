@@ -97,7 +97,7 @@ impl From<openssl::aes::KeyError> for CoseCipherError<CoseOpensslCipherError> {
 ///         - [x] AES-CCM-16-128-256
 ///         - [x] AES-CCM-64-128-128
 ///         - [x] AES-CCM-64-128-256
-///     - [ ] ChaCha20/Poly1305
+///     - [x] ChaCha20/Poly1305
 /// - Content Key Distribution Methods (for COSE_Recipients)
 ///     - Direct Encryption
 ///         - [ ] Direct Key with KDF

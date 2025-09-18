@@ -17,7 +17,6 @@ use sha2::{Sha256, Sha384, Sha512};
 use crate::error::CoseCipherError;
 use crate::token::cose::crypto_impl::rustcrypto::RustCryptoContext;
 use crate::token::cose::{CoseSymmetricKey, CryptoBackend};
-use aead::Buffer;
 use alloc::vec::Vec;
 
 impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {

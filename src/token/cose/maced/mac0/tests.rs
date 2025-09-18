@@ -26,7 +26,7 @@ use crate::token::cose::{test_helper, CryptoBackend};
 
 #[cfg(feature = "openssl")]
 use crate::token::cose::test_helper::openssl_ctx;
-#[cfg(feature = "rustcrypto-hmac")]
+#[cfg(any(feature = "rustcrypto-hmac", feature = "rustcrypto-aes-cbc-mac"))]
 use crate::token::cose::test_helper::rustcrypto_ctx;
 
 impl<B: CryptoBackend + MacCryptoBackend> CoseStructTestHelper<B> for CoseMac0 {
@@ -155,6 +155,34 @@ fn cose_examples_mac0_reference_output<B: MacCryptoBackend>(
 #[cfg_attr(feature = "rustcrypto-hmac", case::rustcrypto(rustcrypto_ctx()))]
 fn cose_examples_mac0_self_signed<B: MacCryptoBackend>(
     #[files("tests/cose_examples/mac0-tests/mac-*.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    test_helper::perform_cose_self_signed_test::<CoseMac0, B>(test_path, backend);
+}
+
+// As of now, we don't support CBC-MAC with the OpenSSL backend.
+#[cfg(feature = "rustcrypto-aes-cbc-mac")]
+#[rstest]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-cbc-mac"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_cbc_mac_mac0_reference_output<B: MacCryptoBackend>(
+    #[files("tests/cose_examples/cbc-mac-examples/cbc-mac-enc-*.json")] test_path: PathBuf,
+    #[case] backend: B,
+) {
+    test_helper::perform_cose_reference_output_test::<CoseMac0, B>(test_path, backend);
+}
+
+// As of now, we don't support CBC-MAC with the OpenSSL backend.
+#[cfg(feature = "rustcrypto-aes-cbc-mac")]
+#[rstest]
+#[cfg_attr(
+    all(feature = "rustcrypto-aes-cbc-mac"),
+    case::rustcrypto(rustcrypto_ctx())
+)]
+fn cose_examples_cbc_mac_mac0_self_signed<B: MacCryptoBackend>(
+    #[files("tests/cose_examples/cbc-mac-examples/cbc-mac-enc-*.json")] test_path: PathBuf,
     #[case] backend: B,
 ) {
     test_helper::perform_cose_self_signed_test::<CoseMac0, B>(test_path, backend);

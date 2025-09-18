@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -17,7 +17,9 @@ use coset::{iana, Algorithm};
 ///
 /// Performs the checks required for ECDSA keys according to
 /// [RFC 9053, Section 2.1](https://datatracker.ietf.org/doc/html/rfc9053#section-2.1) and/or
-/// [RFC 8812, Section 3.2](https://datatracker.ietf.org/doc/html/rfc8812#section-3.2).
+/// [RFC 8812, Section 3.2](https://datatracker.ietf.org/doc/html/rfc8812#section-3.2), *except for
+/// the key_ops check, which must be performed by the caller based on the operation it intends to
+/// perform with the key*.
 pub(crate) fn ensure_valid_ecdsa_key<BE: Display>(
     algorithm: iana::Algorithm,
     parsed_key: CoseParsedKey<BE>,

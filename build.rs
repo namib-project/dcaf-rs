@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The NAMIB Project Developers.
+ * Copyright (c) 2024-2025 The NAMIB Project Developers.
  * Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
  * https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
  * <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
@@ -32,7 +32,8 @@ fn main() {
         },
         rustcrypto_mac_base: {
             any(
-                feature = "rustcrypto-hmac"
+                feature = "rustcrypto-hmac",
+                feature = "rustcrypto-aes-cbc-mac"
             )
         },
         rustcrypto_base: {
