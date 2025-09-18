@@ -557,7 +557,6 @@ impl<T> From<CoseCipherError<T>> for AccessTokenError<T>
 where
     T: Display,
 {
-    #[must_use]
     fn from(error: CoseCipherError<T>) -> Self {
         AccessTokenError::CoseCipherError(error)
     }
@@ -567,7 +566,6 @@ impl<T> From<CoseError> for AccessTokenError<T>
 where
     T: Display,
 {
-    #[must_use]
     fn from(error: CoseError) -> Self {
         AccessTokenError::CoseError(error)
     }

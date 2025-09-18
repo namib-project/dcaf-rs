@@ -38,7 +38,7 @@ impl<RNG: RngCore + CryptoRng> RustCryptoContext<RNG> {
         <C as BlockSizeUser>::BlockSize: typenum::IsLess<U256>,
         <<C as BlockSizeUser>::BlockSize as IsLess<U256>>::Output: typenum::NonZero,
     {
-        // Key length must have been validated by caller as per the API contract of 
+        // Key length must have been validated by caller as per the API contract of
         // `MacCryptoBackend`.
         let mut cbc_mac = <CbcMac<C> as Mac>::new_from_slice(&key.k).expect("key length invalid");
         cbc_mac.update(payload);
