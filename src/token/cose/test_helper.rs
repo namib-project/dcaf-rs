@@ -636,5 +636,5 @@ pub(crate) fn openssl_ctx() -> OpensslContext {
 #[cfg(rustcrypto_base)]
 #[fixture]
 pub(crate) fn rustcrypto_ctx() -> RustCryptoContext<ThreadRng> {
-    RustCryptoContext::new(rand::thread_rng())
+    RustCryptoContext::new(rand::rng())
 }
