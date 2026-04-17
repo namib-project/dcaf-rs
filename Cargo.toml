@@ -40,7 +40,7 @@ derive_builder = { version = "0.20", default-features = false, features = ["allo
 strum = { version = "0.26", default-features = false, features = ["derive"] }
 strum_macros = { version = "0.26", default-features = false }
 enumflags2 = { version = "^0.7", default-features = false }
-rand = { version = "^0.8", default-features = false }
+rand = { version = "^0.9.3", default-features = false }
 openssl = { version = "^0.10", optional = true }
 lazy_static = "1.4.0"
 aes-gcm = { version = "0.10.3", optional = true, default-features = false, features = ["alloc", "aes"] }
@@ -67,7 +67,7 @@ hex = { version = "^0.4", features = ["serde"] }
 base64 = "0.22.1"
 rstest = "0.22.0"
 serde_json = "1.0.118"
-rand = { version = "^0.8", default-features = false, features = ["std_rng", "std"] }
+rand = { version = "^0.9.3", default-features = false, features = ["std_rng", "std", "thread_rng"] }
 
 [build-dependencies]
 cfg_aliases = "0.2.1"

@@ -228,7 +228,7 @@ fn test_get_headers_invalid() {
 #[test]
 fn test_encrypt_decrypt(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
-    let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
+    let mut backend = MockCipher::<ThreadRng>::new(rand::rng());
     let key = example_key_one(A128GCM);
     let (unprotected_header, protected_header) = example_headers(A128GCM, true);
     let claims = example_claims(&key)?;
@@ -255,7 +255,7 @@ fn test_encrypt_decrypt(
 fn test_encrypt_decrypt_multiple(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     const AUDIENCE: &str = "example_aud";
-    let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
+    let mut backend = MockCipher::<ThreadRng>::new(rand::rng());
     let (unprotected_header, protected_header) = example_headers(A128GCM, true);
     let key1 = example_key_one(A128KW);
     let key2 = example_key_two(A128KW);
@@ -310,7 +310,7 @@ fn test_encrypt_decrypt_multiple(
 #[test]
 fn test_encrypt_decrypt_match_multiple(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
-    let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
+    let mut backend = MockCipher::<ThreadRng>::new(rand::rng());
     let (unprotected_header, protected_header) = example_headers(A128GCM, true);
     let key1 = example_key_one(A128KW);
     let aad = example_aad();
@@ -335,7 +335,7 @@ fn test_encrypt_decrypt_match_multiple(
 #[test]
 fn test_encrypt_decrypt_invalid_header(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
-    let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
+    let mut backend = MockCipher::<ThreadRng>::new(rand::rng());
     let key = example_key_one(A128GCM);
     let (unprotected_header, protected_header) = example_headers(A128GCM, true);
     let (unprotected_invalid, protected_invalid) = example_invalid_headers();
@@ -388,7 +388,7 @@ fn test_encrypt_decrypt_invalid_header(
 #[test]
 fn test_sign_verify(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
-    let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
+    let mut backend = MockCipher::<ThreadRng>::new(rand::rng());
     let key = example_ec_key_one(ES256);
     let (unprotected_header, protected_header) = example_headers(ES256, false);
     let claims = example_claims(&key)?;
@@ -416,7 +416,7 @@ fn test_sign_verify(
 fn test_sign_verify_multiple(
 ) -> Result<(), AccessTokenError<<MockCipher<ThreadRng> as CryptoBackend>::Error>> {
     const AUDIENCE: &str = "example_aud";
-    let mut backend = MockCipher::<ThreadRng>::new(rand::thread_rng());
+    let mut backend = MockCipher::<ThreadRng>::new(rand::rng());
     let key1 = example_ec_key_one(ES256);
     let key2 = example_ec_key_two(ES384);
     let invalid_key1 = CoseKeyBuilder::new_symmetric_key(vec![0; 5])
